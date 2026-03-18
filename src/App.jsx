@@ -67,7 +67,9 @@ const firebaseConfig = {
   appId: "1:778244963354:web:809e81e919fdb4d21525a3",
   measurementId: "G-4NT45V452W"
 };
-
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 // --- Utils & Global Toast ---
 const generateId = () => {
   return typeof crypto !== 'undefined' && crypto.randomUUID 
