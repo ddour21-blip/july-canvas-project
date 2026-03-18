@@ -58,11 +58,19 @@ import {
 } from 'lucide-react';
 
 // --- Firebase Initialization ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const firebaseConfig = {
+  apiKey: "AIzaSyCK4Hc8Bz5lhDTdKRCUaUbDwhUOMwO0bJ0",
+  authDomain: "my-prototype-app-67dc5.firebaseapp.com",
+  projectId: "my-prototype-app-67dc5",
+  storageBucket: "my-prototype-app-67dc5.firebasestorage.app",
+  messagingSenderId: "778244963354",
+  appId: "1:778244963354:web:809e81e919fdb4d21525a3",
+  measurementId: "G-4NT45V452W"
+};
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'prototype-manager-app';
+const appId = 'prototype-manager-app'; // <-- 지워졌던 캔버스 데이터베이스 폴더명 복구 완료!
 
 // --- Utils & Global Toast ---
 const generateId = () => {
@@ -193,7 +201,7 @@ const ShareModal = ({ isOpen, type, id, onClose, workspaceId }) => {
   const handleCopy = (text, msg) => {
     const ta = document.createElement("textarea"); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
     document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); showToast(msg); } catch(e) { showToast('복사 실패', 'error'); }
+    try { document.execCommand('copy'); showToast(msg); } catch(e) { showToast('복 세 실패', 'error'); }
     document.body.removeChild(ta);
   };
 
