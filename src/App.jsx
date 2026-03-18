@@ -59,7 +59,7 @@ import {
 
 // --- Firebase Initialization ---
 const firebaseConfig = {
-  apiKey: "AIzaSyCK4Hc8Bz5lhDTdKRCUaUbDwhUOMwO0bJ0",
+  apiKey: "AIzaSyCK4Hc8Bz5lhDTdKRCuAUbDwhUOMwO0bJ0",
   authDomain: "my-prototype-app-67dc5.firebaseapp.com",
   projectId: "my-prototype-app-67dc5",
   storageBucket: "my-prototype-app-67dc5.firebasestorage.app",
