@@ -58,18 +58,12 @@ import {
 } from 'lucide-react';
 
 // --- Firebase Initialization ---
-const firebaseConfig = {
-  apiKey: "AIzaSyCK4Hc8Bz5lhDTdKRCuAUbDwhUOMwO0bJ0",
-  authDomain: "my-prototype-app-67dc5.firebaseapp.com",
-  projectId: "my-prototype-app-67dc5",
-  storageBucket: "my-prototype-app-67dc5.firebasestorage.app",
-  messagingSenderId: "778244963354",
-  appId: "1:778244963354:web:809e81e919fdb4d21525a3",
-  measurementId: "G-4NT45V452W"
-};
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'prototype-manager-app';
+
 // --- Utils & Global Toast ---
 const generateId = () => {
   return typeof crypto !== 'undefined' && crypto.randomUUID 
