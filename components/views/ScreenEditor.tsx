@@ -805,37 +805,37 @@ export default function ScreenEditor({
 
         {/* 우측 패널 */}
         <div
-          className={`absolute top-0 bottom-0 right-0 w-[420px] bg-white border-l border-gray-200 shadow-2xl flex flex-col transition-transform duration-300 z-40 ${
+          className={`absolute top-0 bottom-0 right-0 w-[420px] bg-[var(--surface-card)] border-l border-[var(--border-default)] shadow-[var(--shadow-2xl)] flex flex-col transition-transform duration-300 z-40 ${
             mode === 'annotate' ? 'translate-x-0' : 'translate-x-full'
           }`}
         >
-          <div className="p-6 border-b border-gray-100 bg-white flex justify-between items-center shrink-0">
+          <div className="p-6 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] flex justify-between items-center shrink-0">
             <div>
-              <h2 className="font-extrabold text-gray-900 text-xl flex items-center gap-2">
-                <FileText className="text-blue-600" /> 기능 정책 / 기획서 <span className="text-gray-300 font-light">| Policy</span>
+              <h2 className="font-extrabold text-[var(--text-strong)] text-xl flex items-center gap-2">
+                <FileText className="text-[var(--color-primary-text)]" /> 기능 정책 / 기획서 <span className="text-[var(--text-tertiary)] font-light">| Policy</span>
               </h2>
-              <p className="text-xs text-gray-500 mt-1 font-medium">화면에 정의된 모든 UI 정책과 스펙</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-1 font-medium">화면에 정의된 모든 UI 정책과 스펙</p>
             </div>
             <button
               onClick={() => {
                 setMode('interact');
                 setShowDraftForm(false);
               }}
-              className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-400"
+              className="p-2 bg-[var(--surface-sunken)] rounded-full hover:bg-[var(--surface-hover)] text-[var(--text-tertiary)] transition-colors"
             >
               <X size={20} />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-gray-50/50">
+          <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-[var(--surface-page)]">
             {showDraftForm && isEditor && (
-              <div className="bg-white border border-gray-200 rounded-xl shadow-lg flex flex-col mb-6 overflow-hidden animate-in fade-in slide-in-from-right-4 z-10 relative">
-                <div className="flex border-b border-gray-100 bg-gray-50/50">
+              <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-lg)] shadow-[var(--shadow-lg)] flex flex-col mb-6 overflow-hidden animate-in fade-in slide-in-from-right-4 z-10 relative">
+                <div className="flex border-b border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
                   <button
                     type="button"
                     onClick={() => setActiveRightTab('edit')}
                     className={`flex-1 py-3 text-sm font-bold text-center border-b-2 transition-colors ${
-                      activeRightTab === 'edit' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'
+                      activeRightTab === 'edit' ? 'border-[var(--color-primary)] text-[var(--color-primary-text)] bg-[var(--surface-card)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-body)]'
                     }`}
                   >
                     📝 정책 편집
@@ -844,11 +844,11 @@ export default function ScreenEditor({
                     type="button"
                     onClick={() => setActiveRightTab('history')}
                     className={`flex-1 py-3 text-sm font-bold text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
-                      activeRightTab === 'history' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'
+                      activeRightTab === 'history' ? 'border-[var(--color-primary)] text-[var(--color-primary-text)] bg-[var(--surface-card)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-body)]'
                     }`}
                   >
                     🕒 버전 히스토리{' '}
-                    <span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full text-[10px]">
+                    <span className="bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] px-1.5 py-0.5 rounded-full text-[10px]">
                       {editingAnnotationId ? annotations.find((a) => a.id === editingAnnotationId)?.history?.length || 1 : 0}
                     </span>
                   </button>
@@ -857,36 +857,36 @@ export default function ScreenEditor({
                 {activeRightTab === 'edit' ? (
                   <div className="p-5 flex flex-col gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-blue-600 mb-1.5">컴포넌트 명칭</label>
+                      <label className="block text-xs font-bold text-[var(--color-primary-text)] mb-1.5">컴포넌트 명칭</label>
                       <input
                         type="text"
                         placeholder="요소 이름 (예: 로그인 버튼)"
                         value={draftTitle}
                         onChange={(e) => setDraftTitle(e.target.value)}
-                        className="w-full text-lg font-extrabold text-gray-900 p-3 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition-colors"
+                        className="w-full text-lg font-extrabold text-[var(--text-strong)] p-3 border border-[var(--border-default)] rounded-[var(--radius-md)] outline-none focus:ring-2 focus:ring-[var(--color-focus-ring)] bg-[var(--surface-sunken)] focus:bg-[var(--surface-card)] transition-colors"
                         autoFocus
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-blue-600 mb-1.5">상세 정책 및 인터랙션 디스크립션</label>
-                      <div className="bg-white border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 overflow-hidden flex flex-col">
-                        <div className="flex items-center gap-1 p-1.5 border-b border-gray-100 bg-gray-50/80">
-                          <button type="button" onClick={() => insertFormatting('bold')} className="p-1.5 text-gray-500 hover:text-blue-700 hover:bg-blue-100 rounded" title="굵게">
+                      <label className="block text-xs font-bold text-[var(--color-primary-text)] mb-1.5">상세 정책 및 인터랙션 디스크립션</label>
+                      <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-md)] focus-within:ring-2 focus-within:ring-[var(--color-focus-ring)] overflow-hidden flex flex-col">
+                        <div className="flex items-center gap-1 p-1.5 border-b border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
+                          <button type="button" onClick={() => insertFormatting('bold')} className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--color-primary-text)] hover:bg-[var(--surface-active)] rounded" title="굵게">
                             <Bold size={15} />
                           </button>
-                          <button type="button" onClick={() => insertFormatting('code')} className="p-1.5 text-gray-500 hover:text-blue-700 hover:bg-blue-100 rounded" title="인라인 코드">
+                          <button type="button" onClick={() => insertFormatting('code')} className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--color-primary-text)] hover:bg-[var(--surface-active)] rounded" title="인라인 코드">
                             <Code size={15} />
                           </button>
-                          <div className="w-px h-4 bg-gray-300 mx-1" />
-                          <button type="button" onClick={() => insertFormatting('bullet')} className="p-1.5 text-gray-500 hover:text-blue-700 hover:bg-blue-100 rounded" title="글머리 기호">
+                          <div className="w-px h-4 bg-[var(--border-strong)] mx-1" />
+                          <button type="button" onClick={() => insertFormatting('bullet')} className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--color-primary-text)] hover:bg-[var(--surface-active)] rounded" title="글머리 기호">
                             <List size={15} />
                           </button>
-                          <button type="button" onClick={() => insertFormatting('indent')} className="p-1.5 text-gray-500 hover:text-blue-700 hover:bg-blue-100 rounded" title="들여쓰기">
+                          <button type="button" onClick={() => insertFormatting('indent')} className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--color-primary-text)] hover:bg-[var(--surface-active)] rounded" title="들여쓰기">
                             <Indent size={15} />
                           </button>
-                          <div className="w-px h-4 bg-gray-300 mx-1" />
-                          <button type="button" onClick={() => insertFormatting('link')} className="p-1.5 text-gray-500 hover:text-blue-700 hover:bg-blue-100 rounded" title="링크 추가">
+                          <div className="w-px h-4 bg-[var(--border-strong)] mx-1" />
+                          <button type="button" onClick={() => insertFormatting('link')} className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--color-primary-text)] hover:bg-[var(--surface-active)] rounded" title="링크 추가">
                             <Link2 size={15} />
                           </button>
                         </div>
@@ -895,25 +895,25 @@ export default function ScreenEditor({
                           placeholder="상세 정책을 입력하세요."
                           value={draftDesc}
                           onChange={(e) => setDraftDesc(e.target.value)}
-                          className="w-full text-[13px] p-4 min-h-[200px] resize-y outline-none bg-transparent text-gray-700 leading-relaxed"
+                          className="w-full text-[13px] p-4 min-h-[200px] resize-y outline-none bg-transparent text-[var(--text-body)] leading-relaxed"
                         />
                       </div>
                     </div>
 
                     <div className="flex items-end gap-3 mt-2">
                       <div className="w-24 shrink-0">
-                        <label className="block text-[11px] font-bold text-gray-500 mb-1.5">버전 지정</label>
-                        <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
-                          <span className="text-gray-400 font-bold mr-1 text-sm">v</span>
+                        <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">버전 지정</label>
+                        <div className="flex items-center bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-3 py-2.5">
+                          <span className="text-[var(--text-tertiary)] font-bold mr-1 text-sm">v</span>
                           <input
                             type="text"
                             value={draftVersion}
                             onChange={(e) => setDraftVersion(e.target.value)}
-                            className="w-full bg-transparent outline-none text-sm font-bold text-gray-800"
+                            className="w-full bg-transparent outline-none text-sm font-bold text-[var(--text-body)]"
                           />
                         </div>
                       </div>
-                      <Button onClick={saveAnnotation} className="flex-1 py-2.5 h-[42px] shadow-sm">
+                      <Button onClick={saveAnnotation} className="flex-1 py-2.5 h-[42px] shadow-[var(--shadow-sm)]">
                         <Save size={16} /> 정책 저장 및 공유
                       </Button>
                       <Button
@@ -929,25 +929,25 @@ export default function ScreenEditor({
                     </div>
                   </div>
                 ) : (
-                  <div className="p-5 flex flex-col gap-4 max-h-[450px] overflow-y-auto bg-gray-50">
-                    <h3 className="text-xs font-bold text-gray-500 mb-2">업데이트 내역</h3>
+                  <div className="p-5 flex flex-col gap-4 max-h-[450px] overflow-y-auto bg-[var(--surface-sunken)]">
+                    <h3 className="text-xs font-bold text-[var(--text-secondary)] mb-2">업데이트 내역</h3>
                     {editingAnnotationId && (annotations.find((a) => a.id === editingAnnotationId)?.history?.length ?? 0) > 0 ? (
                       [...(annotations.find((a) => a.id === editingAnnotationId)?.history ?? [])]
                         .sort((a, b) => getTime(b.updatedAt) - getTime(a.updatedAt))
                         .map((h, i) => (
-                          <div key={i} className="border border-gray-200 rounded-xl p-5 bg-white shadow-sm">
-                            <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
-                              <span className="bg-blue-50 text-blue-600 font-bold text-xs px-3 py-1 rounded-md">v{h.version}</span>
-                              <span className="text-xs text-gray-400 font-medium flex items-center gap-1">
+                          <div key={i} className="border border-[var(--border-default)] rounded-[var(--radius-lg)] p-5 bg-[var(--surface-card)] shadow-[var(--shadow-xs)]">
+                            <div className="flex justify-between items-center mb-4 pb-3 border-b border-[var(--border-subtle)]">
+                              <span className="bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] font-bold text-xs px-3 py-1 rounded-[var(--radius-md)]">v{h.version}</span>
+                              <span className="text-xs text-[var(--text-tertiary)] font-medium flex items-center gap-1">
                                 <History size={12} /> {formatDateTime(h.updatedAt)}
                               </span>
                             </div>
-                            <h4 className="font-extrabold text-[15px] text-gray-900 mb-3">{h.title}</h4>
-                            <div className="text-[13px] text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-lg border border-gray-100" dangerouslySetInnerHTML={{ __html: renderMarkdown(h.description) }} />
+                            <h4 className="font-extrabold text-[15px] text-[var(--text-strong)] mb-3">{h.title}</h4>
+                            <div className="text-[13px] text-[var(--text-body)] leading-relaxed bg-[var(--surface-sunken)] p-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)]" dangerouslySetInnerHTML={{ __html: renderMarkdown(h.description) }} />
                           </div>
                         ))
                     ) : (
-                      <div className="text-center py-10 text-sm text-gray-400">히스토리 내역이 없습니다.</div>
+                      <div className="text-center py-10 text-sm text-[var(--text-tertiary)]">히스토리 내역이 없습니다.</div>
                     )}
                   </div>
                 )}
@@ -955,28 +955,30 @@ export default function ScreenEditor({
             )}
 
             {!showDraftForm && visibleAnnotations.length === 0 && (
-              <div className="text-center text-gray-400 py-20 flex flex-col items-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <MessageSquarePlus size={28} className="text-gray-300" />
+              <div className="text-center py-20 flex flex-col items-center">
+                <div className="w-16 h-16 bg-[var(--surface-hover)] rounded-full flex items-center justify-center mb-4">
+                  <MessageSquarePlus size={28} className="text-[var(--text-tertiary)]" />
                 </div>
-                <p className="text-sm font-bold text-gray-500">정의된 기능이 없습니다</p>
-                <p className="text-xs mt-2 text-gray-400">{isEditor ? '좌측 화면 요소를 클릭하여 정책을 추가하세요.' : '아직 작성된 정책이 없습니다.'}</p>
+                <p className="text-sm font-bold text-[var(--text-secondary)]">정의된 기능이 없습니다</p>
+                <p className="text-xs mt-2 text-[var(--text-tertiary)]">{isEditor ? '좌측 화면 요소를 클릭하여 정책을 추가하세요.' : '아직 작성된 정책이 없습니다.'}</p>
               </div>
             )}
 
             {visibleAnnotations.map((ann, idx) => (
-              <div key={ann.id} className={`relative transition-all ${activeAnnotationId === ann.id && !showDraftForm ? '' : 'cursor-pointer hover:border-blue-200'}`}>
+              <div key={ann.id} className="relative transition-all">
                 <div
                   onClick={() => {
                     if (!showDraftForm) setActiveAnnotationId(ann.id);
                   }}
-                  className={`relative p-5 rounded-xl border-2 bg-white overflow-hidden group ${
-                    activeAnnotationId === ann.id && !showDraftForm ? 'border-blue-500 shadow-md ring-4 ring-blue-50' : 'border-gray-100 shadow-sm'
+                  className={`relative p-5 rounded-[var(--radius-lg)] border-2 bg-[var(--surface-card)] overflow-hidden group transition-all ${
+                    activeAnnotationId === ann.id && !showDraftForm
+                      ? 'border-[var(--color-primary)] shadow-[var(--shadow-md)] ring-4 ring-[var(--surface-active)]'
+                      : 'border-[var(--border-subtle)] shadow-[var(--shadow-xs)] cursor-pointer hover:border-[var(--brand-300)]'
                   }`}
                 >
                   <div
-                    className={`absolute -left-3.5 top-5 w-7 h-7 rounded-md flex items-center justify-center text-[13px] font-extrabold border-2 border-white shadow-md transition-colors ${
-                      activeAnnotationId === ann.id && !showDraftForm ? 'bg-blue-600 text-white' : 'bg-rose-500 text-white'
+                    className={`absolute -left-3.5 top-5 w-7 h-7 rounded-[var(--radius-md)] flex items-center justify-center text-[13px] font-extrabold border-2 border-[var(--surface-card)] shadow-md transition-colors ${
+                      activeAnnotationId === ann.id && !showDraftForm ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]' : 'bg-rose-500 text-white'
                     }`}
                   >
                     {idx + 1}
@@ -984,12 +986,12 @@ export default function ScreenEditor({
 
                   <div className="flex justify-between items-start ml-2 mb-3 pr-12">
                     <div className="flex items-center gap-2">
-                      <span className="bg-blue-50 text-blue-600 font-bold text-[10px] px-2 py-0.5 rounded-full">v{ann.version || '1.0'}</span>
-                      <h3 className="font-extrabold text-gray-900 text-[15px]">{ann.title}</h3>
+                      <span className="bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] font-bold text-[10px] px-2 py-0.5 rounded-full">v{ann.version || '1.0'}</span>
+                      <h3 className="font-extrabold text-[var(--text-strong)] text-[15px]">{ann.title}</h3>
                     </div>
                     {isEditor && (
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={(e) => handleEditClick(e, ann)} className="text-gray-400 hover:text-blue-500 p-1.5 bg-white rounded shadow-sm border border-gray-100" title="수정">
+                        <button onClick={(e) => handleEditClick(e, ann)} className="text-[var(--text-tertiary)] hover:text-[var(--color-primary-text)] p-1.5 bg-[var(--surface-card)] rounded shadow-[var(--shadow-xs)] border border-[var(--border-subtle)]" title="수정">
                           <Edit2 size={14} />
                         </button>
                         <button
@@ -997,7 +999,7 @@ export default function ScreenEditor({
                             e.stopPropagation();
                             setConfirmState({ isOpen: true, title: '정책 삭제', msg: '이 기획 내용을 삭제하시겠습니까?', action: () => executeDeleteAnnotation(ann.id) });
                           }}
-                          className="text-gray-400 hover:text-red-500 p-1.5 bg-white rounded shadow-sm border border-gray-100"
+                          className="text-[var(--text-tertiary)] hover:text-[var(--red-600)] p-1.5 bg-[var(--surface-card)] rounded shadow-[var(--shadow-xs)] border border-[var(--border-subtle)]"
                           title="삭제"
                         >
                           <Trash2 size={14} />
@@ -1006,7 +1008,7 @@ export default function ScreenEditor({
                     )}
                   </div>
                   <div
-                    className="ml-2 text-[13px] text-gray-600 whitespace-pre-wrap leading-relaxed font-medium"
+                    className="ml-2 text-[13px] text-[var(--text-body)] whitespace-pre-wrap leading-relaxed font-medium"
                     dangerouslySetInnerHTML={{ __html: renderMarkdown(ann.description) || '<span class="text-gray-400 italic font-normal">상세 설명 없음</span>' }}
                   />
                 </div>
@@ -1125,66 +1127,66 @@ export default function ScreenEditor({
 
       {/* 전체 히스토리 대시보드 */}
       {showHistory && (
-        <div className="fixed inset-0 z-[100] bg-gray-50 flex flex-col animate-in slide-in-from-bottom-4">
-          <div className="bg-white px-8 py-5 flex items-center justify-between border-b border-gray-200 shadow-sm shrink-0">
+        <div className="fixed inset-0 z-[100] bg-[var(--surface-page)] flex flex-col animate-in slide-in-from-bottom-4">
+          <div className="bg-[var(--surface-card)] px-8 py-5 flex items-center justify-between border-b border-[var(--border-default)] shadow-[var(--shadow-sm)] shrink-0">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-md">
+              <div className="w-12 h-12 bg-[var(--color-primary)] rounded-[var(--radius-lg)] flex items-center justify-center text-[var(--color-on-primary)] shadow-[var(--shadow-brand)]">
                 <History size={24} />
               </div>
               <div>
-                <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">전체 버전 히스토리 대시보드</h1>
-                <p className="text-sm text-gray-500 font-medium mt-1">프로젝트 내 모든 기획 및 정책의 버전 업데이트 이력을 최신순으로 확인하세요.</p>
+                <h1 className="text-2xl font-extrabold text-[var(--text-strong)] tracking-tight">전체 버전 히스토리 대시보드</h1>
+                <p className="text-sm text-[var(--text-secondary)] font-medium mt-1">프로젝트 내 모든 기획 및 정책의 버전 업데이트 이력을 최신순으로 확인하세요.</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               {isEditor && (
                 <button
                   onClick={() => setConfirmState({ isOpen: true, title: '전체 히스토리 초기화', msg: '프로젝트 내 모든 기획/정책 이력을 삭제합니다. 복구할 수 없습니다. 진행하시겠습니까?', action: executeClearAllHistory })}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-full text-red-500 font-bold hover:bg-red-50 transition-colors border border-transparent hover:border-red-100 whitespace-nowrap"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-full text-[var(--red-600)] font-bold hover:bg-[var(--red-50)] transition-colors border border-transparent hover:border-[var(--red-100)] whitespace-nowrap"
                 >
                   <AlertCircle size={18} /> 전체 초기화
                 </button>
               )}
-              <button onClick={() => setShowHistory(false)} className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-colors whitespace-nowrap">
+              <button onClick={() => setShowHistory(false)} className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[var(--surface-hover)] text-[var(--text-body)] font-bold hover:bg-[var(--border-default)] transition-colors whitespace-nowrap">
                 <X size={18} /> 대시보드 닫기
               </button>
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto p-8 bg-gray-50/50">
+          <div className="flex-1 overflow-auto p-8 bg-[var(--surface-page)]">
             <div className="max-w-7xl mx-auto w-full">
               {sortedVersions.length === 0 ? (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-16 text-center text-gray-400 font-medium">히스토리 내역이 없습니다.</div>
+                <div className="bg-[var(--surface-card)] rounded-[var(--radius-2xl)] shadow-[var(--shadow-xs)] border border-[var(--border-default)] p-16 text-center text-[var(--text-tertiary)] font-medium">히스토리 내역이 없습니다.</div>
               ) : (
                 sortedVersions.map((version) => (
-                  <div key={version} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-                    <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50/50">
+                  <div key={version} className="bg-[var(--surface-card)] rounded-[var(--radius-2xl)] shadow-[var(--shadow-xs)] border border-[var(--border-default)] overflow-hidden mb-8">
+                    <div className="flex items-center justify-between p-6 border-b border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
                       <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-extrabold text-sm">v</span>
-                        <h2 className="text-xl font-extrabold text-blue-600">버전 {version}</h2>
+                        <span className="w-8 h-8 rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center font-extrabold text-sm">v</span>
+                        <h2 className="text-xl font-extrabold text-[var(--color-primary-text)]">버전 {version}</h2>
                       </div>
-                      <div className="px-4 py-1.5 bg-white border border-gray-200 rounded-full text-sm font-bold text-gray-600 shadow-sm whitespace-nowrap">
+                      <div className="px-4 py-1.5 bg-[var(--surface-card)] border border-[var(--border-default)] rounded-full text-sm font-bold text-[var(--text-secondary)] shadow-[var(--shadow-xs)] whitespace-nowrap">
                         {groupedHistorySorted[version].length}개의 업데이트 내역
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-12 gap-6 px-8 py-4 border-b border-gray-100 text-xs font-bold text-gray-500 tracking-wider bg-white">
+                    <div className="grid grid-cols-12 gap-6 px-8 py-4 border-b border-[var(--border-subtle)] text-xs font-bold text-[var(--text-secondary)] tracking-wider bg-[var(--surface-card)]">
                       <div className="col-span-2">업데이트 일시</div>
                       <div className="col-span-3">화면 / 컴포넌트명</div>
                       <div className="col-span-6">정책 상세 내용 미리보기</div>
                       <div className="col-span-1 text-center">관리</div>
                     </div>
 
-                    <div className="divide-y divide-gray-100 bg-white">
+                    <div className="divide-y divide-[var(--border-subtle)] bg-[var(--surface-card)]">
                       {groupedHistorySorted[version].map((h, idx) => (
-                        <div key={idx} className="grid grid-cols-12 gap-6 px-8 py-5 hover:bg-gray-50/80 transition-colors items-start">
-                          <div className="col-span-2 text-[13px] font-bold text-gray-600 font-mono mt-1">{formatDateTime(h.createdAt)}</div>
+                        <div key={idx} className="grid grid-cols-12 gap-6 px-8 py-5 hover:bg-[var(--surface-hover)] transition-colors items-start">
+                          <div className="col-span-2 text-[13px] font-bold text-[var(--text-secondary)] font-mono mt-1">{formatDateTime(h.createdAt)}</div>
                           <div className="col-span-3 pr-4">
-                            <div className="text-[11px] font-extrabold text-blue-500 uppercase tracking-widest mb-1.5 truncate">{h.screenName}</div>
-                            <div className="text-[15px] font-extrabold text-gray-900 leading-tight">{h.title}</div>
+                            <div className="text-[11px] font-extrabold text-[var(--color-primary-text)] uppercase tracking-widest mb-1.5 truncate">{h.screenName}</div>
+                            <div className="text-[15px] font-extrabold text-[var(--text-strong)] leading-tight">{h.title}</div>
                           </div>
                           <div className="col-span-6 pr-4">
-                            <div className="text-[13px] font-medium text-gray-700 leading-relaxed bg-gray-50 border border-gray-100 p-3 rounded-lg max-h-[100px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: renderMarkdown(h.description) || '-' }} />
+                            <div className="text-[13px] font-medium text-[var(--text-body)] leading-relaxed bg-[var(--surface-sunken)] border border-[var(--border-subtle)] p-3 rounded-[var(--radius-md)] max-h-[100px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: renderMarkdown(h.description) || '-' }} />
                           </div>
                           <div className="col-span-1 flex flex-col items-center justify-center pt-1 gap-2">
                             <button
@@ -1192,15 +1194,15 @@ export default function ScreenEditor({
                                 setShowHistory(false);
                                 navigate(`#ws_${workspaceId}_screen_${h.screenId}_ann_${h.annId}`);
                               }}
-                              className="flex items-center justify-center gap-1.5 w-[68px] py-1.5 border border-gray-200 rounded-full text-xs font-bold text-gray-700 hover:bg-white hover:border-blue-300 shadow-sm transition-all whitespace-nowrap bg-white"
+                              className="flex items-center justify-center gap-1.5 w-[68px] py-1.5 border border-[var(--border-default)] rounded-full text-xs font-bold text-[var(--text-body)] hover:bg-[var(--surface-card)] hover:border-[var(--brand-300)] shadow-[var(--shadow-xs)] transition-all whitespace-nowrap bg-[var(--surface-card)]"
                               title="해당 정책으로 이동"
                             >
-                              이동 <ExternalLink size={12} className="text-gray-400" />
+                              이동 <ExternalLink size={12} className="text-[var(--text-tertiary)]" />
                             </button>
                             {isEditor && (
                               <button
                                 onClick={() => setConfirmState({ isOpen: true, title: '정책 삭제', msg: '해당 정책 전체가 삭제됩니다. 삭제하시겠습니까?', action: () => executeDeleteHistoryItem(h.screenId, h.annId) })}
-                                className="w-[30px] h-[30px] flex items-center justify-center border border-gray-200 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all bg-white"
+                                className="w-[30px] h-[30px] flex items-center justify-center border border-[var(--border-default)] rounded-full text-[var(--text-tertiary)] hover:text-[var(--red-600)] hover:bg-[var(--red-50)] hover:border-[var(--red-100)] transition-all bg-[var(--surface-card)]"
                                 title="삭제"
                               >
                                 <X size={14} />
