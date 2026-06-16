@@ -688,7 +688,7 @@ export default function ScreenEditor({
   const renderedHtml = generateHtmlBoilerplate(screen.code || '');
 
   return (
-    <div className="h-[calc(100vh-61px)] flex flex-col relative bg-gray-100 overflow-hidden">
+    <div className="h-[calc(100vh-61px)] flex flex-col relative bg-[var(--surface-page)] overflow-hidden">
       <ConfirmModal
         isOpen={confirmState.isOpen}
         title={confirmState.title}
@@ -715,7 +715,7 @@ export default function ScreenEditor({
       />
 
       <div className="flex-1 flex overflow-hidden relative">
-        <div className={`flex-1 flex flex-col relative bg-white transition-all duration-300 ${mode === 'annotate' ? 'mr-[420px]' : ''}`}>
+        <div className={`flex-1 flex flex-col relative bg-[var(--surface-page)] transition-all duration-300 ${mode === 'annotate' ? 'mr-[420px]' : ''}`}>
           <div className="absolute top-4 left-6 z-20 flex items-center gap-3 bg-[var(--surface-card)] px-4 py-2.5 rounded-[var(--radius-lg)] shadow-[var(--shadow-md)] border border-[var(--border-default)]">
             <button
               onClick={() => navigate(`#project_${project.id}`)}
@@ -766,11 +766,11 @@ export default function ScreenEditor({
             </div>
           )}
 
-          <div ref={iframeContainerRef} className="relative w-full h-full overflow-auto bg-gray-100 p-8 pt-24 pb-40 flex justify-center">
-            <div className="relative shadow-2xl border border-gray-200 bg-white mx-auto shrink-0" style={{ width: '100%', minWidth: '1280px', height: '850px' }}>
-              <iframe srcDoc={renderedHtml} className="w-full h-full border-0 bg-transparent pointer-events-auto" sandbox="allow-scripts allow-same-origin" />
+          <div ref={iframeContainerRef} className="relative w-full h-full overflow-auto bg-[var(--surface-sunken)] p-8 pt-24 pb-40 flex justify-center">
+            <div className="relative shadow-[var(--shadow-xl)] border border-[var(--border-default)] bg-[var(--surface-card)] rounded-[var(--radius-lg)] mx-auto shrink-0" style={{ width: '100%', minWidth: '1280px', height: '850px' }}>
+              <iframe srcDoc={renderedHtml} className="w-full h-full border-0 bg-transparent rounded-[var(--radius-lg)] pointer-events-auto" sandbox="allow-scripts allow-same-origin" />
               {mode === 'annotate' && (
-                <div className={`absolute inset-0 z-10 ${isEditor ? 'cursor-crosshair bg-blue-500/5' : 'cursor-default'}`} onClick={handleCanvasClick} />
+                <div className={`absolute inset-0 z-10 rounded-[var(--radius-lg)] ${isEditor ? 'cursor-crosshair bg-[var(--brand-400)]/5' : 'cursor-default'}`} onClick={handleCanvasClick} />
               )}
               {mode === 'annotate' &&
                 visibleAnnotations.map((ann, idx) => (
