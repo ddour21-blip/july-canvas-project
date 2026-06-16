@@ -1,0 +1,32 @@
+/* July Canvas — Webfonts
+   ---------------------------------------------------------------
+   Pretendard  → primary UI typeface (Korean + Latin). Clean, neutral,
+                 geometric-humanist sans that matches the product mockups.
+   Geist Mono  → monospace for code, version tags, filenames (PRD.md …).
+
+   NOTE (font substitution): the source Next.js app loads "Geist Sans"
+   (next/font/google), which is Latin-only and cannot render the product's
+   Korean copy. The shipping product UI (see uploads/3, 9–12) is clearly set
+   in Pretendard, so the design system standardises on Pretendard for the
+   sans stack. Geist Mono is retained verbatim for monospace.
+
+   Both families load from CDN via explicit @font-face below (so the
+   font is declared in-project and shipped to consumers, rather than
+   hidden behind a remote @import the bundler can't parse). To fully
+   self-host, drop the .woff2 files in assets/fonts/ and repoint the
+   src: url(...) targets at the local files. */
+
+/* Geist Mono — code, version tags, filenames. (@import must precede
+   any other rule, so it stays at the top of the file.) */
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap");
+
+/* Pretendard Variable — primary UI sans (Korean + Latin).
+   woff2-variations covers weights 45–920 in a single file. */
+@font-face {
+  font-family: "Pretendard Variable";
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/woff2/PretendardVariable.woff2")
+    format("woff2-variations");
+}

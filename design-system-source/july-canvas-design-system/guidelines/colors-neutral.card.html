@@ -1,0 +1,23 @@
+<!-- @dsCard group="Colors" viewport="700x160" name="Neutrals — Sage gray + Ink" subtitle="Text, surfaces, borders, and the dark prototype chrome" -->
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin:0; padding:20px; background:#fff; font-family:var(--font-sans); }
+  .ramp { display:flex; gap:8px; }
+  .sw { flex:1; }
+  .chip { height:54px; border-radius:10px; border:1px solid rgba(20,24,36,.06); }
+  .n { font:700 11px/1.4 var(--font-sans); color:var(--text-strong); margin-top:8px; }
+  .h { font:500 10px/1.4 var(--font-mono); color:var(--text-tertiary); }
+</style></head>
+<body>
+<div class="ramp" id="r"></div>
+<script>
+  const steps = [['25','--gray-25'],['50','--gray-50'],['100','--gray-100'],['200','--gray-200'],['300','--gray-300'],['400','--gray-400'],['500','--gray-500'],['600','--gray-600'],['700','--gray-700'],['900','--gray-900'],['ink','--ink']];
+  const cs = getComputedStyle(document.documentElement);
+  document.getElementById('r').innerHTML = steps.map(([n,v]) => {
+    const hex = cs.getPropertyValue(v).trim();
+    return `<div class="sw"><div class="chip" style="background:${hex}"></div><div class="n">${n}</div><div class="h">${hex}</div></div>`;
+  }).join('');
+</script>
+</body></html>

@@ -1,0 +1,19 @@
+<!-- @dsCard group="Spacing" viewport="700x160" name="Corner radii" subtitle="Soft & rounded throughout" -->
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin:0; padding:24px; background:#fff; font-family:var(--font-sans); }
+  .row { display:flex; gap:16px; align-items:flex-end; }
+  .col { text-align:center; }
+  .box { width:64px; height:64px; background:var(--brand-50); border:1.5px solid var(--brand-300); }
+  .n { font:700 11px/1.4 var(--font-sans); color:var(--text-strong); margin-top:8px; }
+  .v { font:500 10px/1.4 var(--font-mono); color:var(--text-tertiary); }
+</style></head>
+<body>
+<div class="row" id="r"></div>
+<script>
+  const steps=[['sm','6px','--radius-sm'],['md','10px','--radius-md'],['lg','12px','--radius-lg'],['xl','16px','--radius-xl'],['2xl','20px','--radius-2xl'],['3xl','24px','--radius-3xl'],['pill','999px','--radius-pill']];
+  document.getElementById('r').innerHTML = steps.map(([n,v,t])=>`<div class="col"><div class="box" style="border-radius:var(${t})"></div><div class="n">${n}</div><div class="v">${v}</div></div>`).join('');
+</script>
+</body></html>

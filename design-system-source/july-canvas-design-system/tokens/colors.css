@@ -1,0 +1,164 @@
+/* July Canvas — Color tokens
+   ===============================================================
+   GREEN-FIRST. The brand color is the vivid spring green #50FA6E.
+   It is used as a FILL for primary actions, active states, selection,
+   focus and live status — always paired with DARK-GREEN text/icons on
+   top (never white, which is unreadable on such a bright green). For
+   green text/icons ON white surfaces, use the deeper --color-primary-text
+   (a readable green). No purple / indigo / blue anywhere — not as brand,
+   not as status.
+
+   Two layers:
+     1. PRIMITIVES  — raw palette ramps (--brand-600, --gray-100 …)
+     2. SEMANTICS   — role aliases the UI actually consumes
+   Always reach for a semantic token in product/UI code.
+
+   NOTE: legacy ramp NAMES are preserved (--blue-*, --violet-*, --teal-*)
+   so older code keeps working, but they alias onto green / slate — never
+   render literal blue or purple. Prefer the semantic aliases.
+   =============================================================== */
+
+:root {
+  /* ---- Brand: vivid spring green (anchor = #50FA6E) ---------- */
+  --brand-25:  #f0fef3;
+  --brand-50:  #e2fde8;   /* soft mint surface / selected nav */
+  --brand-100: #bff8cd;   /* active badge bg, soft fills */
+  --brand-200: #8af1a4;
+  --brand-300: #62ea84;   /* card hover border */
+  --brand-400: #50FA6E;   /* ★ THE brand color — primary FILL (dark text on top) */
+  --brand-500: #22e349;   /* hover/pressed fill, live dot */
+  --brand-600: #11a132;   /* green icons/accents ON white (readable) */
+  --brand-700: #0c7d28;   /* green TEXT / links / active labels ON white */
+  --brand-800: #095f1f;
+  --brand-900: #064214;
+
+  /* Dark green for text/icons placed ON the bright brand fill. */
+  --on-brand-ink: #06371a;
+
+  /* ---- Legacy aliases → green (never blue/teal in product) ---- */
+  --teal-50:  var(--brand-50);
+  --teal-100: var(--brand-100);
+  --teal-500: var(--brand-500);
+  --teal-600: var(--brand-600);
+  --teal-700: var(--brand-700);
+  --blue-50:  var(--brand-50);
+  --blue-100: var(--brand-100);
+  --blue-500: var(--brand-500);
+  --blue-600: var(--brand-600);
+  --blue-700: var(--brand-700);
+
+  /* ---- Neutrals: clean cool-mist gray ------------------------ */
+  /* Bright, modern, near-neutral with the faintest cool "mist" lean —
+     NOT sage/green and NOT yellow-warm (both read dated). This is what
+     lets #50FA6E feel crisp instead of muddy. */
+  --gray-25:  #fcfcfd;   /* hairline off-white */
+  --gray-50:  #f6f8fa;   /* app background — bright, clean */
+  --gray-100: #eef1f5;   /* subtle fills, hover wells */
+  --gray-200: #e4e8ee;   /* default border (light, low-contrast) */
+  --gray-300: #d3dae2;   /* strong border */
+  --gray-400: #98a1ad;   /* placeholder / meta */
+  --gray-500: #687181;   /* secondary text */
+  --gray-600: #4b5563;
+  --gray-700: #343c47;   /* body text */
+  --gray-800: #232a33;   /* @kind color */
+  --gray-900: #141a22;   /* headings, key numbers — deep cool charcoal */
+
+  /* Ink — deep cool charcoal for inverted / prototype chrome */
+  --ink:      #141a22;
+  --ink-soft: #1d2530;
+
+  /* ---- Status palette ---------------------------------------- */
+  /* Approved = a calmer natural green (distinct from the neon brand). */
+  --green-50:  #e9f8ee;
+  --green-100: #cdeed8;
+  --green-500: #1f9d52;
+  --green-600: #178344;
+  --green-700: #136d39;
+
+  /* Review / warning / PREMIUM */
+  --amber-50:  #fdf3e3;
+  --amber-100: #fbe5c2;
+  --amber-500: #e08a0a;
+  --amber-600: #c2750a;
+  --amber-700: #92560a;
+
+  /* Danger / destructive — soft red */
+  --red-50:  #fceced;
+  --red-100: #f9d8da;
+  --red-500: #e25c5c;
+  --red-600: #cf4444;
+  --red-700: #b23537;
+
+  /* Archived / inactive — muted slate (legacy --violet-* aliases) */
+  --slate-50:  #eef1ef;
+  --slate-100: #dde2de;
+  --slate-500: #788078;
+  --slate-600: #5e665e;
+  --violet-50:  var(--slate-50);
+  --violet-100: var(--slate-100);
+  --violet-500: var(--slate-500);
+  --violet-600: var(--slate-600);
+
+  /* =============================================================
+     SEMANTIC ALIASES — use these in product code
+     ============================================================= */
+
+  /* Brand roles */
+  --color-primary:        var(--brand-400);   /* #50FA6E — fills / CTAs / active bg */
+  --color-primary-hover:  var(--brand-500);   /* deeper green on hover/press */
+  --color-primary-text:   var(--brand-700);   /* readable green for TEXT/icons on white */
+  --color-primary-soft:   var(--brand-50);
+  --color-primary-softer: var(--brand-25);
+  --color-on-primary:     var(--on-brand-ink);/* dark-green text/icon ON the bright fill */
+  --color-focus-ring:     color-mix(in srgb, var(--brand-400) 55%, transparent);
+  --color-link:           var(--brand-700);
+
+  /* Text */
+  --text-strong:    var(--gray-900);
+  --text-body:      var(--gray-700);
+  --text-secondary: var(--gray-500);
+  --text-tertiary:  var(--gray-400);
+  --text-on-ink:    #eaeef3;
+  --text-on-ink-dim:#8a93a1;
+
+  /* Surfaces (opaque) */
+  --surface-page:   var(--gray-50);
+  --surface-card:   #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: var(--gray-50);
+  --surface-hover:  var(--gray-100);
+  --surface-active: var(--brand-50);   /* selected nav / row tint */
+  --surface-ink:    var(--ink);
+
+  /* Glass — soft & restrained ("은은한 glass"), used sparingly. */
+  --glass-fill:        rgba(255, 255, 255, 0.72);
+  --glass-fill-strong: rgba(255, 255, 255, 0.92);
+  --glass-fill-ink:    rgba(20, 26, 34, 0.62);
+  --glass-border:      rgba(255, 255, 255, 0.9);
+  --glass-border-ink:  rgba(255, 255, 255, 0.1);
+
+  /* Borders & dividers */
+  --border-default: var(--gray-200);
+  --border-strong:  var(--gray-300);
+  --border-subtle:  var(--gray-100);
+
+  /* Status — fg / bg pairs for badges & pills.
+     active = vivid mint-green · approved = calmer soft green. */
+  --status-draft-fg:    var(--gray-600);   --status-draft-bg:    var(--gray-100);
+  --status-active-fg:   var(--brand-800);  --status-active-bg:   var(--brand-100);
+  --status-review-fg:   var(--amber-700);  --status-review-bg:   var(--amber-50);
+  --status-approved-fg: var(--green-700);  --status-approved-bg: var(--green-50);
+  --status-archived-fg: var(--slate-600);  --status-archived-bg: var(--slate-50);
+  --status-handoff-fg:  var(--slate-600);  --status-handoff-bg:  var(--slate-50);
+
+  /* Membership tiers (KAKE admin demo) */
+  --tier-free-fg: var(--green-700);  --tier-free-bg: var(--green-50);
+  --tier-prem-fg: var(--amber-700);  --tier-prem-bg: var(--amber-50);
+
+  /* Feedback */
+  --color-success: var(--green-600);
+  --color-warning: var(--amber-600);
+  --color-danger:  var(--red-600);
+  --color-info:    var(--brand-700);
+  --color-live:    var(--brand-500);   /* "실시간 동기화 중" pulse dot */
+}

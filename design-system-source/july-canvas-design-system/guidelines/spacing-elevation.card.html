@@ -1,0 +1,21 @@
+<!-- @dsCard group="Spacing" viewport="700x180" name="Elevation" subtitle="Cool, layered shadows + brand glow" -->
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin:0; padding:28px; background:var(--surface-page); font-family:var(--font-sans); }
+  .row { display:flex; gap:24px; align-items:center; flex-wrap:wrap; }
+  .col { text-align:center; }
+  .box { width:96px; height:64px; background:#fff; border-radius:14px; }
+  .n { font:700 11px/1.4 var(--font-sans); color:var(--text-strong); margin-top:12px; }
+</style></head>
+<body>
+<div class="row">
+  <div class="col"><div class="box" style="box-shadow:var(--shadow-sm)"></div><div class="n">sm</div></div>
+  <div class="col"><div class="box" style="box-shadow:var(--shadow-md)"></div><div class="n">md</div></div>
+  <div class="col"><div class="box" style="box-shadow:var(--shadow-lg)"></div><div class="n">lg</div></div>
+  <div class="col"><div class="box" style="box-shadow:var(--shadow-xl)"></div><div class="n">xl</div></div>
+  <div class="col"><div class="box" style="box-shadow:var(--shadow-2xl)"></div><div class="n">2xl</div></div>
+  <div class="col"><div class="box" style="background:var(--brand-600);box-shadow:var(--shadow-brand-lg)"></div><div class="n">brand glow</div></div>
+</div>
+</body></html>

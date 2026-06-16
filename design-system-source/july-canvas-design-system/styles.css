@@ -1,0 +1,19 @@
+/* ===============================================================
+   July Canvas — Global stylesheet entry point
+   ---------------------------------------------------------------
+   This is the single file consumers link. It is an import manifest
+   only — no rules live here. Everything below is shipped to
+   consuming projects, and every @font-face in the closure declares
+   a webfont.
+
+   Order matters: fonts first, then primitives, then the layers that
+   reference them.
+   =============================================================== */
+
+@import "./tokens/fonts.css";
+@import "./tokens/colors.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./tokens/effects.css";
+@import "./tokens/base.css";
+@import "./components.css";

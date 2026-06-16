@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 디자인 시스템 원본(참고용, 앱에서 import 안 함) — lint 대상 제외
+    "design-system-source/**",
   ]),
 ]);
 

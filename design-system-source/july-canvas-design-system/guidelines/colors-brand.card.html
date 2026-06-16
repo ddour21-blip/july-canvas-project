@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Brand — Fresh Green" subtitle="The signature ramp. Primary = 600 (solid, white text)." -->
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin:0; padding:20px; background:#fff; font-family:var(--font-sans); }
+  .ramp { display:flex; gap:8px; }
+  .sw { flex:1; }
+  .chip { height:60px; border-radius:10px; border:1px solid rgba(20,24,36,.06); }
+  .n { font:700 11px/1.4 var(--font-sans); color:var(--text-strong); margin-top:8px; }
+  .h { font:500 10px/1.4 var(--font-mono); color:var(--text-tertiary); }
+  .tag { display:inline-block; margin-top:2px; font:700 9px/1 var(--font-sans); color:var(--color-primary-text); }
+</style></head>
+<body>
+<div class="ramp" id="r"></div>
+<script>
+  const steps = [['50','--brand-50'],['100','--brand-100'],['200','--brand-200'],['300','--brand-300'],['400','--brand-400'],['500','--brand-500'],['600','--brand-600'],['700','--brand-700'],['800','--brand-800'],['900','--brand-900']];
+  const cs = getComputedStyle(document.documentElement);
+  document.getElementById('r').innerHTML = steps.map(([n,v]) => {
+    const hex = cs.getPropertyValue(v).trim();
+    const isPrimary = n === '600';
+    return `<div class="sw"><div class="chip" style="background:${hex}"></div><div class="n">${n}</div><div class="h">${hex}</div>${isPrimary?'<div class="tag">PRIMARY</div>':''}</div>`;
+  }).join('');
+</script>
+</body></html>

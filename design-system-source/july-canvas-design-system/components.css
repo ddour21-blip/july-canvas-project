@@ -1,0 +1,293 @@
+/* ===============================================================
+   July Canvas — Component classes
+   ---------------------------------------------------------------
+   The shared style layer for the reusable React primitives AND the
+   UI-kit screens. React components in components/** emit these class
+   names; kit HTML can use them directly. All styling resolves through
+   the design tokens — no hard-coded colors here.
+   =============================================================== */
+
+/* ============================ BUTTON ============================ */
+.jc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-md);
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: var(--fw-bold) var(--text-base)/1 var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard);
+}
+.jc-btn:active { transform: translateY(0.5px) scale(0.99); }
+.jc-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.jc-btn > svg { flex: none; }
+
+/* sizes */
+.jc-btn--sm { height: var(--control-sm); padding: 0 var(--space-3); font-size: var(--text-sm); border-radius: var(--radius-sm); }
+.jc-btn--lg { height: var(--control-lg); padding: 0 var(--space-6); font-size: var(--text-md); }
+.jc-btn--block { width: 100%; }
+
+/* variants */
+.jc-btn--primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: var(--shadow-brand);
+}
+.jc-btn--primary:hover:not(:disabled) { background: var(--color-primary-hover); box-shadow: var(--shadow-brand-lg); }
+
+.jc-btn--secondary {
+  background: var(--gray-100);
+  color: var(--gray-700);
+}
+.jc-btn--secondary:hover:not(:disabled) { background: var(--gray-200); }
+
+.jc-btn--outline {
+  background: var(--surface-card);
+  border-color: var(--border-strong);
+  color: var(--gray-700);
+  box-shadow: var(--shadow-xs);
+}
+.jc-btn--outline:hover:not(:disabled) { background: var(--gray-50); border-color: var(--gray-400); }
+
+.jc-btn--ghost {
+  background: transparent;
+  color: var(--gray-600);
+}
+.jc-btn--ghost:hover:not(:disabled) { background: var(--surface-hover); color: var(--gray-800); }
+
+.jc-btn--danger {
+  background: var(--red-50);
+  color: var(--red-600);
+}
+.jc-btn--danger:hover:not(:disabled) { background: var(--red-100); }
+
+/* glass variant — for floating chrome over content */
+.jc-btn--glass {
+  background: var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-border);
+  color: var(--gray-700);
+  box-shadow: var(--shadow-sm);
+}
+.jc-btn--glass:hover:not(:disabled) { background: #fff; }
+
+/* ========================= ICON BUTTON ========================= */
+.jc-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-md);
+  height: var(--control-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--gray-500);
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+.jc-icon-btn:hover:not(:disabled) { background: var(--surface-hover); color: var(--gray-800); }
+.jc-icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.jc-icon-btn--sm { width: var(--control-sm); height: var(--control-sm); border-radius: var(--radius-sm); }
+.jc-icon-btn--round { border-radius: var(--radius-pill); }
+.jc-icon-btn--soft { background: var(--gray-50); }
+.jc-icon-btn--soft:hover:not(:disabled) { background: var(--gray-200); }
+.jc-icon-btn--danger:hover:not(:disabled) { background: var(--red-50); color: var(--red-600); }
+
+/* ============================ BADGE ============================ */
+/* Small status pills — fg/bg pair driven by tone */
+.jc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font: var(--fw-bold) var(--text-2xs)/1.4 var(--font-sans);
+  white-space: nowrap;
+}
+.jc-badge > svg { flex: none; }
+.jc-badge--neutral { background: var(--gray-100);   color: var(--gray-600); }
+.jc-badge--brand   { background: var(--brand-50);    color: var(--brand-700); }
+.jc-badge--info    { background: var(--status-active-bg);   color: var(--status-active-fg); }
+.jc-badge--success { background: var(--status-approved-bg); color: var(--status-approved-fg); }
+.jc-badge--warning { background: var(--status-review-bg);   color: var(--status-review-fg); }
+.jc-badge--danger  { background: var(--red-50);      color: var(--red-600); }
+.jc-badge--handoff { background: var(--status-handoff-bg);  color: var(--status-handoff-fg); }
+.jc-badge--archived { background: var(--status-archived-bg); color: var(--status-archived-fg); }
+/* solid emphasis variant (e.g. notification count) */
+.jc-badge--solid-danger { background: var(--red-500); color: #fff; }
+.jc-badge--solid-brand  { background: var(--color-primary); color: var(--color-on-primary); }
+
+/* version / mono tag */
+.jc-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font: var(--fw-bold) var(--text-2xs)/1.4 var(--font-mono);
+  letter-spacing: var(--tracking-snug);
+}
+.jc-tag--neutral { background: var(--gray-100); color: var(--gray-500); }
+
+/* =========================== AVATAR ============================ */
+.jc-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-100);
+  color: var(--brand-700);
+  font: var(--fw-bold) var(--text-sm)/1 var(--font-sans);
+  text-transform: uppercase;
+  overflow: hidden;
+  flex: none;
+  border: 2px solid var(--surface-card);
+}
+.jc-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.jc-avatar--sm { width: 28px; height: 28px; font-size: var(--text-xs); }
+.jc-avatar--lg { width: 48px; height: 48px; font-size: var(--text-md); }
+/* overlapping stack */
+.jc-avatar-stack { display: inline-flex; }
+.jc-avatar-stack > .jc-avatar:not(:first-child) { margin-left: -10px; }
+
+/* ============================ CARD ============================= */
+.jc-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+.jc-card--pad { padding: var(--space-6); }
+.jc-card--interactive {
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+.jc-card--interactive:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--brand-300);
+  transform: translateY(-2px);
+}
+.jc-card--glass {
+  background: var(--glass-fill);
+  border-color: var(--glass-border);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ===================== INPUT / TEXTAREA ======================== */
+.jc-field-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font: var(--type-label);
+  color: var(--gray-700);
+}
+.jc-field-label .jc-req { color: var(--red-500); margin-left: 2px; }
+
+.jc-input,
+.jc-textarea {
+  width: 100%;
+  padding: 0 var(--space-3);
+  height: var(--control-md);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font: var(--fw-medium) var(--text-base)/1.4 var(--font-sans);
+  transition: border-color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard);
+  outline: none;
+}
+.jc-input::placeholder,
+.jc-textarea::placeholder { color: var(--text-tertiary); }
+.jc-input:focus,
+.jc-textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+.jc-input:disabled,
+.jc-textarea:disabled { background: var(--gray-50); color: var(--text-tertiary); cursor: not-allowed; }
+.jc-input--invalid,
+.jc-textarea--invalid { border-color: var(--red-500); }
+.jc-input--invalid:focus,
+.jc-textarea--invalid:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--red-500) 30%, transparent); }
+
+.jc-textarea {
+  height: auto;
+  min-height: 96px;
+  padding: var(--space-3);
+  line-height: var(--leading-relaxed);
+  resize: vertical;
+}
+/* sunken variant — long-form editors (matches the product's code/doc fields) */
+.jc-input--sunken,
+.jc-textarea--sunken { background: var(--surface-sunken); }
+.jc-input--sunken:focus,
+.jc-textarea--sunken:focus { background: var(--surface-card); }
+
+.jc-field-hint { margin-top: var(--space-2); font: var(--type-meta); color: var(--text-tertiary); }
+.jc-field-hint--error { color: var(--red-600); }
+
+/* ============================ TABS ============================= */
+.jc-tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border-default);
+}
+.jc-tab {
+  padding: var(--space-3) var(--space-5);
+  margin-bottom: -1px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font: var(--fw-bold) var(--text-base)/1 var(--font-sans);
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+.jc-tab:hover { color: var(--gray-700); }
+.jc-tab--active { color: var(--color-primary-text); border-bottom-color: var(--color-primary); }
+
+/* ============================ TOAST ============================ */
+.jc-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--gray-800);
+  color: #fff;
+  font: var(--fw-medium) var(--text-base)/1.2 var(--font-sans);
+  box-shadow: var(--shadow-xl);
+  white-space: nowrap;
+}
+.jc-toast > svg { flex: none; }
+.jc-toast--success svg { color: #4ade80; }
+.jc-toast--error svg { color: #f87171; }
+
+/* ========================== LIVE DOT =========================== */
+.jc-live-dot {
+  width: 9px; height: 9px;
+  border-radius: var(--radius-pill);
+  background: var(--color-live);
+  flex: none;
+  animation: jc-pulse 1.8s var(--ease-standard) infinite;
+}
+@keyframes jc-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-live) 55%, transparent); }
+  50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-live) 0%, transparent); }
+}

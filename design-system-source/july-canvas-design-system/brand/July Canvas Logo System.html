@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>July Canvas — Logo System</title>
+<link rel="icon" href="../public/brand/favicon/favicon.svg" type="image/svg+xml" />
+<style>
+  @font-face{font-family:"Pretendard Variable";font-weight:45 920;font-style:normal;font-display:swap;
+    src:url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/woff2/PretendardVariable.woff2") format("woff2-variations");}
+  @import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap");
+  :root{
+    --page:#f6f8fa;--card:#fff;--ink:#141a22;--ink-soft:#1d2530;--body:#343c47;
+    --muted:#687181;--faint:#98a1ad;--border:#e4e8ee;--subtle:#eef1f5;
+    --brand:#50FA6E;--brand-left:#25C547;--brand-right:#11982F;--brand-text:#0c7d28;--brand-soft:#e2fde8;--spark:#06371a;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--page);font-family:"Pretendard Variable",-apple-system,sans-serif;color:var(--body);-webkit-font-smoothing:antialiased}
+  .mono{font-family:"Geist Mono",monospace}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 32px}
+  h1,h2,h3{color:var(--ink);letter-spacing:-.025em;margin:0}
+  .eyebrow{font:600 12px/1 "Geist Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--brand-text)}
+
+  /* hero */
+  header.hero{padding:96px 0 72px;text-align:center}
+  .hero .sym{filter:drop-shadow(0 18px 30px rgba(17,152,47,.22))}
+  .hero h1{font-size:54px;font-weight:800;margin:28px 0 0}
+  .hero h1 .c{color:var(--brand-text)}
+  .hero p{font-size:18px;color:var(--muted);margin:14px auto 0;max-width:560px;line-height:1.6}
+
+  section{padding:56px 0;border-top:1px solid var(--border)}
+  .sec-head{margin-bottom:32px}
+  .sec-head h2{font-size:26px;font-weight:800}
+  .sec-head p{color:var(--muted);font-size:15px;margin:8px 0 0;max-width:620px;line-height:1.6}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:18px;display:flex;align-items:center;justify-content:center;min-height:200px;position:relative;overflow:hidden}
+  .panel.ink{background:var(--ink);border-color:#2a323d}
+  .tag{position:absolute;left:16px;top:14px;font:600 11px/1 "Geist Mono",monospace;letter-spacing:.06em;color:var(--faint)}
+  .ink .tag{color:#5b6573}
+
+  /* depth ramp */
+  .ramp{display:flex;gap:14px;flex-wrap:wrap}
+  .chip{flex:1;min-width:150px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+  .sw{height:64px;border-radius:10px}
+  .chip .nm{font-weight:700;color:var(--ink);font-size:14px}
+  .chip .hex{font:500 12px/1 "Geist Mono",monospace;color:var(--muted)}
+  .chip .role{font-size:12px;color:var(--faint)}
+
+  /* lockups */
+  .lock-light{background:#fff}
+  .wmrow{display:flex;align-items:center;gap:14px}
+
+  /* in-context */
+  .demo{border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--card)}
+  .demo-top{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;border-bottom:1px solid var(--border);background:#fff}
+  .demo-top .right{display:flex;align-items:center;gap:14px;color:var(--muted);font-size:13px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--brand);display:inline-block;margin-right:6px;box-shadow:0 0 0 3px rgba(80,250,110,.2)}
+  .demo-body{display:flex;min-height:240px}
+  .side{width:208px;background:var(--ink);padding:22px 16px;display:flex;flex-direction:column;gap:6px}
+  .side .logo{display:flex;align-items:center;gap:10px;padding:0 6px 18px}
+  .nav{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;font-size:13px;color:#aeb6c2}
+  .nav.active{background:rgba(80,250,110,.14);color:#eafff0}
+  .nav .ic{width:16px;height:16px;border-radius:4px;background:currentColor;opacity:.55}
+  .nav.active .ic{background:var(--brand);opacity:1}
+  .main{flex:1;padding:26px;background:var(--page)}
+  .main .crumb{font-size:12px;color:var(--faint);margin-bottom:10px}
+  .main h3{font-size:20px;font-weight:800}
+  .skl{height:12px;border-radius:6px;background:var(--subtle);margin-top:14px}
+
+  /* favicon */
+  .favset{display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap}
+  .favitem{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .favtile{background:#fff;border:1px solid var(--border);border-radius:22%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(20,26,34,.08)}
+  .cap{font:500 11px/1 "Geist Mono",monospace;color:var(--muted)}
+  .appset{display:flex;gap:22px;flex-wrap:wrap}
+  .appitem{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .appitem img{border-radius:22.3%;box-shadow:0 8px 22px rgba(20,26,34,.14)}
+
+  /* dos donts */
+  .rule{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;display:flex;gap:14px;align-items:flex-start}
+  .mark{width:24px;height:24px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff}
+  .ok{background:var(--brand-right)} .no{background:#cf4444}
+  .rule p{margin:0;font-size:14px;line-height:1.5;color:var(--body)}
+  .rule b{color:var(--ink)}
+
+  footer{padding:48px 0 80px;color:var(--faint);font-size:13px;text-align:center}
+  code{font-family:"Geist Mono",monospace;font-size:.92em;background:var(--subtle);padding:2px 6px;border-radius:5px;color:var(--ink-soft)}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <img class="sym" src="../public/brand/logo/july-canvas-symbol.svg" width="104" height="104" alt="July Canvas symbol" />
+    <h1>July <span class="c">Canvas</span></h1>
+    <p>기획 문서 · 프로토타입 · 산출물이 레이어처럼 쌓이는 <b>3D 캔버스 블록</b>.<br/>그린-퍼스트 입체 심볼 시스템.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">The Symbol</div>
+      <h2 style="margin-top:10px">레이어드 캔버스 블록</h2>
+      <p>세 겹으로 쌓인 isometric 슬랩이 시장조사 → 정의 → 산출의 적층 과정을 표현합니다. 컬러 마크라 라이트·다크 어디서나 반전 없이 동일하게 사용합니다. 상단의 spark는 캔버스 위에서 생성되는 결과물을 상징합니다.</p>
+    </div>
+    <div class="grid2">
+      <div class="panel lock-light"><span class="tag">SYMBOL / LIGHT</span><img src="../public/brand/logo/july-canvas-symbol.svg" width="120" height="120" alt="symbol on light" /></div>
+      <div class="panel ink"><span class="tag">SYMBOL / DARK</span><img src="../public/brand/logo/july-canvas-symbol.svg" width="120" height="120" alt="symbol on dark" /></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Construction</div>
+      <h2 style="margin-top:10px">입체는 그린 명도로</h2>
+      <p>그라데이션·그림자 없이 평면 면 분리만으로 깊이를 만듭니다. 윗면이 가장 밝은 브랜드 그린, 좌·우 측면으로 갈수록 어두워집니다.</p>
+    </div>
+    <div class="ramp">
+      <div class="chip"><div class="sw" style="background:#50FA6E"></div><div class="nm">Top face</div><div class="hex">#50FA6E</div><div class="role">브랜드 그린 · 가장 밝은 윗면</div></div>
+      <div class="chip"><div class="sw" style="background:#25C547"></div><div class="nm">Left face</div><div class="hex">#25C547</div><div class="role">중간 명도 측면</div></div>
+      <div class="chip"><div class="sw" style="background:#11982F"></div><div class="nm">Right face</div><div class="hex">#11982F</div><div class="role">가장 어두운 측면</div></div>
+      <div class="chip"><div class="sw" style="background:#06371a"></div><div class="nm">Spark ink</div><div class="hex">#06371a</div><div class="role">윗면 spark / 디테일</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Lockups</div>
+      <h2 style="margin-top:10px">심볼 + 워드마크</h2>
+      <p>워드마크는 Pretendard 800. <b>July</b>는 차콜(다크에선 화이트), <b>Canvas</b>는 그린으로 제품의 그린-퍼스트 톤을 강조합니다.</p>
+    </div>
+    <div class="grid2">
+      <div class="panel lock-light"><span class="tag">LOCKUP / LIGHT</span><img src="../public/brand/logo/july-canvas-logo-light.svg" height="52" alt="lockup light" /></div>
+      <div class="panel ink"><span class="tag">LOCKUP / DARK</span><img src="../public/brand/logo/july-canvas-logo-dark.svg" height="52" alt="lockup dark" /></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">In context</div>
+      <h2 style="margin-top:10px">헤더 · 사이드바 적용</h2>
+      <p>기존의 깨진 블루 라운드 아이콘을 대체합니다. 밝은 헤더에는 라이트 락업, 드라이브형 다크 사이드바에는 다크 락업을 사용합니다.</p>
+    </div>
+    <div class="demo">
+      <div class="demo-top">
+        <img src="../public/brand/logo/july-canvas-logo-light.svg" height="30" alt="header logo" />
+        <div class="right"><span><span class="dot"></span>실시간 동기화 중</span><span>알림</span></div>
+      </div>
+      <div class="demo-body">
+        <div class="side">
+          <div class="logo"><img src="../public/brand/logo/july-canvas-logo-dark.svg" height="26" alt="sidebar logo" /></div>
+          <div class="nav active"><span class="ic"></span>kake</div>
+          <div class="nav"><span class="ic"></span>프로젝트 목록</div>
+          <div class="nav"><span class="ic"></span>기능 정책 / 기획서</div>
+          <div class="nav"><span class="ic"></span>프로토타입 설정</div>
+          <div class="nav"><span class="ic"></span>팀원 관리</div>
+        </div>
+        <div class="main">
+          <div class="crumb">프로젝트 목록 / kake</div>
+          <h3>kake Admin</h3>
+          <div class="skl" style="width:62%"></div>
+          <div class="skl" style="width:88%"></div>
+          <div class="skl" style="width:74%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Favicon &amp; App icons</div>
+      <h2 style="margin-top:10px">초소형까지 식별되게</h2>
+      <p>16px favicon은 spark를 빼고 2-레이어로 단순화한 <code>favicon.svg</code>를 사용해 또렷하게 유지합니다. 앱 아이콘은 밝고 깨끗한 화이트 타일에 심볼을 얹습니다.</p>
+    </div>
+    <div class="grid2" style="align-items:stretch">
+      <div class="panel" style="min-height:180px;flex-direction:column;gap:22px">
+        <span class="tag">FAVICON</span>
+        <div class="favset">
+          <div class="favitem"><div class="favtile" style="width:64px;height:64px"><img src="../public/brand/favicon/favicon.svg" width="44" height="44" alt="64"/></div><span class="cap">64</span></div>
+          <div class="favitem"><div class="favtile" style="width:32px;height:32px"><img src="../public/brand/favicon/favicon-32x32.png" width="26" height="26" alt="32"/></div><span class="cap">32</span></div>
+          <div class="favitem"><div class="favtile" style="width:16px;height:16px;border-radius:4px"><img src="../public/brand/favicon/favicon-16x16.png" width="14" height="14" alt="16"/></div><span class="cap">16</span></div>
+        </div>
+      </div>
+      <div class="panel" style="min-height:180px;flex-direction:column;gap:22px">
+        <span class="tag">APP ICON</span>
+        <div class="appset">
+          <div class="appitem"><img src="../public/brand/favicon/app-icon-512.png" width="92" height="92" alt="app"/><span class="cap">512 · any</span></div>
+          <div class="appitem"><img src="../public/brand/favicon/apple-touch-icon.png" width="68" height="68" alt="apple"/><span class="cap">180 · apple</span></div>
+          <div class="appitem"><img src="../public/brand/favicon/icon-maskable-512.png" width="68" height="68" alt="maskable"/><span class="cap">512 · maskable</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Usage</div>
+      <h2 style="margin-top:10px">규칙</h2>
+    </div>
+    <div class="grid2">
+      <div class="rule"><span class="mark ok">✓</span><p><b>심볼은 컬러 그대로.</b> 라이트·다크 동일하게 사용하고, 주변 여백은 심볼 높이의 1/4 이상 확보합니다.</p></div>
+      <div class="rule"><span class="mark ok">✓</span><p><b>최소 크기를 지키세요.</b> 심볼 24px·락업 28px 이하에서는 단순화된 <code>favicon.svg</code>를 사용합니다.</p></div>
+      <div class="rule"><span class="mark no">✕</span><p><b>색·그림자·글래스 추가 금지.</b> 평면 입체 면을 그대로 두고 외곽선·드롭섀도우를 더하지 않습니다.</p></div>
+      <div class="rule"><span class="mark no">✕</span><p><b>블루·퍼플·폴더형 금지.</b> 기존 블루 라운드 아이콘과 퍼플 톤은 더 이상 사용하지 않습니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Open Graph</div>
+      <h2 style="margin-top:10px">공유 카드 템플릿</h2>
+      <p>링크 공유·소셜 미리보기용 1200×630 OG 이미지. <code>og/og-image.png</code> 로 동봉되어 있고, 워드마크·태그라인만 바꿔 재사용할 수 있습니다.</p>
+    </div>
+    <div class="panel" style="padding:24px"><img src="../public/brand/og/og-image.png" alt="OG image" style="width:100%;max-width:760px;border-radius:12px;border:1px solid var(--border)" /></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">파일은 <code>public/brand/</code> 에 정리되어 있습니다 · <code>README.md</code> 에 head 스니펫 / Next.js metadata 포함</div>
+</footer>
+
+</body>
+</html>

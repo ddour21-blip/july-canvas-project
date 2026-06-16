@@ -1,0 +1,38 @@
+<!-- @dsCard group="Components" viewport="700x300" name="Forms — Input & Textarea" subtitle="Labels, focus, error, sunken variant" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; padding: 24px; background: #fff; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { Input, Textarea } = window.JulyCanvasDesignSystem_d81917;
+function Demo() {
+  return (
+    <div className="grid">
+      <Input label="프로젝트 이름" required placeholder="예: 쇼핑몰 앱 리뉴얼" defaultValue="kake Admin 콘솔" />
+      <Input label="접속 코드" placeholder="예: project_123" hint="팀원에게 공유할 입장 코드입니다." />
+      <Input label="이메일" defaultValue="admin@kake" error="올바른 이메일 형식이 아닙니다." />
+      <Input label="비활성 필드" placeholder="수정 불가" disabled />
+      <div style={{gridColumn:'1 / -1'}}>
+        <Textarea label="상세 정책 및 인터랙션 디스크립션" sunken rows={4}
+          defaultValue={"[기능 정의]\n[동작]\n[정책]\n[예외 사항]"} />
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script>
+</body>
+</html>

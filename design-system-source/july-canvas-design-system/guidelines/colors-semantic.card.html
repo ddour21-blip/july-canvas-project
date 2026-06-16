@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x170" name="Semantic — Status & Membership" subtitle="fg/bg pairs for project, document, and tier states" -->
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin:0; padding:20px; background:#fff; font-family:var(--font-sans); }
+  .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .pill { display:inline-flex; align-items:center; padding:4px 12px; border-radius:999px; font:700 12px/1.4 var(--font-sans); }
+  .cell { }
+  .lbl { font:700 10px/1.4 var(--font-sans); letter-spacing:.04em; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:8px; }
+  .row { display:flex; flex-direction:column; gap:8px; }
+</style></head>
+<body>
+<div class="grid">
+  <div class="cell"><div class="lbl">초안 / Draft</div><span class="pill" style="background:var(--status-draft-bg);color:var(--status-draft-fg)">초안</span></div>
+  <div class="cell"><div class="lbl">활성 / Active</div><span class="pill" style="background:var(--status-active-bg);color:var(--status-active-fg)">활성</span></div>
+  <div class="cell"><div class="lbl">리뷰 / Review</div><span class="pill" style="background:var(--status-review-bg);color:var(--status-review-fg)">리뷰</span></div>
+  <div class="cell"><div class="lbl">승인 / Approved</div><span class="pill" style="background:var(--status-approved-bg);color:var(--status-approved-fg)">승인</span></div>
+  <div class="cell"><div class="lbl">보관됨 / Archived</div><span class="pill" style="background:var(--status-archived-bg);color:var(--status-archived-fg)">보관됨</span></div>
+  <div class="cell"><div class="lbl">FREE TRIAL</div><span class="pill" style="background:var(--tier-free-bg);color:var(--tier-free-fg)">FREE (TRIAL)</span></div>
+  <div class="cell"><div class="lbl">PREMIUM</div><span class="pill" style="background:var(--tier-prem-bg);color:var(--tier-prem-fg)">PREMIUM</span></div>
+  <div class="cell"><div class="lbl">Danger</div><span class="pill" style="background:var(--red-50);color:var(--red-600)">삭제</span></div>
+</div>
+</body></html>

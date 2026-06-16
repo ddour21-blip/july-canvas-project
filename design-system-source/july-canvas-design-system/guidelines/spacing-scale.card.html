@@ -1,0 +1,19 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Spacing scale" subtitle="4px base grid" -->
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin:0; padding:24px; background:#fff; font-family:var(--font-sans); }
+  .row { display:flex; align-items:flex-end; gap:18px; }
+  .col { text-align:center; }
+  .bar { background:var(--brand-200); border-radius:4px 4px 0 0; width:28px; }
+  .n { font:700 11px/1.4 var(--font-sans); color:var(--text-strong); margin-top:8px; }
+  .px { font:500 10px/1.4 var(--font-mono); color:var(--text-tertiary); }
+</style></head>
+<body>
+<div class="row" id="r"></div>
+<script>
+  const steps=[['1',4],['2',8],['3',12],['4',16],['5',20],['6',24],['8',32],['10',40],['12',48],['16',64]];
+  document.getElementById('r').innerHTML = steps.map(([n,px])=>`<div class="col"><div class="bar" style="height:${px}px"></div><div class="n">${n}</div><div class="px">${px}</div></div>`).join('');
+</script>
+</body></html>

@@ -1,0 +1,15 @@
+{
+  "name": "July Canvas",
+  "short_name": "July Canvas",
+  "description": "기획 올인원 워크스페이스 — 시장조사부터 PRD/PPTX 산출물까지",
+  "lang": "ko",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8fa",
+  "theme_color": "#50FA6E",
+  "icons": [
+    { "src": "/brand/favicon/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/favicon/app-icon-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/favicon/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,71 @@
+/* July Canvas — Effects: shadows, blur, gradients, motion
+   ===============================================================
+   "Soft premium SaaS", not heavy glassmorphism. Shadows are quiet
+   and green-charcoal tinted; glass is a restrained frosted surface
+   used sparingly (floating toolbars, sticky bars); the page wash is
+   a barely-there green/teal bloom on warm off-white. Motion is gentle
+   — ease, no bounce on UI chrome.
+   =============================================================== */
+
+:root {
+  /* ---- Elevation / shadows ----------------------------------- */
+  /* Soft, low, cool-neutral tint — modern "floating on light" depth,
+     not heavy old-admin drop shadows. */
+  --shadow-xs:  0 1px 2px rgba(18, 26, 38, 0.04);
+  --shadow-sm:  0 1px 2px rgba(18, 26, 38, 0.04), 0 1px 3px rgba(18, 26, 38, 0.03);
+  --shadow-md:  0 1px 3px rgba(18, 26, 38, 0.04), 0 4px 10px rgba(18, 26, 38, 0.05);
+  --shadow-lg:  0 4px 12px rgba(18, 26, 38, 0.05), 0 10px 24px rgba(18, 26, 38, 0.06);
+  --shadow-xl:  0 8px 24px rgba(18, 26, 38, 0.07), 0 18px 44px rgba(18, 26, 38, 0.08);
+  --shadow-2xl: 0 16px 40px rgba(18, 26, 38, 0.10), 0 32px 64px rgba(18, 26, 38, 0.10);
+
+  /* Subtle green lift for primary CTAs / focus moments (NOT a glow). */
+  --shadow-brand: 0 2px 8px rgba(34, 227, 73, 0.24);
+  --shadow-brand-lg: 0 6px 16px rgba(34, 227, 73, 0.26);
+
+  /* Inset/well shadow for sunken inputs & code blocks */
+  --shadow-inset: inset 0 1px 2px rgba(18, 26, 38, 0.04);
+
+  /* ---- Frosted glass (restrained) ---------------------------- */
+  --blur-sm: blur(6px);   /* @kind other */
+  --blur-md: blur(12px);  /* @kind other */
+  --blur-lg: blur(18px);  /* @kind other */
+  /* Ready-to-use glass recipe (apply fill + border + blur together):
+       background: var(--glass-fill);
+       border: 1px solid var(--glass-border);
+       backdrop-filter: var(--glass-blur);
+       box-shadow: var(--shadow-lg); */
+  --glass-blur: saturate(135%) blur(14px); /* @kind other */
+
+  /* ---- Signature backgrounds --------------------------------- */
+  /* Page wash: faint green + teal blooms on warm off-white. Barely
+     there — the structure (cards, panels) carries the design, not glow. */
+  /* Page wash: almost imperceptible. The background reads as a clean
+     bright neutral — just one faint cool-green hint in the top corner so
+     it isn't flat. Do NOT flood the screen with green tint. */
+  --gradient-aurora:
+    radial-gradient(900px 520px at 0% -12%, rgba(80, 250, 110, 0.05), transparent 55%),
+    radial-gradient(760px 520px at 100% -6%, rgba(80, 250, 110, 0.03), transparent 52%),
+    var(--gray-50); /* @kind color */
+
+  /* Brand gradient — logo mark, accent fills, progress bars */
+  --gradient-brand: linear-gradient(135deg, #6dfd86 0%, #50FA6E 48%, #22e349 100%); /* @kind color */
+  --gradient-brand-soft: linear-gradient(135deg, var(--brand-50), var(--brand-100)); /* @kind color */
+
+  /* ---- Motion ------------------------------------------------ */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);   /* @kind other */
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);  /* @kind other */
+  --ease-in:       cubic-bezier(0.4, 0, 1, 1);     /* @kind other */
+  --dur-fast:   120ms; /* @kind other */
+  --dur-normal: 200ms; /* @kind other */
+  --dur-slow:   320ms; /* @kind other */
+  --transition-base: all var(--dur-normal) var(--ease-standard); /* @kind other */
+
+  /* ---- Z-index scale ----------------------------------------- */
+  --z-base:    0;    /* @kind other */
+  --z-sticky:  50;   /* @kind other */
+  --z-panel:   40;   /* @kind other */
+  --z-toolbar: 50;   /* @kind other */
+  --z-overlay: 100;  /* @kind other */
+  --z-modal:   120;  /* @kind other */
+  --z-toast:   9999; /* @kind other */
+}
