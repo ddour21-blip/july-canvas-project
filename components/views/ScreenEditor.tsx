@@ -5,6 +5,7 @@ import type { User } from 'firebase/auth';
 import { addDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { col, docRef } from '@/lib/firestore';
+import { getPermissions } from '@/lib/auth';
 import { formatDateTime, generateId, getPageContext, getCssSelector, getTime, hashCode, nowMs, showToast } from '@/lib/utils';
 import { renderMarkdown } from '@/lib/markdown';
 import { generateHtmlBoilerplate } from '@/lib/htmlRenderer';
@@ -129,7 +130,8 @@ export default function ScreenEditor({
 
   const screen = screens.find((s) => s.id === screenId);
   const project = projects.find((p) => p.id === screen?.projectId);
-  const isEditor = !project?.ownerId || project.ownerId === user?.uid;
+  // 권한 기반 편집 가능 여부 (owner|editor). viewer는 읽기 전용.
+  const isEditor = getPermissions(project, user?.uid).canEdit;
   const annotations = useMemo(() => screen?.annotations || [], [screen]);
 
   // --- 버그 수정: 프로젝트 전체 히스토리 (sortedVersions / groupedHistory) 도출 ---

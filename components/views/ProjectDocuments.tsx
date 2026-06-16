@@ -105,6 +105,11 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
 
   return (
     <div className="space-y-5">
+      {!isEditor && (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-600">
+          현재 권한에서는 문서를 편집할 수 없습니다. <span className="font-bold">Owner 또는 Editor</span> 권한이 필요합니다. (조회·다운로드는 가능)
+        </div>
+      )}
       {/* 진행 요약 */}
       <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-3">

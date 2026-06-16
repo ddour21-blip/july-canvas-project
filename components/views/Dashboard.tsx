@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { User } from 'firebase/auth';
 import { addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
+import { getPermissions } from '@/lib/auth';
 import { deleteProjectCascade } from '@/lib/projects';
 import { showToast } from '@/lib/utils';
 import { Button } from '@/components/common/Button';
@@ -189,19 +190,22 @@ export default function Dashboard({
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {myProjects.map((project) => {
           const status = STATUS_LABEL[project.status ?? 'draft'];
+          const canDelete = getPermissions(project, user?.uid).canDelete; // owner만 삭제 노출
           return (
             <div
               key={project.id}
               onClick={() => navigate(`#project_${project.id}`)}
               className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-blue-300 cursor-pointer transition-all group relative"
             >
-              <button
-                onClick={(e) => handleDeleteProjectClick(e, project)}
-                className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-all z-10 border border-gray-100"
-                title="프로젝트 삭제"
-              >
-                <Trash2 size={16} />
-              </button>
+              {canDelete && (
+                <button
+                  onClick={(e) => handleDeleteProjectClick(e, project)}
+                  className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-all z-10 border border-gray-100"
+                  title="프로젝트 삭제"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
               <div className="flex items-center gap-3 mb-4 mt-2">
                 <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
                   <Folder size={28} />

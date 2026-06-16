@@ -72,14 +72,89 @@ export function useAuth(): AuthContextValue {
 }
 
 /**
- * 현재 사용자의 프로젝트 역할 반환.
+ * 사용자의 프로젝트 역할 계산 (순수 함수, 훅 아님 — 목록/맵에서도 사용 가능).
  * - roleByUid가 있으면 그 값 사용 (신규 프로젝트)
  * - 없으면(레거시: KAKE 등) 기존 규칙: ownerId 없음/일치 → owner, 그 외 → viewer
  */
-export function useRole(project: Project | null | undefined): ProjectRole | null {
-  const { user } = useAuth();
-  if (!project || !user) return null;
-  if (project.roleByUid && project.roleByUid[user.uid]) return project.roleByUid[user.uid];
-  if (!project.ownerId || project.ownerId === user.uid) return 'owner';
+export function getRole(
+  project: Project | null | undefined,
+  uid: string | null | undefined,
+): ProjectRole | null {
+  if (!project || !uid) return null;
+  if (project.roleByUid && project.roleByUid[uid]) return project.roleByUid[uid];
+  if (!project.ownerId || project.ownerId === uid) return 'owner';
   return 'viewer';
 }
+
+export interface ProjectPermissions {
+  role: ProjectRole | null;
+  isOwner: boolean;
+  isEditor: boolean;
+  isViewer: boolean;
+  /** owner|editor: 문서/프로토타입/정책 편집 */
+  canEdit: boolean;
+  /** owner: 프로젝트 삭제 */
+  canDelete: boolean;
+  /** owner: 최종 승인/잠금 */
+  canApprove: boolean;
+  /** owner: 멤버 관리 */
+  canManageMembers: boolean;
+  /** owner: 초대/공유 */
+  canInvite: boolean;
+  /** owner|editor: 화면 추가/수정/삭제 */
+  canCreateScreen: boolean;
+  /** owner|editor: 문서 생성/수정 */
+  canEditDocument: boolean;
+  /** 모든 멤버: 다운로드 */
+  canDownload: boolean;
+  /** 모든 멤버: 댓글 작성 */
+  canComment: boolean;
+  /** owner|editor: 백업/복원 */
+  canBackup: boolean;
+}
+
+export function permissionsFor(role: ProjectRole | null): ProjectPermissions {
+  const isOwner = role === 'owner';
+  const isEditor = role === 'editor';
+  const isViewer = role === 'viewer';
+  const canEdit = isOwner || isEditor;
+  const isMember = isOwner || isEditor || isViewer;
+  return {
+    role,
+    isOwner,
+    isEditor,
+    isViewer,
+    canEdit,
+    canDelete: isOwner,
+    canApprove: isOwner,
+    canManageMembers: isOwner,
+    canInvite: isOwner,
+    canCreateScreen: canEdit,
+    canEditDocument: canEdit,
+    canDownload: isMember,
+    canComment: isMember,
+    canBackup: canEdit,
+  };
+}
+
+/** 순수 함수 버전 (훅 아님): 목록/맵에서 카드별 권한 계산용 */
+export function getPermissions(
+  project: Project | null | undefined,
+  uid: string | null | undefined,
+): ProjectPermissions {
+  return permissionsFor(getRole(project, uid));
+}
+
+/** 현재 로그인 사용자의 프로젝트 권한 (훅) */
+export function useRole(project: Project | null | undefined): ProjectPermissions {
+  const { user } = useAuth();
+  return permissionsFor(getRole(project, user?.uid ?? null));
+}
+
+const ROLE_LABEL: Record<ProjectRole, string> = {
+  owner: 'Owner',
+  editor: 'Editor',
+  viewer: 'Viewer',
+  guest: 'Guest',
+};
+export const roleLabel = (role: ProjectRole | null): string => (role ? ROLE_LABEL[role] : '-');

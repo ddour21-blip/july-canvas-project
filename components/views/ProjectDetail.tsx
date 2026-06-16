@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { addDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
+import { useRole, roleLabel } from '@/lib/auth';
 import { deleteProjectCascade } from '@/lib/projects';
 import { copyToClipboard, getTime, showToast } from '@/lib/utils';
 import { DOCUMENT_ORDER } from '@/lib/documents';
@@ -81,9 +82,11 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
     return () => unsub();
   }, [projectId]);
 
+  // 권한 계산 (훅이므로 early-return 이전에 호출)
+  const perms = useRole(project);
+
   if (!project) return null;
-  const isOwner = !project.ownerId || project.ownerId === user?.uid;
-  const isEditor = isOwner; // 1차: owner === editor. 권한 분화는 2차 작업.
+  const { isOwner, canEdit, canDelete, canInvite, role } = perms;
   const status = STATUS_LABEL[project.status ?? 'draft'];
   const isActivated = project.status && project.status !== 'draft';
 
@@ -161,7 +164,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
           <ChevronRight size={16} className="mx-3 text-gray-300" />
           <span className="text-gray-900 bg-gray-100 px-3 py-1 rounded-full">{project.name}</span>
           <span className={`ml-3 text-xs px-2 py-1 rounded-full font-bold ${status.cls}`}>{status.label}</span>
-          {!isEditor && <span className="ml-3 bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded">👁️ 보기 전용 모드</span>}
+          <span className="ml-3 bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded font-bold">내 권한: {roleLabel(role)}</span>
+          {!canEdit && <span className="ml-2 bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded">👁️ 보기 전용</span>}
         </div>
       </div>
 
@@ -171,10 +175,12 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
           <p className="text-gray-500 mt-3 text-lg">기획 문서와 프로토타입을 한 곳에서 관리합니다.</p>
         </div>
         <div className="flex gap-3 shrink-0">
-          <Button variant="outline" icon={ExternalLink} onClick={() => setShareState({ isOpen: true, type: 'project', id: project.id })}>
-            공유 및 초대
-          </Button>
-          {isEditor && (
+          {canInvite && (
+            <Button variant="outline" icon={ExternalLink} onClick={() => setShareState({ isOpen: true, type: 'project', id: project.id })}>
+              공유 및 초대
+            </Button>
+          )}
+          {canDelete && (
             <Button
               variant="outline"
               className="text-red-500 border-red-200 hover:bg-red-50"
@@ -229,7 +235,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               <p className="text-gray-500 mb-6 max-w-md mx-auto leading-relaxed">
                 기획 의도·문제·고객·가치·MVP 범위 등을 입력하면 브리프/시장조사/제품화전략 문서가 자동 생성됩니다.
               </p>
-              {isEditor && (
+              {canEdit && (
                 <Button icon={Rocket} onClick={() => setShowWizard(true)} className="mx-auto px-7 py-3">
                   활성화 시작하기
                 </Button>
@@ -251,7 +257,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                     </Button>
                   </div>
                 </div>
-                {isEditor && (
+                {canEdit && (
                   <Button variant="secondary" icon={Rocket} onClick={() => setShowWizard(true)} className="w-full">
                     활성화 정보 수정
                   </Button>
@@ -270,14 +276,14 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               <FileText size={48} className="mx-auto text-gray-400 mb-4" />
               <h3 className="text-xl font-bold text-gray-900 mb-2">먼저 프로젝트를 활성화하세요</h3>
               <p className="text-gray-500 mb-6">활성화하면 기본 기획 문서가 생성됩니다.</p>
-              {isEditor && (
+              {canEdit && (
                 <Button icon={Rocket} onClick={() => setShowWizard(true)} className="mx-auto">
                   활성화 시작하기
                 </Button>
               )}
             </div>
           ) : (
-            <ProjectDocuments project={project} documents={documents} screens={screens} isEditor={isEditor} isOwner={isOwner} />
+            <ProjectDocuments project={project} documents={documents} screens={screens} isEditor={canEdit} isOwner={isOwner} />
           )}
         </>
       )}
@@ -286,7 +292,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
       {tab === 'screens' && (
         <>
           <div className="flex justify-end mb-6">
-            {isEditor && (
+            {canEdit && (
               <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="shadow-md">
                 새 화면 추가
               </Button>
@@ -299,7 +305,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 onClick={() => navigate(`#screen_${screen.id}`)}
                 className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer flex flex-col group relative"
               >
-                {isEditor && (
+                {canEdit && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -336,7 +342,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 <Layout size={48} className="mx-auto text-gray-400 mb-4" />
                 <h3 className="text-xl font-bold text-gray-900 mb-2">등록된 화면이 없습니다</h3>
                 <p className="text-gray-500 mb-6">
-                  {isEditor ? "'새 화면 추가' 버튼을 눌러 첫 번째 프로토타입을 등록해보세요." : '이 프로젝트에는 아직 등록된 화면이 없습니다.'}
+                  {canEdit ? "'새 화면 추가' 버튼을 눌러 첫 번째 프로토타입을 등록해보세요." : '이 프로젝트에는 아직 등록된 화면이 없습니다.'}
                 </p>
               </div>
             )}
@@ -344,7 +350,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         </>
       )}
 
-      {isModalOpen && isEditor && (
+      {isModalOpen && canEdit && (
         <div className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-50 p-6 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-5xl flex flex-col h-[85vh] animate-in zoom-in-95">
             <h2 className="text-2xl font-bold mb-6">새 화면(프로토타입) 추가</h2>
