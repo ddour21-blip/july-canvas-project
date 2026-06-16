@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged, signInAnonymously, type User } from 'firebase/auth';
 import { onSnapshot, updateDoc, writeBatch } from 'firebase/firestore';
 import {
   AlertCircle,
@@ -10,10 +9,12 @@ import {
   Database,
   Download,
   Layout,
+  LogOut,
   Upload,
   X,
 } from 'lucide-react';
-import { auth, db, isFirebaseConfigured } from '@/lib/firebase';
+import { db, isFirebaseConfigured } from '@/lib/firebase';
+import { AuthProvider, useAuth } from '@/lib/auth';
 import { col, docRef } from '@/lib/firestore';
 import { formatDateTime, getTime } from '@/lib/utils';
 import { Button } from '@/components/common/Button';
@@ -40,10 +41,9 @@ function FirebaseNotice() {
   );
 }
 
-export default function CanvasApp() {
-  const [user, setUser] = useState<User | null>(null);
-  // 미설정이면 즉시 안내 화면을 보여주므로 로딩 상태로 시작하지 않습니다.
-  const [loading, setLoading] = useState(isFirebaseConfigured);
+function CanvasAppInner() {
+  // 인증은 AuthProvider(useAuth)에서 관리. firebaseUser를 기존 user 변수로 사용.
+  const { user: authUser, firebaseUser: user, loading, signInWithGoogle, signOutUser } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [screens, setScreens] = useState<Screen[]>([]);
   const [globalMembers, setGlobalMembers] = useState<Member[]>([]);
@@ -75,17 +75,6 @@ export default function CanvasApp() {
     };
     window.addEventListener('show-toast', handler);
     return () => window.removeEventListener('show-toast', handler);
-  }, []);
-
-  // 인증 (익명 로그인)
-  useEffect(() => {
-    if (!isFirebaseConfigured) return;
-    signInAnonymously(auth).catch((err) => console.error('Auth Init Error:', err));
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
-    return () => unsub();
   }, []);
 
   // 실시간 구독
@@ -253,6 +242,34 @@ export default function CanvasApp() {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" /> 실시간 동기화 중
           </div>
+          {/* Google 로그인/로그아웃 */}
+          {authUser && !authUser.isAnonymous ? (
+            <div className="flex items-center gap-2">
+              {authUser.photoURL ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={authUser.photoURL} alt="" className="w-7 h-7 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
+              ) : (
+                <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
+                  {(authUser.displayName || authUser.email || '?').charAt(0)}
+                </span>
+              )}
+              <span className="text-gray-700 font-bold max-w-[140px] truncate">{authUser.displayName || authUser.email}</span>
+              <button
+                onClick={() => signOutUser()}
+                className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 transition-colors px-3 py-1.5 rounded-full text-gray-700"
+                title="로그아웃"
+              >
+                <LogOut size={15} /> 로그아웃
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => signInWithGoogle().catch((e) => console.error('Google 로그인 실패:', e))}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 transition-colors px-4 py-1.5 rounded-full text-white font-bold"
+            >
+              Google 로그인
+            </button>
+          )}
         </div>
       </header>
 
@@ -293,6 +310,14 @@ export default function CanvasApp() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function CanvasApp() {
+  return (
+    <AuthProvider>
+      <CanvasAppInner />
+    </AuthProvider>
   );
 }
 

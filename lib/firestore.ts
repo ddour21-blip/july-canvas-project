@@ -10,6 +10,7 @@ export type CollectionName =
   | 'projects'
   | 'screens'
   | 'members'
+  | 'projectMembers'
   | 'mockEmails'
   | 'documents'
   | 'screen_images'

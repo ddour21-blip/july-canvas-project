@@ -54,6 +54,8 @@ export interface Project {
   id: string;
   name: string;
   ownerId: string | null;
+  /** uid → 역할 맵. 신규 프로젝트부터 적용 (레거시 프로젝트는 없을 수 있음). */
+  roleByUid?: Record<string, ProjectRole>;
   status?: ProjectStatus;
   description?: string;
   /** 활성화 입력 데이터 (활성화 완료 시 채워짐) */
@@ -61,6 +63,29 @@ export interface Project {
   activatedAt?: FirestoreTime;
   createdAt?: FirestoreTime;
   updatedAt?: FirestoreTime;
+}
+
+/** 프로젝트별 멤버 (projectMembers 컬렉션) */
+export interface ProjectMember {
+  id: string;
+  projectId: string;
+  uid: string;
+  email?: string | null;
+  displayName?: string | null;
+  photoURL?: string | null;
+  role: ProjectRole;
+  status: 'active' | 'pending' | 'removed';
+  createdAt?: FirestoreTime;
+  updatedAt?: FirestoreTime;
+}
+
+/** 로그인 사용자 정보 */
+export interface AuthUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  isAnonymous: boolean;
 }
 
 export type DocumentType =

@@ -53,13 +53,29 @@ export default function Dashboard({
     e.preventDefault();
     if (!newProjectName.trim()) return;
     try {
+      const uid = user?.uid || null;
+      // 신규 프로젝트: 생성자를 owner로 등록 (roleByUid + projectMembers)
       const ref = await addDoc(col('projects'), {
         name: newProjectName,
-        ownerId: user?.uid || null,
+        ownerId: uid,
+        roleByUid: uid ? { [uid]: 'owner' as const } : {},
         status: 'draft' as ProjectStatus,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      if (uid) {
+        await addDoc(col('projectMembers'), {
+          projectId: ref.id,
+          uid,
+          email: user?.email || null,
+          displayName: user?.displayName || null,
+          photoURL: user?.photoURL || null,
+          role: 'owner' as const,
+          status: 'active' as const,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
       setIsModalOpen(false);
       setNewProjectName('');
       navigate(`#project_${ref.id}`);
