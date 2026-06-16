@@ -58,33 +58,33 @@ export function CommentInputBox({ onSubmit, members, placeholder = '댓글 추�
   return (
     <form onSubmit={handleSubmit} className="relative mt-3">
       {showMentions && filteredMembers.length > 0 && (
-        <div className="absolute bottom-full left-0 w-64 bg-white border border-gray-200 shadow-xl rounded-xl mb-2 max-h-48 overflow-y-auto z-50 animate-in fade-in slide-in-from-bottom-2">
-          <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 text-xs font-bold text-gray-500">팀원 멘션하기</div>
+        <div className="absolute bottom-full left-0 w-64 bg-[var(--surface-card)] border border-[var(--border-default)] shadow-[var(--shadow-xl)] rounded-[var(--radius-lg)] mb-2 max-h-48 overflow-y-auto z-[var(--z-overlay)] animate-in fade-in slide-in-from-bottom-2">
+          <div className="px-3 py-2 border-b border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-xs font-bold text-[var(--text-secondary)]">팀원 멘션하기</div>
           {filteredMembers.map((m) => (
             <div
               key={m.id}
               onClick={() => handleMentionClick(m.nickname)}
-              className="px-4 py-2.5 hover:bg-blue-50 cursor-pointer flex flex-col transition-colors border-b border-gray-50 last:border-0"
+              className="px-4 py-2.5 hover:bg-[var(--surface-active)] cursor-pointer flex flex-col transition-colors border-b border-[var(--border-subtle)] last:border-0"
             >
-              <span className="text-sm font-bold text-gray-900">{m.nickname}</span>
+              <span className="text-sm font-bold text-[var(--text-strong)]">{m.nickname}</span>
             </div>
           ))}
         </div>
       )}
-      <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-xl pl-3 pr-1 py-1 focus-within:ring-2 focus-within:ring-blue-500 transition-all shadow-sm">
-        <AtSign size={16} className="text-gray-400 shrink-0" />
+      <div className="flex items-center gap-2 bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] pl-3 pr-1 py-1 focus-within:ring-2 focus-within:ring-[var(--color-focus-ring)] transition-all shadow-[var(--shadow-sm)]">
+        <AtSign size={16} className="text-[var(--text-tertiary)] shrink-0" />
         <input
           ref={inputRef}
           type="text"
           value={text}
           onChange={handleChange}
           placeholder={placeholder}
-          className="flex-1 bg-transparent border-none outline-none text-sm py-1.5 text-gray-800"
+          className="flex-1 bg-transparent border-none outline-none text-sm py-1.5 text-[var(--text-body)]"
         />
         <button
           type="submit"
           disabled={!text.trim()}
-          className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 transition-colors shrink-0"
+          className="p-2 bg-[var(--color-primary)] text-[var(--color-on-primary)] rounded-[var(--radius-md)] shadow-[var(--shadow-brand)] hover:bg-[var(--color-primary-hover)] disabled:bg-[var(--border-strong)] disabled:text-[var(--text-tertiary)] disabled:shadow-none transition-colors shrink-0"
         >
           <Send size={14} />
         </button>

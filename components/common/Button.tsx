@@ -14,11 +14,14 @@ interface ButtonProps {
   type?: 'button' | 'submit' | 'reset';
 }
 
+// green-first 디자인 토큰 직접 소비 (UI-3). primary = 밝은 #50FA6E 필 + 다크 잉크 텍스트.
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-blue-600 text-white hover:bg-blue-700',
-  secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-  danger: 'bg-red-50 text-red-600 hover:bg-red-100',
-  outline: 'border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white',
+  primary:
+    'bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-[var(--shadow-brand)] hover:bg-[var(--color-primary-hover)] hover:shadow-[var(--shadow-brand-lg)]',
+  secondary: 'bg-[var(--surface-hover)] text-[var(--text-body)] hover:bg-[var(--border-default)]',
+  danger: 'bg-[var(--red-50)] text-[var(--red-600)] hover:bg-[var(--red-100)]',
+  outline:
+    'border border-[var(--border-strong)] bg-[var(--surface-card)] text-[var(--text-body)] hover:bg-[var(--surface-hover)]',
 };
 
 export function Button({
@@ -31,7 +34,7 @@ export function Button({
   type = 'button',
 }: ButtonProps) {
   const base =
-    'flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+    'flex items-center justify-center gap-2 px-4 py-2 rounded-[var(--radius-lg)] font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]';
   return (
     <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${VARIANTS[variant]} ${className}`}>
       {Icon && <Icon size={18} />} {children}
