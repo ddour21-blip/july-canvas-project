@@ -411,7 +411,7 @@ export default function Dashboard({
       </div>
 
       {isModalOpen && isGlobalEditor && (
-        <div className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md animate-in zoom-in-95">
             <h2 className="text-2xl font-bold mb-6">새 프로젝트 생성</h2>
             <form onSubmit={handleCreateProject}>
@@ -420,7 +420,7 @@ export default function Dashboard({
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
                 placeholder="프로젝트 이름 (예: 쇼핑몰 앱 리뉴얼)"
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none mb-8 text-lg"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none mb-8 text-lg"
                 autoFocus
                 required
               />
@@ -438,11 +438,11 @@ export default function Dashboard({
       )}
 
       {isMemberModalOpen && isGlobalEditor && (
-        <div className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg animate-in zoom-in-95 flex flex-col max-h-[80vh]">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <Users className="text-blue-600" /> 전체 팀원 관리 (멘션 대상)
+                <Users className="text-[var(--color-primary-text)]" /> 전체 팀원 관리 (멘션 대상)
               </h2>
               <button onClick={() => setIsMemberModalOpen(false)} className="p-2 bg-gray-50 rounded-full hover:bg-gray-200 text-gray-500">
                 <X size={20} />
@@ -459,7 +459,7 @@ export default function Dashboard({
                   {globalMembers.map((m) => (
                     <div key={m.id} className="flex justify-between items-center bg-white p-3 rounded-lg shadow-sm border border-gray-100">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-100 text-blue-600 font-bold rounded-full flex items-center justify-center text-xs uppercase">
+                        <div className="w-8 h-8 bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] font-bold rounded-full flex items-center justify-center text-xs uppercase">
                           {m.nickname.charAt(0)}
                         </div>
                         <div>
@@ -485,7 +485,7 @@ export default function Dashboard({
                   placeholder="닉네임 (예: 김기획)"
                   value={newMemberName}
                   onChange={(e) => setNewMemberName(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[var(--color-focus-ring)]"
                   required
                 />
                 <div className="flex gap-2">
@@ -494,7 +494,7 @@ export default function Dashboard({
                     placeholder="이메일 (선택)"
                     value={newMemberEmail}
                     onChange={(e) => setNewMemberEmail(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[var(--color-focus-ring)]"
                   />
                   <Button type="submit" className="shrink-0 px-6 py-2 text-sm" disabled={!newMemberName}>
                     추가

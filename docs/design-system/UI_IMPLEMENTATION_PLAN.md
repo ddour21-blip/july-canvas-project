@@ -99,12 +99,59 @@ npm run build
 - 미리보기 팁: dev 기동 후 서버 ready(HTTP 200) 확인하고 navigate(레이스 방지). 익명 uid는 미리보기 브라우저에서 `m5FZDWIjFMgTKk1zqMlIQQxU8NB3`로 안정적이었음.
 
 ## 11. 남은 작업 목록
-- [ ] UI-3 공통 컴포넌트(green-first, 정식 primary 버튼)
-- [ ] UI-4 Dashboard + 좌측 워크스페이스 내비(sidebar.svg)
-- [ ] UI-5 ProjectDetail / ProjectDocuments / Wizard
-- [ ] UI-6 ScreenEditor / 캔버스
-- [ ] UI-7 모달/보조 화면
-- [ ] 2차-6 알림 + 이메일(notifications + /api/notify + Resend)
+- [x] UI-3 공통 컴포넌트(green-first, 정식 primary 버튼) — `0ab171d`
+- [x] UI-4 Dashboard + 좌측 워크스페이스 내비(sidebar.svg) — `c29f765`/`648248a`/`ed0d9d3`
+- [x] UI-5 ProjectDetail / ProjectDocuments / Wizard — `4788604`/`b7b0540`/`4cf032e`
+- [x] UI-6 ScreenEditor / 캔버스 — `367e58d`/`f2fda73`/`e78db39`/`fa5d696`
+- [x] UI-7 모달/보조 화면 — `5eb9b7a`/`deb6e8e`/`4db5f4d`/`f001d96`
+- [x] UI-FINAL 전체 회귀 QA + 문서화 + Dashboard blue-* 토큰 치환
+- [ ] 2차-6 알림 + 이메일(notifications + /api/notify + Resend) ← **다음 기능 단계**
 - [ ] (선택) 단계 B Rules용 앱 쿼리 리팩터(memberUids array-contains 등) 후 멤버십 read 강제 게시
 - [ ] (선택) Pretendard 웹폰트 로딩, Dashboard myProjects 필터를 roleByUid 기반으로 확장
 - [ ] (확인 필요) Google OAuth 인터랙티브 로그인/로그아웃 — 헤드리스 QA 불가, 실제 브라우저에서 사용자 확인 권장
+
+## 12. UI 적용 완료 현황 (UI-FINAL, 디자인 라운드 종료)
+
+### 12.1 UI-0 ~ UI-7 완료 상태 + 커밋 해시
+| 단계 | 내용 | 커밋 |
+|---|---|---|
+| UI-0 | 디자인 원본 정리(design-system-source, lint/tsc 제외) | `ade757b` |
+| UI-1 | 브랜드 에셋(로고/파비콘/OG/manifest/metadata) | `056089a` |
+| UI-2 | green-first 토큰(globals.css :root + @theme 리매핑) | `a201d87` |
+| UI-3 | 공통 컴포넌트(Button #50FA6E primary, ConfirmModal, CommentInputBox) | `0ab171d` |
+| UI-4-1 | 드라이브형 좌측 WorkspaceSidebar(sidebar.svg, 대시보드 뷰 한정) | `c29f765` |
+| UI-4-2 | Dashboard 헤더 + 프로젝트 카드 그리드(상태 배지/카운트/아바타/시간) | `648248a` |
+| UI-4-3 | Dashboard 최근 활동 패널(파생) + empty state CTA | `ed0d9d3` |
+| UI-5-1 | ProjectDetail(헤더/정보카드/화면목록/empty) | `4788604` |
+| UI-5-2 | ProjectDocuments(마스터-디테일 목록+에디터, PRD 승인가드 유지) | `b7b0540` |
+| UI-5-3 | ProjectActivationWizard(stepper green, 입력 10항목) | `4cf032e` |
+| UI-6-1 | ScreenEditor 헤더/툴바(권한 배지/모드 토글) | `367e58d` |
+| UI-6-2 | 프리뷰 캔버스 프레임(white frame+radius, iframe minWidth 1280 유지) | `f2fda73` |
+| UI-6-3 | 정책 패널/드래프트 폼/버전 히스토리/전체 히스토리 대시보드 | `e78db39` |
+| UI-6-4 | 댓글/멘션 스레드 + 주석 카드 + 캔버스 마커 | `fa5d696` |
+| UI-7-1 | 공통 모달 오버레이 토큰 통일(`rgba(20,26,34,0.55)`) | `5eb9b7a` |
+| UI-7-2 | ShareModal / ProfileModal | `deb6e8e` |
+| UI-7-3 | ExportDocModal(카드형 옵션) / ExportZipModal | `4db5f4d` |
+| UI-7-4 | InboxModals(VirtualInbox/EmailSimulation) | `f001d96` |
+| UI-FINAL | 전체 회귀 QA + 문서화 + Dashboard blue-* 토큰 치환 | (본 커밋) |
+
+### 12.2 최종 디자인 적용 범위
+- 전 화면 green-first(primary `#50FA6E`) + cool-neutral surface 토큰 적용: Dashboard, WorkspaceSidebar, ProjectDetail, ProjectDocuments, ProjectActivationWizard, ScreenEditor(헤더/캔버스/정책패널/히스토리/댓글), 모달 6종(Confirm/Share/Profile/ExportDoc/ExportZip/Inbox), 공통 Button/CommentInputBox.
+- 상태 배지는 `--status-*` semantic 토큰, 모달 오버레이는 `rgba(20,26,34,0.55)` 통일.
+
+### 12.3 Dashboard blue-* 잔여 처리 결과 (UI-FINAL)
+- UI-7-4에서 보류했던 Dashboard 새프로젝트/팀원관리 모달의 `blue-*` 5건을 **안전한 색상 토큰으로 치환**(focus ring→`--color-focus-ring`, 아이콘/아바타→`--color-primary-*`, 오버레이→cool-neutral). 레이아웃/로직 무변경.
+- 결과: `components/{modals,common,views}`에 `blue-/purple-/indigo-/violet-` **0건**.
+
+### 12.4 보류 항목 (의도적 유지)
+- `components/CanvasApp.tsx`·`components/ClientApp.tsx`의 `blue-*` 유틸(헤더 알림/Google 로그인/아바타, 로딩 스피너, FirebaseNotice, BackupModal): **@theme 리매핑으로 green 렌더 중**(UI-2 전략). 앱 셸이라 이번 디자인 라운드 범위 밖 → 유지. 시각상 그린(스크린샷 확인됨).
+- 단계 B Firestore Rules(멤버십 read), Pretendard 웹폰트, roleByUid 기반 myProjects 필터 확장: 선택 과제로 보류.
+
+### 12.5 다음 기능 단계: 2차-6 알림/이메일
+- `notifications` 컬렉션 + `app/api/notify` Route Handler + Resend(`RESEND_API_KEY` 서버 전용, 미설정 시 graceful skip). 현재 멘션은 `mockEmails` 앱 내부 시뮬레이션. **mockEmails는 deleteProjectCascade 미포함** → 알림 검증 시 orphan 생성 주의.
+
+### 12.6 전체 회귀 QA 결과 (UI-FINAL)
+- 반응형 1440/1280/1024/800 전부 정상, 800px는 `min-w-[1024px]` 유지 + 페이지 가로 스크롤, **한국어 텍스트 세로 분리 없음**.
+- 임시 프로젝트 풀 라이프사이클(생성→활성화 위저드→문서 6종→화면 추가→ScreenEditor→주석→ProfileModal→댓글→ExportDoc) 정상, 캐스케이드 삭제 후 KAKE만 잔존.
+- Dashboard 모달(팀원관리/새프로젝트/배포안내/Inbox/Confirm) green-first 정상. **콘솔 에러 0 · permission-denied 0**.
+- 검증 명령: `npx tsc --noEmit`(OK) / `npx eslint .`(0 problems) / `npm run build`(성공).
