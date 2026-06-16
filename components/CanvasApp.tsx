@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Database,
   Download,
-  Layout,
   LogOut,
   Upload,
   X,
@@ -221,11 +220,10 @@ function CanvasAppInner() {
       )}
 
       <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between sticky top-0 z-50 shadow-sm">
-        <div className="flex items-center gap-2 text-xl font-bold text-gray-800 cursor-pointer" onClick={() => navigate('#')}>
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
-            <Layout size={18} />
-          </div>
-          <span>July 캔버스</span>
+        <div className="flex items-center cursor-pointer" onClick={() => navigate('#')}>
+          {/* July Canvas 브랜드 락업 (심볼+워드마크 포함, 라이트 헤더용) */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/logo/header.svg" alt="July Canvas" className="h-7 w-auto" />
         </div>
         <div className="text-sm text-gray-500 flex items-center gap-4 font-medium">
           <button

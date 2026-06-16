@@ -12,9 +12,32 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const DESCRIPTION = "조직과 프로젝트 단위로 기획 문서와 프로토타입을 관리하는 제품화 워크스페이스";
+
 export const metadata: Metadata = {
-  title: "July 캔버스 — 기획 자동화 툴",
-  description: "아이디어를 시장조사·제품화전략·IA·기능정의서·프로토타입·PRD로 연결하는 기획 OS",
+  title: "July Canvas",
+  description: DESCRIPTION,
+  icons: {
+    icon: [
+      { url: "/brand/favicon/favicon.ico" },
+      { url: "/brand/favicon/favicon.svg", type: "image/svg+xml" },
+      { url: "/brand/favicon/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/brand/favicon/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: "/brand/favicon/apple-touch-icon.png",
+  },
+  manifest: "/brand/favicon/site.webmanifest",
+  openGraph: {
+    title: "July Canvas",
+    description: DESCRIPTION,
+    images: ["/brand/og/og-image.png"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "July Canvas",
+    description: DESCRIPTION,
+    images: ["/brand/og/og-image.png"],
+  },
 };
 
 export default function RootLayout({
