@@ -6,23 +6,71 @@ import { addDoc, deleteDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
 import { getPermissions } from '@/lib/auth';
 import { deleteProjectCascade } from '@/lib/projects';
-import { showToast } from '@/lib/utils';
+import { getTime, nowMs, showToast } from '@/lib/utils';
 import { Button } from '@/components/common/Button';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
-import { ChevronRight, Database, Folder, Globe, Layout, Plus, Trash2, Users, X } from 'lucide-react';
-import type { Member, Project, ProjectStatus } from '@/types';
+import { ChevronRight, Clock, Database, FileText, Folder, Globe, Layers, Layout, Plus, Trash2, User as UserIcon, Users, X } from 'lucide-react';
+import type { Member, Project, ProjectDocument, ProjectStatus, Screen } from '@/types';
 
-const STATUS_LABEL: Record<ProjectStatus, { label: string; cls: string }> = {
-  draft: { label: '초안', cls: 'bg-gray-100 text-gray-600' },
-  active: { label: '활성', cls: 'bg-blue-100 text-blue-700' },
-  review: { label: '리뷰', cls: 'bg-amber-100 text-amber-700' },
-  approved: { label: '승인', cls: 'bg-green-100 text-green-700' },
-  archived: { label: '보관', cls: 'bg-gray-200 text-gray-500' },
-  handoff: { label: '전달됨', cls: 'bg-purple-100 text-purple-700' },
+// 상태 배지: green-first 토큰(fg/bg)을 직접 소비. draft=neutral, active=green,
+// review=amber, approved=soft green, archived=muted gray, handoff=neutral.
+const STATUS_LABEL: Record<ProjectStatus, { label: string; fg: string; bg: string }> = {
+  draft: { label: '초안', fg: 'var(--status-draft-fg)', bg: 'var(--status-draft-bg)' },
+  active: { label: '활성', fg: 'var(--status-active-fg)', bg: 'var(--status-active-bg)' },
+  review: { label: '리뷰', fg: 'var(--status-review-fg)', bg: 'var(--status-review-bg)' },
+  approved: { label: '승인', fg: 'var(--status-approved-fg)', bg: 'var(--status-approved-bg)' },
+  archived: { label: '보관', fg: 'var(--status-archived-fg)', bg: 'var(--status-archived-bg)' },
+  handoff: { label: '전달됨', fg: 'var(--status-handoff-fg)', bg: 'var(--status-handoff-bg)' },
 };
+
+/** 최근 수정/방문 시간을 가벼운 상대 표현으로. (시점 생성은 nowMs로 일원화) */
+function formatRelative(ts: Project['updatedAt']): string {
+  const ms = getTime(ts);
+  if (!ms) return '방금 전';
+  const diff = nowMs() - ms;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return '방금 전';
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}시간 전`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}일 전`;
+  const d = new Date(ms);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+}
+
+/** 멤버 아바타 스택. memberUids 기반(없으면 owner 1명). 신원 데이터는 추가 조회하지 않음. */
+function MemberAvatars({ project }: { project: Project }) {
+  const count = Math.max(project.memberUids?.length ?? 0, project.ownerId ? 1 : 0);
+  if (count === 0) return <span className="text-xs text-[var(--text-tertiary)]">멤버 없음</span>;
+  const shown = Math.min(count, 3);
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex -space-x-2">
+        {Array.from({ length: shown }).map((_, i) => (
+          <span
+            key={i}
+            className="w-6 h-6 rounded-full bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] ring-2 ring-[var(--surface-card)] flex items-center justify-center"
+          >
+            <UserIcon size={12} />
+          </span>
+        ))}
+        {count > 3 && (
+          <span className="w-6 h-6 rounded-full bg-[var(--surface-hover)] text-[var(--text-secondary)] ring-2 ring-[var(--surface-card)] flex items-center justify-center text-[10px] font-bold">
+            +{count - 3}
+          </span>
+        )}
+      </div>
+      <span className="text-xs text-[var(--text-secondary)] font-medium">{count}명</span>
+    </div>
+  );
+}
 
 interface DashboardProps {
   projects: Project[];
+  screens: Screen[];
+  documents: ProjectDocument[];
   navigate: (hash: string) => void;
   user: User | null;
   globalMembers: Member[];
@@ -32,6 +80,8 @@ interface DashboardProps {
 
 export default function Dashboard({
   projects,
+  screens,
+  documents,
   navigate,
   user,
   globalMembers,
@@ -147,42 +197,42 @@ export default function Dashboard({
         onConfirm={confirmState.action}
         onCancel={() => setConfirmState({ ...confirmState, isOpen: false })}
       />
-      <div className="flex flex-wrap justify-between items-end gap-6 mb-10">
+      <div className="flex flex-wrap justify-between items-end gap-x-6 gap-y-5 mb-10">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900">내 프로젝트</h1>
-          <p className="text-gray-500 mt-2">기획 문서와 프로토타입을 관리할 프로젝트를 선택하거나 접속 코드로 입장하세요.</p>
+          <h1 className="text-3xl font-extrabold text-[var(--text-strong)] tracking-tight">내 프로젝트</h1>
+          <p className="text-[var(--text-secondary)] mt-2">기획 문서와 프로토타입을 관리할 프로젝트를 선택하거나 접속 코드로 입장하세요.</p>
         </div>
-        <div className="flex gap-4 items-center shrink-0">
+        <div className="flex flex-wrap gap-3 items-center shrink-0">
           <form
             onSubmit={handleJoinByCode}
-            className="flex bg-white border border-gray-300 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 shadow-sm h-[44px] transition-shadow"
+            className="flex bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] overflow-hidden focus-within:ring-2 focus-within:ring-[var(--color-focus-ring)] shadow-[var(--shadow-sm)] h-[44px] transition-shadow"
           >
             <input
               type="text"
               value={accessCode}
               onChange={(e) => setAccessCode(e.target.value)}
               placeholder="접속 코드 (예: project_123)"
-              className="px-4 py-2 outline-none w-56 text-sm font-medium text-gray-800"
+              className="px-4 py-2 outline-none w-56 text-sm font-medium text-[var(--text-body)] bg-transparent"
             />
             <button
               type="submit"
-              className="bg-gray-50 hover:bg-blue-50 hover:text-blue-600 px-5 py-2 text-sm font-bold text-gray-600 border-l border-gray-300 transition-colors"
+              className="bg-[var(--surface-sunken)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] px-5 py-2 text-sm font-bold text-[var(--text-secondary)] border-l border-[var(--border-default)] transition-colors whitespace-nowrap"
             >
               바로 입장
             </button>
           </form>
           {isGlobalEditor && (
             <>
-              <Button variant="outline" icon={Globe} onClick={() => setExportModalOpen(true)} className="h-[44px] px-5 shadow-sm text-gray-700 bg-white border-gray-300 hover:bg-gray-50">
+              <Button variant="outline" icon={Globe} onClick={() => setExportModalOpen(true)} className="h-[44px] px-5 shadow-[var(--shadow-xs)]">
                 배포 안내
               </Button>
-              <Button variant="secondary" icon={Database} onClick={() => setBackupOpen(true)} className="h-[44px] px-5 shadow-sm">
+              <Button variant="secondary" icon={Database} onClick={() => setBackupOpen(true)} className="h-[44px] px-5">
                 데이터 백업/복원
               </Button>
-              <Button variant="secondary" icon={Users} onClick={() => setIsMemberModalOpen(true)} className="h-[44px] px-5 shadow-sm">
+              <Button variant="secondary" icon={Users} onClick={() => setIsMemberModalOpen(true)} className="h-[44px] px-5">
                 팀원 관리 ({globalMembers.length})
               </Button>
-              <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="h-[44px] px-6 shadow-sm">
+              <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="h-[44px] px-6">
                 새 프로젝트
               </Button>
             </>
@@ -190,45 +240,80 @@ export default function Dashboard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {myProjects.map((project) => {
           const status = STATUS_LABEL[project.status ?? 'draft'];
           const canDelete = getPermissions(project, user?.uid).canDelete; // owner만 삭제 노출
+          const screenCount = screens.filter((s) => s.projectId === project.id).length;
+          const docCount = documents.filter((d) => d.projectId === project.id).length;
           return (
             <div
               key={project.id}
               onClick={() => navigate(`#project_${project.id}`)}
-              className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-blue-300 cursor-pointer transition-all group relative"
+              className="group relative flex flex-col bg-[var(--surface-card)] p-5 rounded-[var(--radius-2xl)] border border-[var(--border-default)] shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5 hover:border-[var(--brand-300)] cursor-pointer transition-all"
             >
               {canDelete && (
                 <button
                   onClick={(e) => handleDeleteProjectClick(e, project)}
-                  className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-all z-10 border border-gray-100"
+                  className="absolute top-4 right-4 p-2 bg-[var(--surface-card)]/90 backdrop-blur text-[var(--text-tertiary)] hover:text-[var(--red-600)] hover:bg-[var(--red-50)] rounded-[var(--radius-md)] shadow-[var(--shadow-xs)] opacity-0 group-hover:opacity-100 transition-all z-10 border border-[var(--border-subtle)]"
                   title="프로젝트 삭제"
                 >
                   <Trash2 size={16} />
                 </button>
               )}
-              <div className="flex items-center gap-3 mb-4 mt-2">
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                  <Folder size={28} />
+
+              {/* 헤더: 폴더 타일 + 이름/상태 */}
+              <div className="flex items-start gap-3 pr-8">
+                <div className="p-2.5 bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] rounded-[var(--radius-lg)] group-hover:bg-[var(--color-primary)] group-hover:text-[var(--color-on-primary)] transition-colors shrink-0">
+                  <Folder size={22} />
                 </div>
-                <h2 className="text-xl font-bold truncate pr-12">{project.name}</h2>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg font-bold text-[var(--text-strong)] truncate">{project.name}</h2>
+                  <span
+                    className="inline-block mt-1 text-[11px] font-bold px-2.5 py-0.5 rounded-[var(--radius-pill)]"
+                    style={{ color: status.fg, backgroundColor: status.bg }}
+                  >
+                    {status.label}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${status.cls}`}>{status.label}</span>
-                <p className="text-sm font-medium text-gray-500 flex items-center gap-1 group-hover:text-blue-600 transition-colors">
+
+              {/* 설명 */}
+              <p className="mt-3 text-sm text-[var(--text-secondary)] leading-relaxed line-clamp-2 min-h-[2.6em]">
+                {project.description?.trim() || '기획 문서와 프로토타입을 한 곳에서 관리합니다.'}
+              </p>
+
+              {/* 메타: 화면 수 · 문서 수 · 최근 시간 */}
+              <div className="mt-4 flex items-center flex-wrap gap-x-4 gap-y-1.5 text-xs font-medium text-[var(--text-secondary)]">
+                <span className="flex items-center gap-1.5">
+                  <Layers size={14} className="text-[var(--text-tertiary)]" />
+                  화면 {screenCount}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <FileText size={14} className="text-[var(--text-tertiary)]" />
+                  문서 {docCount}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Clock size={14} className="text-[var(--text-tertiary)]" />
+                  {formatRelative(project.updatedAt ?? project.createdAt)}
+                </span>
+              </div>
+
+              {/* 푸터: 멤버 아바타 + 입장 */}
+              <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex items-center justify-between">
+                <MemberAvatars project={project} />
+                <span className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-1 group-hover:text-[var(--color-primary-text)] transition-colors">
                   입장 <ChevronRight size={16} />
-                </p>
+                </span>
               </div>
             </div>
           );
         })}
         {myProjects.length === 0 && (
-          <div className="col-span-full py-16 text-center border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50">
-            <Layout size={48} className="mx-auto text-gray-400 mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">등록된 프로젝트가 없습니다</h3>
-            <p className="text-gray-500 mb-6">위 입력창에 접속 코드를 입력하거나 새 프로젝트를 생성하세요.</p>
+          <div className="col-span-full py-16 text-center border-2 border-dashed border-[var(--border-strong)] rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)]">
+            <Layout size={48} className="mx-auto text-[var(--text-tertiary)] mb-4" />
+            <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">등록된 프로젝트가 없습니다</h3>
+            <p className="text-[var(--text-secondary)] mb-6">위 입력창에 접속 코드를 입력하거나 새 프로젝트를 생성하세요.</p>
           </div>
         )}
       </div>
