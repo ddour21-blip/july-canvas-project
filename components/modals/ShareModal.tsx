@@ -35,51 +35,54 @@ export function ShareModal({ isOpen, type, id, onClose, workspaceId }: ShareModa
 
   return (
     <div className="fixed inset-0 z-[9999] bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 animate-in zoom-in-95">
+      <div className="bg-[var(--surface-card)] rounded-[var(--radius-3xl)] shadow-[var(--shadow-2xl)] w-full max-w-md p-8 animate-in zoom-in-95">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Share2 className="text-blue-600" /> 프로젝트 공유
+          <h2 className="text-2xl font-bold text-[var(--text-strong)] flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
+              <Share2 size={20} />
+            </span>
+            프로젝트 공유
           </h2>
-          <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-200 text-gray-500">
+          <button onClick={onClose} className="p-2 bg-[var(--surface-sunken)] rounded-full hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] transition-colors">
             <X size={20} />
           </button>
         </div>
         <div className="space-y-6">
-          <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5 text-center">
-            <label className="block text-sm font-bold text-blue-800 mb-3">고유 접속 링크 및 코드</label>
+          <div className="bg-[var(--color-primary-softer)] border border-[var(--brand-100)] rounded-[var(--radius-2xl)] p-5 text-center">
+            <label className="block text-sm font-bold text-[var(--color-primary-text)] mb-3">고유 접속 링크 및 코드</label>
             <div
-              className="bg-white border border-blue-200 rounded-xl px-4 py-3 font-mono font-bold text-gray-800 text-[13px] shadow-inner select-all overflow-hidden text-ellipsis whitespace-nowrap mb-4"
+              className="bg-[var(--surface-card)] border border-[var(--brand-200)] rounded-[var(--radius-lg)] px-4 py-3 font-mono font-bold text-[var(--text-body)] text-[13px] shadow-[var(--shadow-inset)] select-all overflow-hidden text-ellipsis whitespace-nowrap mb-4"
               title={fullUrl}
             >
               {fullUrl}
             </div>
-            <Button onClick={handleCopyMessage} className="w-full py-3.5 text-base font-bold shadow-md">
+            <Button onClick={handleCopyMessage} className="w-full py-3.5 text-base font-bold shadow-[var(--shadow-brand)]">
               링크 + 접속 코드 함께 복사
             </Button>
-            <div className="bg-green-50 px-4 py-3 border border-green-200 rounded-xl text-xs font-bold text-green-700 flex flex-col gap-1 mt-4">
+            <div className="bg-[var(--green-50)] px-4 py-3 border border-[var(--green-100)] rounded-[var(--radius-lg)] text-xs font-bold text-[var(--green-700)] flex flex-col gap-1 mt-4">
               <span>💡 이 링크는 안심하고 한 번만 공유하세요.</span>
-              <span className="text-green-600 font-medium">
+              <span className="text-[var(--green-600)] font-medium">
                 코드가 업데이트되어도 팀원 접속 시 자동으로 최신 버전 화면으로 즉시 연결됩니다.
               </span>
             </div>
           </div>
-          <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 text-xs font-bold text-gray-500 text-center">
+          <div className="border border-[var(--border-default)] rounded-[var(--radius-lg)] overflow-hidden bg-[var(--surface-card)]">
+            <div className="bg-[var(--surface-sunken)] px-4 py-3 border-b border-[var(--border-default)] text-xs font-bold text-[var(--text-secondary)] text-center">
               💡 팀원 직접 입장 가이드
             </div>
             <div className="p-6 flex flex-col items-center text-center">
-              <div className="flex bg-white border border-gray-300 rounded-xl overflow-hidden shadow-sm h-[40px] w-full max-w-[300px] mb-4 pointer-events-none">
-                <div className="px-4 py-2 text-sm font-medium text-gray-800 flex-1 text-left bg-blue-50/20 font-mono select-none truncate">
+              <div className="flex bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] overflow-hidden shadow-[var(--shadow-sm)] h-[40px] w-full max-w-[300px] mb-4 pointer-events-none">
+                <div className="px-4 py-2 text-sm font-medium text-[var(--text-body)] flex-1 text-left bg-[var(--surface-active)] font-mono select-none truncate">
                   {displayHash}
                 </div>
-                <div className="bg-gray-50 px-4 py-2 text-sm font-bold text-gray-600 border-l border-gray-300 select-none whitespace-nowrap">
+                <div className="bg-[var(--surface-sunken)] px-4 py-2 text-sm font-bold text-[var(--text-secondary)] border-l border-[var(--border-strong)] select-none whitespace-nowrap">
                   바로 입장
                 </div>
               </div>
-              <p className="text-[13px] font-bold text-gray-700 leading-relaxed">
+              <p className="text-[13px] font-bold text-[var(--text-body)] leading-relaxed">
                 공유 받은 다이렉트 링크를 클릭하거나
                 <br />
-                <span className="text-blue-600">접속 코드</span>를 입력 후 접속하세요
+                <span className="text-[var(--color-primary-text)]">접속 코드</span>를 입력 후 접속하세요
               </p>
             </div>
           </div>
