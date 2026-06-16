@@ -17,6 +17,7 @@ import { AuthProvider, useAuth } from '@/lib/auth';
 import { col, docRef } from '@/lib/firestore';
 import { formatDateTime, getTime } from '@/lib/utils';
 import { Button } from '@/components/common/Button';
+import { WorkspaceSidebar } from '@/components/common/WorkspaceSidebar';
 import { ShareModal, type ShareState } from '@/components/modals/ShareModal';
 import { ExportZipModal } from '@/components/modals/ExportZipModal';
 import { VirtualInboxModal, EmailSimulationModal } from '@/components/modals/InboxModals';
@@ -219,7 +220,7 @@ function CanvasAppInner() {
         />
       )}
 
-      <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between sticky top-0 z-50 shadow-sm">
+      <header className="bg-white border-b border-gray-200 h-[var(--header-height)] px-6 flex items-center justify-between sticky top-0 z-50 shadow-sm">
         <div className="flex items-center cursor-pointer" onClick={() => navigate('#')}>
           {/* July Canvas 브랜드 락업 (심볼+워드마크 포함, 라이트 헤더용) */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -271,7 +272,12 @@ function CanvasAppInner() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1600px]">
+      {/* 대시보드 뷰에서만 드라이브형 좌측 워크스페이스 내비를 노출(프로젝트/화면 뷰 레이아웃은 UI-5/UI-6). */}
+      <div className="flex">
+        {viewType === 'dashboard' && (
+          <WorkspaceSidebar projects={projects} user={user} navigate={navigate} currentRoute={currentRoute} />
+        )}
+        <main className="flex-1 min-w-0 mx-auto max-w-[1600px]">
         {viewType === 'dashboard' && (
           <Dashboard
             projects={projects}
@@ -305,7 +311,8 @@ function CanvasAppInner() {
             workspaceId={activeWorkspaceId}
           />
         )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
