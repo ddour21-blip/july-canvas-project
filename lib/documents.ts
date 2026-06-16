@@ -110,6 +110,16 @@ export const buildActivationDocuments = (
 ];
 
 /**
+ * PRD 본문의 "## 14. 프로토타입 URL" 섹션만 최신 URL로 교체.
+ * 수동 편집된 다른 섹션은 보존합니다. 섹션이 없으면 말미에 추가합니다.
+ */
+export const injectPrototypeUrl = (content: string, url: string): string => {
+  const re = /(##\s*14\.\s*프로토타입 URL\s*\n)([^\n]*)/;
+  if (re.test(content)) return content.replace(re, `$1${url}`);
+  return `${content.trimEnd()}\n\n## 14. 프로토타입 URL\n${url}\n`;
+};
+
+/**
  * 최종 PRD.md 조립.
  * 기존 활성화 데이터 + 작성된 IA/기능정의서 문서 + 프로토타입 URL을 종합합니다.
  */

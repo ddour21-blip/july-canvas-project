@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
 import { showToast } from '@/lib/utils';
-import { DOCUMENT_META, DOCUMENT_ORDER, generatePRD } from '@/lib/documents';
+import { DOCUMENT_META, DOCUMENT_ORDER, generatePRD, injectPrototypeUrl } from '@/lib/documents';
 import { downloadTextFile } from '@/lib/export/exportMarkdown';
 import { Button } from '@/components/common/Button';
 import { CheckCircle2, Download, FileText, Lock, Plus, RefreshCw, Save } from 'lucide-react';
@@ -82,9 +82,23 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   };
 
   const handleApprovePRD = async (docu: ProjectDocument) => {
-    await updateDoc(docRef('documents', docu.id), { status: 'approved', locked: true, updatedAt: serverTimestamp() });
+    // 승인된 PRD에는 클릭 가능한 프로토타입 URL이 반드시 포함되어야 한다.
+    // 프로토타입 화면이 없으면 승인을 막고 경고한다.
+    const url = prototypeUrl();
+    if (!url) {
+      showToast('프로토타입 화면이 없어 승인할 수 없습니다. 먼저 프로토타입을 등록한 뒤 승인하세요.', 'error');
+      return;
+    }
+    // 승인 시점에 최신 프로토타입 URL을 PRD 본문(섹션 14)에 자동 주입한 뒤 잠금.
+    const finalContent = injectPrototypeUrl(docu.content, url);
+    await updateDoc(docRef('documents', docu.id), {
+      content: finalContent,
+      status: 'approved',
+      locked: true,
+      updatedAt: serverTimestamp(),
+    });
     await updateDoc(docRef('projects', project.id), { status: 'approved', updatedAt: serverTimestamp() });
-    showToast('PRD가 승인되어 잠금 처리되었습니다.');
+    showToast('PRD가 승인·잠금되었습니다. 최신 프로토타입 URL이 포함되었습니다.');
   };
 
   const missingRequired = DOCUMENT_ORDER.filter((t) => t !== 'prd').filter((t) => !byType(t));
