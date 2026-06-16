@@ -30,73 +30,76 @@ export const DOCUMENT_ORDER: DocumentType[] = (
 const fallback = (v: string | undefined, placeholder: string) =>
   v && v.trim() ? v.trim() : `_(${placeholder})_`;
 
+// 활성화 시 비워둔 선택 항목에 들어가는 안내 문구 (어색한 "미입력" 대체).
+const EMPTY_HINT = '아직 입력되지 않았습니다. 문서 화면에서 보완해주세요.';
+
 export const generateBrief = (project: Project, a: ProjectActivation): string => `# ${project.name} — 프로젝트 브리프
 
 ## 기획 의도
-${fallback(a.intent, '미입력')}
+${fallback(a.intent, EMPTY_HINT)}
 
 ## 해결하려는 문제
-${fallback(a.problem, '미입력')}
+${fallback(a.problem, EMPTY_HINT)}
 
 ## 핵심 고객
-${fallback(a.customer, '미입력')}
+${fallback(a.customer, EMPTY_HINT)}
 
 ## 핵심 가치
-${fallback(a.value, '미입력')}
+${fallback(a.value, EMPTY_HINT)}
 
 ## 핵심 차별점
-${fallback(a.differentiator, '미입력')}
+${fallback(a.differentiator, EMPTY_HINT)}
 
 ## 참고 UI / 서비스 / 레퍼런스
-${fallback(a.references, '미입력')}
+${fallback(a.references, EMPTY_HINT)}
 `;
 
 export const generateMarketResearch = (a: ProjectActivation): string => `# 시장조사
 
 ## 핵심 고객
-${fallback(a.customer, '미입력')}
+${fallback(a.customer, EMPTY_HINT)}
 
 ## 핵심 문제
-${fallback(a.problem, '미입력')}
+${fallback(a.problem, EMPTY_HINT)}
 
 ## 핵심 가치
-${fallback(a.value, '미입력')}
+${fallback(a.value, EMPTY_HINT)}
 
 ## 핵심 차별점
-${fallback(a.differentiator, '미입력')}
+${fallback(a.differentiator, EMPTY_HINT)}
 
 ## 최초 진입 시장
-${fallback(a.market, '미입력')}
+${fallback(a.market, EMPTY_HINT)}
 
 ## 참고 레퍼런스
-${fallback(a.references, '미입력')}
+${fallback(a.references, EMPTY_HINT)}
 `;
 
 export const generateProductStrategy = (a: ProjectActivation): string => `# 제품화전략
 
 ## 핵심 고객
-${fallback(a.customer, '미입력')}
+${fallback(a.customer, EMPTY_HINT)}
 
 ## 핵심 문제
-${fallback(a.problem, '미입력')}
+${fallback(a.problem, EMPTY_HINT)}
 
 ## 핵심 가치
-${fallback(a.value, '미입력')}
+${fallback(a.value, EMPTY_HINT)}
 
 ## 핵심 차별점
-${fallback(a.differentiator, '미입력')}
+${fallback(a.differentiator, EMPTY_HINT)}
 
 ## 수익 구조
-${fallback(a.revenue, '미입력')}
+${fallback(a.revenue, EMPTY_HINT)}
 
 ## 최초 진입 시장
-${fallback(a.market, '미입력')}
+${fallback(a.market, EMPTY_HINT)}
 
 ## MVP 범위
-${fallback(a.mvpScope, '미입력')}
+${fallback(a.mvpScope, EMPTY_HINT)}
 
 ## 나중에 추가할 기능
-${fallback(a.laterScope, '미입력')}
+${fallback(a.laterScope, EMPTY_HINT)}
 `;
 
 /** 활성화 시 자동 생성되는 3개 기본 문서의 초안 페이로드 */
@@ -139,26 +142,26 @@ export const generatePRD = (
 ${fallback(project.description || a.intent, '프로젝트 개요 미입력')}
 
 ## 2. 기획 의도
-${fallback(a.intent, '미입력')}
+${fallback(a.intent, EMPTY_HINT)}
 
 ## 3. 핵심 고객
-${fallback(a.customer, '미입력')}
+${fallback(a.customer, EMPTY_HINT)}
 
 ## 4. 핵심 문제
-${fallback(a.problem, '미입력')}
+${fallback(a.problem, EMPTY_HINT)}
 
 ## 5. 핵심 가치
-${fallback(a.value, '미입력')}
+${fallback(a.value, EMPTY_HINT)}
 
 ## 6. 시장조사 요약
-- 최초 진입 시장: ${fallback(a.market, '미입력')}
-- 핵심 차별점: ${fallback(a.differentiator, '미입력')}
+- 최초 진입 시장: ${fallback(a.market, EMPTY_HINT)}
+- 핵심 차별점: ${fallback(a.differentiator, EMPTY_HINT)}
 
 ## 7. 제품화전략
-- 수익 구조: ${fallback(a.revenue, '미입력')}
+- 수익 구조: ${fallback(a.revenue, EMPTY_HINT)}
 
 ## 8. MVP 범위
-${fallback(a.mvpScope, '미입력')}
+${fallback(a.mvpScope, EMPTY_HINT)}
 
 ## 9. IA
 ${ia ? ia : '_(IA 문서가 아직 작성되지 않았습니다)_'}

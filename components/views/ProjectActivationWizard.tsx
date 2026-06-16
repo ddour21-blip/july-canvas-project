@@ -14,37 +14,45 @@ interface Field {
   label: string;
   placeholder: string;
   required?: boolean;
+  /** 아이디어 자유 입력처럼 큰 textarea로 렌더 */
+  big?: boolean;
 }
 
-const STEPS: { title: string; desc: string; fields: Field[] }[] = [
+// 3단계: 1) 아이디어(자유 입력, 유일 필수) 2) 보강 정보(선택) 3) 문서 생성 확인.
+// 기존 10개 항목(ProjectActivation)은 모두 유지 — intent는 1단계, 나머지 9개는 2단계 선택 입력.
+const STEPS: { id: 'idea' | 'detail' | 'confirm'; title: string; desc: string; fields: Field[] }[] = [
   {
-    title: '문제와 고객',
-    desc: '이 프로젝트가 왜 필요한지, 무엇을 해결하는지 정의합니다.',
+    id: 'idea',
+    title: '아이디어',
+    desc: '만들고 싶은 서비스나 아이디어를 자유롭게 설명해주세요. 이 내용으로 기획 문서 초안이 만들어집니다.',
     fields: [
-      { key: 'intent', label: '기획 의도', placeholder: '왜 이 제품/기능을 만드는가?', required: true },
-      { key: 'problem', label: '해결하려는 문제', placeholder: '어떤 문제를 해결하는가?', required: true },
-      { key: 'customer', label: '핵심 고객', placeholder: '누구를 위한 제품인가?', required: true },
+      {
+        key: 'intent',
+        label: '무엇을 만들고 싶나요?',
+        placeholder:
+          '예: 여행 장소와 일정을 자동으로 정리해주는 앱을 만들고 싶습니다. 사용자는 구글맵에 저장한 장소나 참고 URL을 넣으면, AI가 여행 일정표와 예산, 날씨 준비까지 정리해줍니다.',
+        required: true,
+        big: true,
+      },
     ],
   },
   {
-    title: '제품 전략',
-    desc: '제품화전략의 핵심 요소를 정리합니다.',
+    id: 'detail',
+    title: '보강 정보',
+    desc: '상세 정보를 더 입력하면 생성되는 문서의 품질이 좋아집니다. 지금은 비워두고 나중에 문서 화면에서 보완해도 됩니다.',
     fields: [
-      { key: 'value', label: '핵심 가치', placeholder: '고객에게 주는 핵심 가치', required: true },
-      { key: 'differentiator', label: '핵심 차별점', placeholder: '경쟁/대안 대비 차별점', required: true },
-      { key: 'revenue', label: '수익 구조', placeholder: '어떻게 수익을 내는가?' },
-      { key: 'market', label: '최초 진입 시장', placeholder: '가장 먼저 공략할 시장/세그먼트' },
+      { key: 'problem', label: '해결하려는 문제', placeholder: '어떤 문제를 해결하는가? (선택)' },
+      { key: 'customer', label: '핵심 고객', placeholder: '누구를 위한 제품인가? (선택)' },
+      { key: 'value', label: '핵심 가치', placeholder: '고객에게 주는 핵심 가치 (선택)' },
+      { key: 'differentiator', label: '핵심 차별점', placeholder: '경쟁/대안 대비 차별점 (선택)' },
+      { key: 'revenue', label: '수익 구조', placeholder: '어떻게 수익을 내는가? (선택)' },
+      { key: 'market', label: '최초 진입 시장', placeholder: '가장 먼저 공략할 시장/세그먼트 (선택)' },
+      { key: 'mvpScope', label: 'MVP 범위', placeholder: '최소 기능 범위 (선택)' },
+      { key: 'laterScope', label: '나중에 추가할 기능', placeholder: 'MVP 이후 확장 기능 (선택)' },
+      { key: 'references', label: '참고 UI / 서비스 / 레퍼런스', placeholder: '참고할 서비스 또는 URL (선택)' },
     ],
   },
-  {
-    title: 'MVP와 레퍼런스',
-    desc: 'MVP 범위와 참고 자료를 정리하면 활성화가 완료됩니다.',
-    fields: [
-      { key: 'mvpScope', label: 'MVP 범위', placeholder: '최소 기능 범위', required: true },
-      { key: 'laterScope', label: '나중에 추가할 기능', placeholder: 'MVP 이후 확장 기능' },
-      { key: 'references', label: '참고 UI / 서비스 / 레퍼런스', placeholder: '참고할 서비스 또는 URL' },
-    ],
-  },
+  { id: 'confirm', title: '문서 생성', desc: '', fields: [] },
 ];
 
 interface Props {
@@ -60,8 +68,11 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
 
   const current = STEPS[step];
   const isLast = step === STEPS.length - 1;
+  const isConfirm = current.id === 'confirm';
 
+  // 유일 필수 = 아이디어(intent). 나머지 단계/필드는 항상 통과.
   const stepValid = current.fields.every((f) => !f.required || data[f.key].trim());
+  const ideaFilled = !!data.intent.trim();
 
   const set = (key: keyof ProjectActivation, v: string) => setData((prev) => ({ ...prev, [key]: v }));
 
@@ -111,7 +122,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
             </div>
             <div>
               <h2 className="text-2xl font-extrabold text-[var(--text-strong)] tracking-tight">프로젝트 활성화</h2>
-              <p className="text-sm text-[var(--text-secondary)] mt-1">{project.name} · 기획 정보를 입력하면 기본 문서가 자동 생성됩니다.</p>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">{project.name} · 아이디어만 입력하면 기획 문서 초안이 생성됩니다.</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 bg-[var(--surface-sunken)] rounded-full hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] transition-colors">
@@ -125,7 +136,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
             const done = i < step;
             const cur = i === step;
             return (
-              <div key={i} className="flex items-center gap-1.5 min-w-0">
+              <div key={s.id} className="flex items-center gap-1.5 min-w-0">
                 <span
                   className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
                     done
@@ -150,49 +161,73 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
 
         {/* 현재 단계 콘텐츠 */}
         <div className="flex-1 overflow-y-auto p-7">
-          <p className="text-sm text-[var(--text-secondary)] mb-5">{current.desc}</p>
-          <div className="space-y-4">
-            {current.fields.map((f) => {
-              const filled = !!data[f.key].trim();
-              return (
-                <div key={f.key}>
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-body)] mb-1.5">
-                    {f.label} {f.required && <span className="text-[var(--red-600)]">*</span>}
-                    {filled && <CheckCircle2 size={13} className="text-[var(--green-600)]" />}
-                  </label>
-                  <textarea
-                    value={data[f.key]}
-                    onChange={(e) => set(f.key, e.target.value)}
-                    placeholder={f.placeholder}
-                    rows={f.key === 'mvpScope' || f.key === 'intent' || f.key === 'problem' ? 3 : 2}
-                    className="w-full px-4 py-3 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-sm resize-y bg-[var(--surface-sunken)] focus:bg-[var(--surface-card)] text-[var(--text-body)] transition-colors"
-                  />
-                </div>
-              );
-            })}
-          </div>
+          {current.desc && <p className="text-sm text-[var(--text-secondary)] mb-5">{current.desc}</p>}
 
-          {/* 활성화 완료 안내 (마지막 단계) */}
-          {isLast && (
-            <div className="mt-6 rounded-[var(--radius-lg)] border border-[var(--brand-200)] bg-[var(--color-primary-softer)] p-4">
-              <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-strong)]">
-                <Rocket size={15} className="text-[var(--color-primary-text)]" /> 활성화하면 프로젝트가 <span className="text-[var(--color-primary-text)]">draft → active</span>로 전환됩니다.
-              </div>
-              <p className="text-xs text-[var(--text-secondary)] mt-1.5 mb-2.5">입력한 정보로 기본 기획 문서 3종이 자동 생성됩니다.</p>
-              <ul className="flex flex-wrap gap-2">
-                {['PROJECT_BRIEF', 'MARKET_RESEARCH', 'PRODUCT_STRATEGY'].map((d) => (
-                  <li key={d} className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold bg-[var(--surface-card)] border border-[var(--border-default)] text-[var(--text-body)] px-2.5 py-1 rounded-[var(--radius-md)]">
-                    <FileText size={12} className="text-[var(--color-primary-text)]" /> {d}
-                  </li>
-                ))}
-              </ul>
+          {!isConfirm && (
+            <div className="space-y-4">
+              {current.fields.map((f) => {
+                const filled = !!data[f.key].trim();
+                return (
+                  <div key={f.key}>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-body)] mb-1.5">
+                      {f.label} {f.required && <span className="text-[var(--red-600)]">*</span>}
+                      {filled && <CheckCircle2 size={13} className="text-[var(--green-600)]" />}
+                    </label>
+                    <textarea
+                      value={data[f.key]}
+                      onChange={(e) => set(f.key, e.target.value)}
+                      placeholder={f.placeholder}
+                      rows={f.big ? 6 : 2}
+                      className="w-full px-4 py-3 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-sm resize-y bg-[var(--surface-sunken)] focus:bg-[var(--surface-card)] text-[var(--text-body)] transition-colors"
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {/* 미입력 validation 안내 */}
+          {/* 보강 정보 단계: 건너뛰기 안내 */}
+          {current.id === 'detail' && (
+            <p className="mt-4 text-xs text-[var(--text-tertiary)]">
+              모두 선택 입력입니다. 비워두고 <span className="font-bold text-[var(--text-secondary)]">다음</span>을 눌러 바로 생성할 수 있어요.
+            </p>
+          )}
+
+          {/* 생성 전 확인 단계 */}
+          {isConfirm && (
+            <div className="space-y-4">
+              <div className="rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
+                <div className="text-xs font-bold text-[var(--text-tertiary)] mb-1.5">입력한 아이디어</div>
+                {ideaFilled ? (
+                  <p className="text-sm text-[var(--text-body)] whitespace-pre-wrap leading-relaxed line-clamp-6">{data.intent}</p>
+                ) : (
+                  <p className="text-sm text-[var(--amber-700)]">아이디어가 비어 있습니다. 1단계에서 입력해주세요.</p>
+                )}
+              </div>
+
+              <div className="rounded-[var(--radius-lg)] border border-[var(--brand-200)] bg-[var(--color-primary-softer)] p-4">
+                <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-strong)]">
+                  <Rocket size={15} className="text-[var(--color-primary-text)]" /> 완료하면 프로젝트가 <span className="text-[var(--color-primary-text)]">draft → active</span>로 전환됩니다.
+                </div>
+                <p className="text-xs text-[var(--text-secondary)] mt-1.5 mb-2.5">다음 기획 문서 초안이 자동 생성됩니다.</p>
+                <ul className="flex flex-wrap gap-2 mb-3">
+                  {['PROJECT_BRIEF', 'MARKET_RESEARCH', 'PRODUCT_STRATEGY'].map((d) => (
+                    <li key={d} className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold bg-[var(--surface-card)] border border-[var(--border-default)] text-[var(--text-body)] px-2.5 py-1 rounded-[var(--radius-md)]">
+                      <FileText size={12} className="text-[var(--color-primary-text)]" /> {d}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  IA / FEATURE_SPEC / PRD 와 비워둔 상세 정보는 이후 <span className="font-bold text-[var(--text-secondary)]">문서 화면</span>에서 생성·보완할 수 있습니다.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 미입력 validation 안내 (아이디어 단계 전용) */}
           {!stepValid && (
             <p className="mt-4 text-xs font-medium text-[var(--amber-700)] bg-[var(--amber-50)] border border-[var(--amber-100)] rounded-[var(--radius-md)] px-3 py-2">
-              이 단계의 필수 항목(<span className="text-[var(--red-600)] font-bold">*</span>)을 모두 입력해야 {isLast ? '활성화를 완료' : '다음 단계로 진행'}할 수 있습니다.
+              아이디어(<span className="text-[var(--red-600)] font-bold">*</span>)를 입력해야 다음 단계로 진행할 수 있습니다.
             </p>
           )}
         </div>
@@ -203,7 +238,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
             이전
           </Button>
           {isLast ? (
-            <Button icon={Rocket} onClick={handleActivate} disabled={!stepValid || saving} className="px-7">
+            <Button icon={Rocket} onClick={handleActivate} disabled={!ideaFilled || saving} className="px-7">
               {saving ? '활성화 중...' : '활성화 완료'}
             </Button>
           ) : (
