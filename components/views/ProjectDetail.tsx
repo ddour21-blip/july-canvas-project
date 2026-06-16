@@ -6,7 +6,7 @@ import { addDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firesto
 import { col, docRef } from '@/lib/firestore';
 import { useRole, roleLabel } from '@/lib/auth';
 import { deleteProjectCascade } from '@/lib/projects';
-import { copyToClipboard, getTime, showToast } from '@/lib/utils';
+import { copyToClipboard, getTime, nowMs, showToast } from '@/lib/utils';
 import { DOCUMENT_ORDER } from '@/lib/documents';
 import { Button } from '@/components/common/Button';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
@@ -16,6 +16,8 @@ import ProjectDocuments from './ProjectDocuments';
 import {
   ArrowLeft,
   ChevronRight,
+  Clock,
+  Eye,
   ExternalLink,
   FileCode2,
   FileText,
@@ -27,16 +29,34 @@ import {
   Rocket,
   Trash2,
 } from 'lucide-react';
-import type { Project, ProjectDocument, ProjectMember, ProjectStatus, Screen } from '@/types';
+import type { FirestoreTime, Project, ProjectDocument, ProjectMember, ProjectStatus, Screen } from '@/types';
 
-const STATUS_LABEL: Record<ProjectStatus, { label: string; cls: string }> = {
-  draft: { label: '초안', cls: 'bg-gray-100 text-gray-600' },
-  active: { label: '활성', cls: 'bg-blue-100 text-blue-700' },
-  review: { label: '리뷰', cls: 'bg-amber-100 text-amber-700' },
-  approved: { label: '승인', cls: 'bg-green-100 text-green-700' },
-  archived: { label: '보관', cls: 'bg-gray-200 text-gray-500' },
-  handoff: { label: '전달됨', cls: 'bg-purple-100 text-purple-700' },
+// 상태 배지: green-first 토큰(fg/bg) 직접 소비 (Dashboard와 동일 규칙).
+const STATUS_LABEL: Record<ProjectStatus, { label: string; fg: string; bg: string }> = {
+  draft: { label: '초안', fg: 'var(--status-draft-fg)', bg: 'var(--status-draft-bg)' },
+  active: { label: '활성', fg: 'var(--status-active-fg)', bg: 'var(--status-active-bg)' },
+  review: { label: '리뷰', fg: 'var(--status-review-fg)', bg: 'var(--status-review-bg)' },
+  approved: { label: '승인', fg: 'var(--status-approved-fg)', bg: 'var(--status-approved-bg)' },
+  archived: { label: '보관', fg: 'var(--status-archived-fg)', bg: 'var(--status-archived-bg)' },
+  handoff: { label: '전달됨', fg: 'var(--status-handoff-fg)', bg: 'var(--status-handoff-bg)' },
 };
+
+/** 생성/수정 시간을 가벼운 상대 표현으로. (Dashboard와 동일 톤) */
+function formatRelative(ts: FirestoreTime): string {
+  const ms = getTime(ts);
+  if (!ms) return '방금 전';
+  const diff = nowMs() - ms;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return '방금 전';
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}시간 전`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}일 전`;
+  const d = new Date(ms);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+}
 
 type Tab = 'overview' | 'documents' | 'screens';
 
@@ -143,6 +163,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
     { key: 'screens', label: `프로토타입 (${projectScreens.length})` },
   ];
 
+  const openAddScreen = () => setIsModalOpen(true);
+
   return (
     <div className="p-10">
       <ConfirmModal
@@ -156,34 +178,49 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         <ProjectActivationWizard project={project} onClose={() => setShowWizard(false)} onActivated={() => setTab('documents')} />
       )}
 
-      <div className="mb-8 flex items-center justify-between">
-        <div className="flex items-center text-sm font-medium text-gray-500">
-          <button onClick={() => navigate('#')} className="hover:text-blue-600 flex items-center gap-1 transition-colors">
-            <Folder size={16} /> 프로젝트 목록
-          </button>
-          <ChevronRight size={16} className="mx-3 text-gray-300" />
-          <span className="text-gray-900 bg-gray-100 px-3 py-1 rounded-full">{project.name}</span>
-          <span className={`ml-3 text-xs px-2 py-1 rounded-full font-bold ${status.cls}`}>{status.label}</span>
-          <span className="ml-3 bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded font-bold">내 권한: {roleLabel(role)}</span>
-          {!canEdit && <span className="ml-2 bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded">👁️ 보기 전용</span>}
-        </div>
+      {/* 브레드크럼 + 상태/권한 배지 */}
+      <div className="mb-6 flex items-center flex-wrap gap-y-2 text-sm font-medium text-[var(--text-secondary)]">
+        <button onClick={() => navigate('#')} className="hover:text-[var(--color-primary-text)] flex items-center gap-1 transition-colors">
+          <Folder size={16} /> 프로젝트 목록
+        </button>
+        <ChevronRight size={16} className="mx-2.5 text-[var(--text-tertiary)]" />
+        <span className="text-[var(--text-strong)] bg-[var(--surface-hover)] px-3 py-1 rounded-[var(--radius-pill)]">{project.name}</span>
+        <span className="ml-3 text-xs px-2.5 py-1 rounded-[var(--radius-pill)] font-bold" style={{ color: status.fg, backgroundColor: status.bg }}>
+          {status.label}
+        </span>
+        <span className="ml-2 bg-[var(--surface-hover)] text-[var(--text-body)] text-xs px-2.5 py-1 rounded-[var(--radius-md)] font-bold">
+          내 권한: {roleLabel(role)}
+        </span>
+        {!canEdit && (
+          <span className="ml-2 inline-flex items-center gap-1 bg-[var(--surface-hover)] text-[var(--text-secondary)] text-xs px-2.5 py-1 rounded-[var(--radius-md)]">
+            <Eye size={12} /> 보기 전용
+          </span>
+        )}
       </div>
 
-      <div className="flex flex-wrap justify-between items-end gap-6 mb-6">
-        <div>
-          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">{project.name}</h1>
-          <p className="text-gray-500 mt-3 text-lg">기획 문서와 프로토타입을 한 곳에서 관리합니다.</p>
+      {/* 헤더: 프로젝트명/설명 + 액션 */}
+      <div className="flex flex-col gap-5 mb-8 lg:flex-row lg:flex-wrap lg:justify-between lg:items-end lg:gap-x-6">
+        <div className="shrink-0">
+          <h1 className="text-4xl font-extrabold text-[var(--text-strong)] tracking-tight">{project.name}</h1>
+          <p className="text-[var(--text-secondary)] mt-3 text-lg">
+            {project.description?.trim() || '기획 문서와 프로토타입을 한 곳에서 관리합니다.'}
+          </p>
         </div>
-        <div className="flex gap-3 shrink-0">
+        <div className="flex flex-wrap gap-3 items-center">
           {canInvite && (
             <Button variant="outline" icon={ExternalLink} onClick={() => setShareState({ isOpen: true, type: 'project', id: project.id })}>
               공유 및 초대
             </Button>
           )}
+          {canEdit && (
+            <Button icon={Plus} onClick={openAddScreen}>
+              새 화면 추가
+            </Button>
+          )}
           {canDelete && (
             <Button
               variant="outline"
-              className="text-red-500 border-red-200 hover:bg-red-50"
+              className="text-[var(--red-600)] border-[var(--red-200)] hover:bg-[var(--red-50)]"
               icon={Trash2}
               onClick={() =>
                 setConfirmState({
@@ -201,13 +238,15 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
       </div>
 
       {/* 탭 */}
-      <div className="flex gap-1 border-b border-gray-200 mb-8">
+      <div className="flex gap-1 border-b border-[var(--border-default)] mb-8">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-5 py-3 text-sm font-bold border-b-2 transition-colors -mb-px ${
-              tab === t.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+              tab === t.key
+                ? 'border-[var(--color-primary)] text-[var(--color-primary-text)]'
+                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-body)]'
             }`}
           >
             {t.label}
@@ -220,19 +259,19 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         <div className="space-y-5">
           <ProjectInfoCard
             project={project}
-            statusLabel={status.label}
-            statusCls={status.cls}
+            status={status}
+            roleText={roleLabel(role)}
             members={members}
             documents={documents}
             screenCount={projectScreens.length}
           />
           {!isActivated ? (
-            <div className="py-16 text-center border-2 border-dashed border-blue-200 rounded-2xl bg-blue-50/30">
-              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-5">
+            <div className="py-16 px-6 text-center border-2 border-dashed border-[var(--brand-200)] rounded-[var(--radius-2xl)] bg-[var(--color-primary-softer)] flex flex-col items-center">
+              <div className="w-16 h-16 bg-[var(--color-primary)] rounded-[var(--radius-2xl)] flex items-center justify-center text-[var(--color-on-primary)] mb-5">
                 <Rocket size={30} />
               </div>
-              <h3 className="text-2xl font-extrabold text-gray-900 mb-2">프로젝트를 활성화하세요</h3>
-              <p className="text-gray-500 mb-6 max-w-md mx-auto leading-relaxed">
+              <h3 className="text-2xl font-extrabold text-[var(--text-strong)] mb-2">프로젝트를 활성화하세요</h3>
+              <p className="text-[var(--text-secondary)] mb-6 max-w-md mx-auto leading-relaxed">
                 기획 의도·문제·고객·가치·MVP 범위 등을 입력하면 브리프/시장조사/제품화전략 문서가 자동 생성됩니다.
               </p>
               {canEdit && (
@@ -245,9 +284,9 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <ActivationSummary project={project} />
               <div className="space-y-5">
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                  <h3 className="font-bold text-gray-900 text-lg mb-1">최종 산출물</h3>
-                  <p className="text-sm text-gray-500 mb-5">코워크 담당자에게 전달할 PRD와 프로토타입 URL입니다.</p>
+                <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
+                  <h3 className="font-bold text-[var(--text-strong)] text-lg mb-1">최종 산출물</h3>
+                  <p className="text-sm text-[var(--text-secondary)] mb-5">코워크 담당자에게 전달할 PRD와 프로토타입 URL입니다.</p>
                   <div className="flex flex-col gap-3">
                     <Button variant="outline" icon={FileText} onClick={() => setTab('documents')} className="justify-start">
                       PRD 문서 관리로 이동
@@ -272,10 +311,12 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
       {tab === 'documents' && (
         <>
           {!isActivated ? (
-            <div className="py-16 text-center border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50">
-              <FileText size={48} className="mx-auto text-gray-400 mb-4" />
-              <h3 className="text-xl font-bold text-gray-900 mb-2">먼저 프로젝트를 활성화하세요</h3>
-              <p className="text-gray-500 mb-6">활성화하면 기본 기획 문서가 생성됩니다.</p>
+            <div className="py-16 px-6 text-center border-2 border-dashed border-[var(--border-strong)] rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] flex flex-col items-center">
+              <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center mb-4">
+                <FileText size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">먼저 프로젝트를 활성화하세요</h3>
+              <p className="text-[var(--text-secondary)] mb-6">활성화하면 기본 기획 문서가 생성됩니다.</p>
               {canEdit && (
                 <Button icon={Rocket} onClick={() => setShowWizard(true)} className="mx-auto">
                   활성화 시작하기
@@ -293,17 +334,17 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         <>
           <div className="flex justify-end mb-6">
             {canEdit && (
-              <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="shadow-md">
+              <Button icon={Plus} onClick={openAddScreen}>
                 새 화면 추가
               </Button>
             )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
             {projectScreens.map((screen) => (
               <div
                 key={screen.id}
                 onClick={() => navigate(`#screen_${screen.id}`)}
-                className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer flex flex-col group relative"
+                className="bg-[var(--surface-card)] rounded-[var(--radius-2xl)] border border-[var(--border-default)] overflow-hidden shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5 hover:border-[var(--brand-300)] transition-all cursor-pointer flex flex-col group relative"
               >
                 {canEdit && (
                   <button
@@ -316,34 +357,46 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                         action: () => executeDeleteScreen(screen.id),
                       });
                     }}
-                    className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-all z-10 border border-gray-100"
+                    className="absolute top-3 right-3 p-2 bg-[var(--surface-card)]/90 backdrop-blur text-[var(--text-tertiary)] hover:text-[var(--red-600)] hover:bg-[var(--red-50)] rounded-[var(--radius-md)] shadow-[var(--shadow-xs)] opacity-0 group-hover:opacity-100 transition-all z-10 border border-[var(--border-subtle)]"
                   >
                     <Trash2 size={16} />
                   </button>
                 )}
-                <div className="h-40 bg-gray-50 border-b border-gray-100 flex items-center justify-center text-gray-300 group-hover:bg-blue-50 group-hover:text-blue-400 transition-colors">
-                  <FileCode2 size={48} />
+                <div className="h-36 bg-[var(--surface-sunken)] border-b border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-tertiary)] group-hover:bg-[var(--surface-active)] group-hover:text-[var(--color-primary-text)] transition-colors">
+                  <FileCode2 size={44} />
                 </div>
-                <div className="p-6 flex-1 flex flex-col justify-between">
+                <div className="p-5 flex-1 flex flex-col justify-between">
                   <div>
-                    <h3 className="font-bold text-xl text-gray-800 mb-2 truncate">{screen.name}</h3>
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 text-gray-600 text-xs font-semibold">
-                      <MessageSquarePlus size={12} /> 기획/정책: {(screen.annotations || []).length}개
+                    <h3 className="font-bold text-lg text-[var(--text-strong)] mb-2 truncate">{screen.name}</h3>
+                    <div className="flex items-center flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] bg-[var(--surface-hover)] text-[var(--text-secondary)] text-xs font-semibold">
+                        <MessageSquarePlus size={12} /> 기획/정책 {(screen.annotations || []).length}개
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
+                        <Clock size={12} /> {formatRelative(screen.createdAt)}
+                      </span>
                     </div>
                   </div>
-                  <div className="mt-6 text-blue-600 font-bold flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1">
+                  <div className="mt-5 text-[var(--color-primary-text)] font-bold flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1">
                     캔버스 열기 <ArrowLeft size={16} className="rotate-180" />
                   </div>
                 </div>
               </div>
             ))}
             {projectScreens.length === 0 && (
-              <div className="col-span-full py-16 text-center border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50">
-                <Layout size={48} className="mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-bold text-gray-900 mb-2">등록된 화면이 없습니다</h3>
-                <p className="text-gray-500 mb-6">
+              <div className="col-span-full py-16 px-6 text-center border-2 border-dashed border-[var(--border-strong)] rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] flex flex-col items-center">
+                <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center mb-5">
+                  <Layout size={32} />
+                </div>
+                <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">등록된 화면이 없습니다</h3>
+                <p className="text-[var(--text-secondary)] mb-6 max-w-md">
                   {canEdit ? "'새 화면 추가' 버튼을 눌러 첫 번째 프로토타입을 등록해보세요." : '이 프로젝트에는 아직 등록된 화면이 없습니다.'}
                 </p>
+                {canEdit && (
+                  <Button icon={Plus} onClick={openAddScreen} className="px-6 h-[44px]">
+                    새 화면 추가
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -351,32 +404,32 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
       )}
 
       {isModalOpen && canEdit && (
-        <div className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-50 p-6 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-5xl flex flex-col h-[85vh] animate-in zoom-in-95">
-            <h2 className="text-2xl font-bold mb-6">새 화면(프로토타입) 추가</h2>
+        <div className="fixed inset-0 z-[var(--z-modal)] bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center p-6 backdrop-blur-sm">
+          <div className="bg-[var(--surface-card)] rounded-[var(--radius-2xl)] shadow-[var(--shadow-2xl)] p-8 w-full max-w-5xl flex flex-col h-[85vh] animate-in zoom-in-95">
+            <h2 className="text-2xl font-bold text-[var(--text-strong)] mb-6">새 화면(프로토타입) 추가</h2>
             <form onSubmit={handleAddScreen} className="flex flex-col flex-1 gap-6 overflow-hidden">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">화면 이름</label>
+                <label className="block text-sm font-bold text-[var(--text-body)] mb-2">화면 이름</label>
                 <input
                   type="text"
                   value={screenName}
                   onChange={(e) => setScreenName(e.target.value)}
                   placeholder="예: 메인 랜딩 페이지, 로그인 모달"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-lg"
+                  className="w-full px-4 py-3 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-lg text-[var(--text-body)]"
                   required
                   autoFocus
                 />
               </div>
               <div className="flex flex-col flex-1 min-h-0">
-                <label className="block text-sm font-bold text-gray-700 mb-2">UI 코드</label>
+                <label className="block text-sm font-bold text-[var(--text-body)] mb-2">UI 코드</label>
                 <textarea
                   value={screenCode}
                   onChange={(e) => setScreenCode(e.target.value)}
-                  className="w-full flex-1 p-5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm resize-none bg-gray-50"
+                  className="w-full flex-1 p-5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none font-mono text-sm resize-none bg-[var(--surface-sunken)] text-[var(--text-body)]"
                   required
                 />
               </div>
-              <div className="flex justify-end gap-3 pt-6 border-t mt-auto">
+              <div className="flex justify-end gap-3 pt-6 border-t border-[var(--border-default)] mt-auto">
                 <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
                   취소
                 </Button>
@@ -394,15 +447,15 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
 
 function ProjectInfoCard({
   project,
-  statusLabel,
-  statusCls,
+  status,
+  roleText,
   members,
   documents,
   screenCount,
 }: {
   project: Project;
-  statusLabel: string;
-  statusCls: string;
+  status: { label: string; fg: string; bg: string };
+  roleText: string;
   members: ProjectMember[];
   documents: ProjectDocument[];
   screenCount: number;
@@ -414,8 +467,16 @@ function ProjectInfoCard({
   const docProgress = `${documents.length} / ${DOCUMENT_ORDER.length}`;
 
   const items: { label: string; value: React.ReactNode }[] = [
-    { label: '상태', value: <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusCls}`}>{statusLabel}</span> },
+    {
+      label: '프로젝트 상태',
+      value: (
+        <span className="text-xs font-bold px-2 py-0.5 rounded-[var(--radius-pill)]" style={{ color: status.fg, backgroundColor: status.bg }}>
+          {status.label}
+        </span>
+      ),
+    },
     { label: 'Owner', value: ownerLabel },
+    { label: '내 권한', value: roleText },
     { label: '참여 멤버', value: `${members.length}명` },
     { label: '문서 진행', value: docProgress },
     { label: '프로토타입 화면', value: `${screenCount}개` },
@@ -423,13 +484,13 @@ function ProjectInfoCard({
   ];
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-      <h3 className="font-bold text-gray-900 text-lg mb-4">{project.name}</h3>
+    <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
+      <h3 className="font-bold text-[var(--text-strong)] text-lg mb-4">{project.name}</h3>
       <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
         {items.map((it) => (
           <div key={it.label} className="flex flex-col gap-1">
-            <dt className="text-xs font-bold text-gray-400">{it.label}</dt>
-            <dd className="text-sm font-medium text-gray-800">{it.value}</dd>
+            <dt className="text-xs font-bold text-[var(--text-tertiary)]">{it.label}</dt>
+            <dd className="text-sm font-medium text-[var(--text-body)]">{it.value}</dd>
           </div>
         ))}
       </dl>
@@ -453,13 +514,15 @@ function ActivationSummary({ project }: { project: Project }) {
     { label: '참고 레퍼런스', value: a.references },
   ];
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-      <h3 className="font-bold text-gray-900 text-lg mb-4">활성화 정보</h3>
+    <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
+      <h3 className="font-bold text-[var(--text-strong)] text-lg mb-4">활성화 정보</h3>
       <dl className="space-y-3">
         {rows.map((r) => (
           <div key={r.label} className="grid grid-cols-[120px_1fr] gap-3">
-            <dt className="text-xs font-bold text-gray-400 pt-0.5">{r.label}</dt>
-            <dd className="text-sm text-gray-700 whitespace-pre-wrap">{r.value?.trim() || <span className="text-gray-300">미입력</span>}</dd>
+            <dt className="text-xs font-bold text-[var(--text-tertiary)] pt-0.5">{r.label}</dt>
+            <dd className="text-sm text-[var(--text-body)] whitespace-pre-wrap">
+              {r.value?.trim() || <span className="text-[var(--text-tertiary)]">미입력</span>}
+            </dd>
           </div>
         ))}
       </dl>
