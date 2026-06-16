@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { User } from 'firebase/auth';
-import { addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, deleteDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
 import { getPermissions } from '@/lib/auth';
 import { deleteProjectCascade } from '@/lib/projects';
@@ -54,18 +54,21 @@ export default function Dashboard({
     if (!newProjectName.trim()) return;
     try {
       const uid = user?.uid || null;
-      // 신규 프로젝트: 생성자를 owner로 등록 (roleByUid + projectMembers)
+      // 신규 프로젝트: 생성자를 owner로 등록 (roleByUid + memberUids + projectMembers)
       const ref = await addDoc(col('projects'), {
         name: newProjectName,
         organizationId: null, // 조직 단위 확장 대비 (현재 개인 프로젝트)
         ownerId: uid,
         roleByUid: uid ? { [uid]: 'owner' as const } : {},
+        // memberUids: Firestore Rules의 멤버십 기반 read(list) 쿼리 대비 (where array-contains)
+        memberUids: uid ? [uid] : [],
         status: 'draft' as ProjectStatus,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
       if (uid) {
-        await addDoc(col('projectMembers'), {
+        // projectMembers 문서 ID를 결정적(`{projectId}_{uid}`)으로 지정 → Rules에서 get()으로 권한 판정 가능
+        await setDoc(docRef('projectMembers', `${ref.id}_${uid}`), {
           projectId: ref.id,
           uid,
           email: user?.email || null,

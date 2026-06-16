@@ -1,0 +1,133 @@
+rules_version = '2';
+
+// July Canvas — Firestore 보안 규칙 (단계 A: 쓰기 역할 강제 / 읽기는 로그인 기반)
+//
+// ⚠️ 적용 전 반드시 docs/FIRESTORE_RULES.md 를 읽으세요.
+// - 앱이 컬렉션을 통째로 구독(onSnapshot(col(...)))하므로, read를 멤버십으로 좁히면
+//   Firestore의 list 규칙이 쿼리를 거부하여 앱이 깨집니다.
+// - 따라서 이 단계(A)에서는 read = 로그인 사용자, write = 역할 기반으로 강제합니다.
+// - 멤버십 기반 read(비멤버 차단)는 앱 쿼리 리팩터(단계 B) 후 적용 — 문서 참조.
+//
+// 실제 데이터 경로: artifacts/{appId}/public/data/{collection}/{docId}
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /artifacts/{appId}/public/data {
+
+      // ---- helpers ----
+      function signedIn() { return request.auth != null; }
+      function uidv() { return request.auth.uid; }
+      function p(coll, id) {
+        return /databases/$(database)/documents/artifacts/$(appId)/public/data/$(coll)/$(id);
+      }
+
+      // projectMembers/{projectId}_{uid} (결정적 ID) 우선, 없으면 projects.roleByUid / ownerId
+      function memberRole(pid) {
+        return exists(p('projectMembers', pid + '_' + uidv()))
+          ? get(p('projectMembers', pid + '_' + uidv())).data.role
+          : null;
+      }
+      function projRole(pid) {
+        return exists(p('projects', pid))
+          ? get(p('projects', pid)).data.get('roleByUid', {}).get(uidv(),
+              (get(p('projects', pid)).data.ownerId == uidv() ? 'owner' : null))
+          : null;
+      }
+      function roleFor(pid) {
+        return memberRole(pid) != null ? memberRole(pid) : projRole(pid);
+      }
+      function isOwner(pid) { return signedIn() && roleFor(pid) == 'owner'; }
+      function isEditor(pid) { return signedIn() && roleFor(pid) in ['owner', 'editor']; }
+      function isMember(pid) { return signedIn() && roleFor(pid) in ['owner', 'editor', 'viewer']; }
+
+      // ---- projects ----
+      match /projects/{projectId} {
+        // 단계 A: 로그인 read. (단계 B 목표: allow read: if uidv() in resource.data.memberUids)
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.resource.data.ownerId == uidv()
+          && request.resource.data.roleByUid[uidv()] == 'owner';
+        // owner: 전체 수정 / editor: roleByUid·ownerId·memberUids 불변 조건에서만 수정
+        allow update: if isOwner(projectId)
+          || (isEditor(projectId)
+              && request.resource.data.roleByUid == resource.data.roleByUid
+              && request.resource.data.ownerId == resource.data.ownerId
+              && request.resource.data.get('memberUids', []) == resource.data.get('memberUids', []));
+        allow delete: if isOwner(projectId);
+      }
+
+      // ---- screens ---- (projectId 필드 보유)
+      match /screens/{screenId} {
+        allow read: if signedIn();
+        allow create: if isEditor(request.resource.data.projectId);
+        allow update: if isEditor(resource.data.projectId);
+        allow delete: if isEditor(resource.data.projectId); // 현재 UI상 editor도 화면 삭제 가능 (owner-only로 강화 가능)
+      }
+
+      // ---- documents ---- (projectId 필드 보유)
+      match /documents/{docId} {
+        allow read: if signedIn();
+        allow create: if isEditor(request.resource.data.projectId);
+        // owner: 전체 / editor: 승인(status=approved 신규 전환)·잠금(locked) 불가
+        allow update: if isOwner(resource.data.projectId)
+          || (isEditor(resource.data.projectId)
+              && request.resource.data.get('locked', false) == resource.data.get('locked', false)
+              && !(request.resource.data.status == 'approved' && resource.data.status != 'approved'));
+        allow delete: if isOwner(resource.data.projectId);
+      }
+
+      // ---- projectMembers ---- (id = {projectId}_{uid})
+      match /projectMembers/{memberId} {
+        allow read: if signedIn();
+        // 생성: owner. 프로젝트 생성 직후 본인 owner 멤버 부트스트랩 포함
+        // (프로젝트 문서가 먼저 roleByUid=owner로 생성되므로 isOwner 판정 성립)
+        allow create: if isOwner(request.resource.data.projectId);
+        allow update, delete: if isOwner(resource.data.projectId);
+      }
+
+      // ---- outputs (예약: 산출물) ----
+      match /outputs/{outputId} {
+        allow read: if signedIn();
+        allow create: if isEditor(request.resource.data.projectId);
+        allow update: if isEditor(resource.data.projectId);
+        allow delete: if isOwner(resource.data.projectId);
+      }
+
+      // ---- comments (5단계 예정) ---- (projectId 필드 보유 전제)
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create: if isMember(request.resource.data.projectId);
+        // 본인 작성 글 또는 owner만 수정/삭제
+        allow update, delete: if signedIn()
+          && (resource.data.authorUid == uidv() || isOwner(resource.data.projectId));
+      }
+
+      // ---- notifications (6단계 예정) ----
+      match /notifications/{notifId} {
+        // 본인 알림만 read/update(읽음 처리). 생성은 서버(Admin SDK)만 — 클라이언트 차단.
+        allow read, update: if signedIn() && resource.data.recipientUid == uidv();
+        allow create, delete: if false;
+      }
+
+      // ---- screen_images (화면 캡처: projectId 없음 → 로그인 기반) ----
+      match /screen_images/{imageId} {
+        allow read, write: if signedIn();
+      }
+
+      // ---- members (전역 멘션 대상 목록: 프로젝트 비종속) ----
+      match /members/{memberId} {
+        allow read, write: if signedIn();
+      }
+
+      // ---- mockEmails (레거시 멘션 알림: 6단계에서 notifications로 대체) ----
+      match /mockEmails/{emailId} {
+        allow read, write: if signedIn();
+      }
+
+      // ---- organizations (예약: 미사용) ----
+      match /organizations/{orgId} {
+        allow read, write: if false;
+      }
+    }
+  }
+}

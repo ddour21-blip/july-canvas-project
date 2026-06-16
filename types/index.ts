@@ -58,6 +58,8 @@ export interface Project {
   ownerId: string | null;
   /** uid → 역할 맵. 신규 프로젝트부터 적용 (레거시 프로젝트는 없을 수 있음). */
   roleByUid?: Record<string, ProjectRole>;
+  /** 멤버 uid 배열. Firestore Rules 멤버십 read(list) 쿼리(array-contains)용. */
+  memberUids?: string[];
   status?: ProjectStatus;
   description?: string;
   /** 활성화 입력 데이터 (활성화 완료 시 채워짐) */
