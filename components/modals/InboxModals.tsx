@@ -15,7 +15,7 @@ interface VirtualInboxModalProps {
 export function VirtualInboxModal({ isOpen, onClose, emails, onOpenEmail }: VirtualInboxModalProps) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[9999] bg-gray-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9999] bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col h-[80vh] animate-in zoom-in-95">
         <div className="p-6 border-b flex justify-between items-center bg-white rounded-t-2xl shrink-0">
           <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -82,7 +82,7 @@ export function EmailSimulationModal({ isOpen, onClose, data, navigate }: EmailS
     onClose();
   };
   return (
-    <div className="fixed inset-0 z-[10000] bg-gray-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[10000] bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 border border-gray-200">
         <div className="bg-gray-100 px-4 py-2 border-b flex justify-between items-center text-xs font-bold text-gray-500">
           <span>새 멘션 알림</span>

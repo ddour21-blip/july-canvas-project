@@ -12,7 +12,7 @@ interface ExportZipModalProps {
 export function ExportZipModal({ isOpen, onClose }: ExportZipModalProps) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[10000] bg-gray-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[10000] bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8 animate-in zoom-in-95">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
