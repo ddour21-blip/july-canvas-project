@@ -776,10 +776,10 @@ export default function ScreenEditor({
                 visibleAnnotations.map((ann, idx) => (
                   <div
                     key={ann.id}
-                    className={`absolute z-20 flex items-center justify-center w-8 h-8 rounded-md shadow-lg text-white cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-all border-2 ${
+                    className={`absolute z-20 flex items-center justify-center w-8 h-8 rounded-[var(--radius-md)] shadow-lg cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-all border-2 border-white ${
                       activeAnnotationId === ann.id
-                        ? 'bg-blue-600 border-white scale-125 z-30 ring-4 ring-blue-600/30'
-                        : 'bg-rose-500 border-white hover:bg-rose-600'
+                        ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] scale-125 z-30 ring-4 ring-[var(--color-focus-ring)]'
+                        : 'bg-rose-500 text-white hover:bg-rose-600'
                     }`}
                     style={{ left: ann.currentX ?? ann.x, top: ann.currentY ?? ann.y }}
                     onClick={(e) => {
@@ -793,7 +793,7 @@ export default function ScreenEditor({
                 ))}
               {showDraftForm && mode === 'annotate' && isEditor && (
                 <div
-                  className="absolute z-30 flex items-center justify-center w-8 h-8 rounded-md bg-blue-600 border-2 border-white shadow-lg text-white font-bold transform -translate-x-1/2 -translate-y-1/2 animate-bounce"
+                  className="absolute z-30 flex items-center justify-center w-8 h-8 rounded-[var(--radius-md)] bg-[var(--color-primary)] border-2 border-white shadow-lg text-[var(--color-on-primary)] font-bold transform -translate-x-1/2 -translate-y-1/2 animate-bounce"
                   style={{ left: draftPosition.x, top: draftPosition.y }}
                 >
                   <CheckSquare size={16} strokeWidth={3} />
@@ -1014,23 +1014,27 @@ export default function ScreenEditor({
                 </div>
 
                 {activeAnnotationId === ann.id && !showDraftForm && (
-                  <div className="mt-2 ml-4 pl-4 border-l-2 border-gray-200 space-y-4 py-3 animate-in fade-in slide-in-from-top-2">
-                    <h4 className="text-xs font-bold text-gray-400 flex items-center gap-1">
+                  <div className="mt-2 ml-4 pl-4 border-l-2 border-[var(--border-default)] space-y-4 py-3 animate-in fade-in slide-in-from-top-2">
+                    <h4 className="text-xs font-bold text-[var(--text-secondary)] flex items-center gap-1">
                       <MessageCircle size={14} /> 댓글 및 논의
                     </h4>
 
+                    {(commentsByAnnotation[ann.id] || []).length === 0 && (
+                      <p className="text-xs text-[var(--text-tertiary)] py-1">아직 댓글이 없습니다. 첫 번째 의견을 남겨보세요.</p>
+                    )}
+
                     {(commentsByAnnotation[ann.id] || []).map((comment) => (
                       <div key={comment.id} className="space-y-3">
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-sm">
+                        <div className="bg-[var(--surface-card)] p-4 rounded-[var(--radius-lg)] border border-[var(--border-default)] shadow-[var(--shadow-xs)] text-sm">
                           <div className="flex justify-between items-center mb-2">
-                            <span className="font-bold text-gray-800">{comment.author}</span>
-                            <span className="text-[10px] text-gray-400">{formatDateTime(comment.createdAt)}</span>
+                            <span className="font-bold text-[var(--text-strong)]">{comment.author}</span>
+                            <span className="text-[10px] text-[var(--text-tertiary)]">{formatDateTime(comment.createdAt)}</span>
                           </div>
-                          <div className="text-gray-600 font-medium leading-relaxed text-[13px]" dangerouslySetInnerHTML={{ __html: renderMarkdown(comment.text) }} />
+                          <div className="text-[var(--text-body)] font-medium leading-relaxed text-[13px]" dangerouslySetInnerHTML={{ __html: renderMarkdown(comment.text) }} />
                           <div className="mt-3 flex">
                             <button
                               onClick={() => setReplyingToCommentId(replyingToCommentId === comment.id ? null : comment.id)}
-                              className="text-xs text-blue-600 font-bold hover:text-blue-800 transition-colors bg-blue-50 px-2 py-1 rounded"
+                              className="text-xs text-[var(--color-primary-text)] font-bold hover:bg-[var(--brand-100)] transition-colors bg-[var(--surface-active)] px-2 py-1 rounded-[var(--radius-sm)]"
                             >
                               {replyingToCommentId === comment.id ? '답글 닫기' : '↳ 답글 달기'}
                             </button>
@@ -1038,15 +1042,15 @@ export default function ScreenEditor({
                         </div>
 
                         {(comment.replies || []).map((reply) => (
-                          <div key={reply.id} className="ml-6 bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-sm">
+                          <div key={reply.id} className="ml-6 bg-[var(--surface-sunken)] p-3.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] text-sm">
                             <div className="flex justify-between items-center mb-2">
-                              <span className="font-bold text-gray-800 flex items-center gap-1.5">
-                                <ArrowLeft size={12} className="rotate-[225deg] text-gray-400" />
+                              <span className="font-bold text-[var(--text-strong)] flex items-center gap-1.5">
+                                <ArrowLeft size={12} className="rotate-[225deg] text-[var(--text-tertiary)]" />
                                 {reply.author}
                               </span>
-                              <span className="text-[10px] text-gray-400">{formatDateTime(reply.createdAt)}</span>
+                              <span className="text-[10px] text-[var(--text-tertiary)]">{formatDateTime(reply.createdAt)}</span>
                             </div>
-                            <div className="text-gray-600 font-medium leading-relaxed text-[13px]" dangerouslySetInnerHTML={{ __html: renderMarkdown(reply.text) }} />
+                            <div className="text-[var(--text-body)] font-medium leading-relaxed text-[13px]" dangerouslySetInnerHTML={{ __html: renderMarkdown(reply.text) }} />
                           </div>
                         ))}
 
