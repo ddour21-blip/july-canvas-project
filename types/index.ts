@@ -116,7 +116,7 @@ export interface ProjectDocument {
   updatedAt?: FirestoreTime;
 }
 
-/** 정책/기획 주석에 달리는 댓글 (기존: annotation 내부 배열) */
+/** 레거시 댓글 (기존: annotation 내부 배열). 읽기 fallback + 마이그레이션 원본. */
 export interface CommentReply {
   id: string;
   text: string;
@@ -130,6 +130,47 @@ export interface Comment {
   author: string;
   createdAt: FirestoreTime;
   replies?: CommentReply[];
+}
+
+/** 멘션 대상 */
+export interface CommentMention {
+  uid?: string;
+  email?: string;
+  name?: string;
+}
+
+/** 신규 댓글 컬렉션(comments) 문서 */
+export interface CommentDoc {
+  id: string;
+  organizationId?: string | null;
+  projectId: string;
+  screenId?: string;
+  annotationId?: string;
+  documentId?: string;
+  parentCommentId?: string | null;
+
+  body: string;
+
+  authorUid: string;
+  authorEmail?: string | null;
+  authorName?: string | null;
+  authorPhotoURL?: string | null;
+
+  mentions: CommentMention[];
+
+  status: 'active' | 'resolved' | 'deleted';
+  source: 'annotation' | 'document' | 'project';
+
+  /** 레거시 마이그레이션 출처 (중복 방지 키). 신규 댓글은 null */
+  migratedFrom?: {
+    screenId?: string;
+    annotationId?: string;
+    legacyCommentIndex?: number;
+    legacyCommentId?: string;
+  } | null;
+
+  createdAt?: FirestoreTime;
+  updatedAt?: FirestoreTime;
 }
 
 /** 정책 버전 히스토리 항목 */

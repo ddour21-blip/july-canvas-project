@@ -6,6 +6,7 @@ import { addDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { col, docRef } from '@/lib/firestore';
 import { getPermissions } from '@/lib/auth';
+import { createComment, migrateScreenComments, parseMentions, subscribeScreenComments } from '@/lib/comments';
 import { formatDateTime, generateId, getPageContext, getCssSelector, getTime, hashCode, nowMs, showToast } from '@/lib/utils';
 import { renderMarkdown } from '@/lib/markdown';
 import { generateHtmlBoilerplate } from '@/lib/htmlRenderer';
@@ -42,6 +43,7 @@ import {
 import type {
   Annotation,
   AnnotationHistory,
+  CommentDoc,
   Member,
   Project,
   Screen,
@@ -69,6 +71,17 @@ interface ScreenEditorProps {
   user: User | null;
   globalMembers: Member[];
   workspaceId: string;
+}
+
+/** 댓글 표시용 뷰모델 (comments 컬렉션 + 레거시 병합 결과) */
+interface ViewReply {
+  id: string;
+  author: string | null;
+  text: string;
+  createdAt: number;
+}
+interface ViewComment extends ViewReply {
+  replies: ViewReply[];
 }
 
 /** 프로젝트 전체 정책 히스토리 1건 (히스토리 대시보드용) */
@@ -127,12 +140,68 @@ export default function ScreenEditor({
     isOpen: false,
     pendingAction: null,
   });
+  const [screenComments, setScreenComments] = useState<CommentDoc[]>([]);
+  const migratedScreens = useRef<Set<string>>(new Set());
 
   const screen = screens.find((s) => s.id === screenId);
   const project = projects.find((p) => p.id === screen?.projectId);
   // 권한 기반 편집 가능 여부 (owner|editor). viewer는 읽기 전용.
   const isEditor = getPermissions(project, user?.uid).canEdit;
   const annotations = useMemo(() => screen?.annotations || [], [screen]);
+
+  // comments 컬렉션 실시간 구독 (현재 화면)
+  useEffect(() => {
+    if (!screenId) return;
+    return subscribeScreenComments(screenId, setScreenComments);
+  }, [screenId]);
+
+  // 레거시 annotation.comments → comments 컬렉션 자동 마이그레이션 (화면당 1회, idempotent)
+  useEffect(() => {
+    if (!screen || !screenId || migratedScreens.current.has(screenId)) return;
+    const hasLegacy = (screen.annotations || []).some((a) => (a.comments || []).length > 0);
+    if (!hasLegacy) {
+      migratedScreens.current.add(screenId);
+      return;
+    }
+    migratedScreens.current.add(screenId);
+    const existing = new Set(screenComments.map((c) => c.id));
+    migrateScreenComments(screen, existing).catch((e) => console.warn('comment migration:', e));
+  }, [screen, screenId, screenComments]);
+
+  // 화면의 댓글을 주석(annotation)별로 묶고 레거시 fallback 병합 (중복 제거)
+  const commentsByAnnotation = useMemo(() => {
+    const migratedLegacyIds = new Set(
+      screenComments.map((c) => c.migratedFrom?.legacyCommentId).filter(Boolean) as string[],
+    );
+    const map: Record<string, ViewComment[]> = {};
+    for (const a of annotations) {
+      const collTop = screenComments
+        .filter((c) => c.annotationId === a.id && !c.parentCommentId)
+        .map((c) => ({
+          id: c.id,
+          author: c.authorName || c.authorEmail || '익명',
+          text: c.body,
+          createdAt: getTime(c.createdAt),
+          replies: screenComments
+            .filter((r) => r.parentCommentId === c.id)
+            .sort((x, y) => getTime(x.createdAt) - getTime(y.createdAt))
+            .map((r) => ({ id: r.id, author: r.authorName || r.authorEmail || '익명', text: r.body, createdAt: getTime(r.createdAt) })),
+        }));
+      const legacyTop = (a.comments || [])
+        .filter((c) => !migratedLegacyIds.has(c.id))
+        .map((c) => ({
+          id: c.id,
+          author: c.author,
+          text: c.text,
+          createdAt: getTime(c.createdAt),
+          replies: (c.replies || [])
+            .filter((r) => !migratedLegacyIds.has(r.id))
+            .map((r) => ({ id: r.id, author: r.author, text: r.text, createdAt: getTime(r.createdAt) })),
+        }));
+      map[a.id] = [...collTop, ...legacyTop].sort((x, y) => x.createdAt - y.createdAt);
+    }
+    return map;
+  }, [screenComments, annotations]);
 
   // --- 버그 수정: 프로젝트 전체 히스토리 (sortedVersions / groupedHistory) 도출 ---
   const groupedHistory = useMemo<Record<string, HistoryRow[]>>(() => {
@@ -518,48 +587,39 @@ export default function ScreenEditor({
   };
 
   const handleCommentSubmit = async (annId: string, text: string, parentCommentId: string | null = null) => {
-    const authorName = localStorage.getItem('axure_username');
+    // 작성자명: Google displayName 우선, 없으면(익명) 저장된 닉네임, 둘 다 없으면 ProfileModal
+    const authorName = user?.displayName || localStorage.getItem('axure_username');
     if (!authorName) {
       setProfileState({ isOpen: true, pendingAction: () => handleCommentSubmit(annId, text, parentCommentId) });
       return;
     }
+    if (!user?.uid) return;
 
-    const newComment = { id: generateId(), text, author: authorName, createdAt: nowMs(), replies: [] };
-
-    const mentionedUsers: string[] = [];
-    text.split(/\s/).forEach((w) => {
-      if (w.startsWith('@')) {
-        const nick = w.slice(1);
-        const member = globalMembers.find((m) => m.nickname === nick);
-        if (member && !mentionedUsers.includes(member.nickname)) mentionedUsers.push(member.nickname);
-      }
-    });
-
-    const updatedAnnotations = annotations.map((a) => {
-      if (a.id === annId) {
-        const comments = a.comments || [];
-        if (parentCommentId) {
-          const updatedComments = comments.map((c) =>
-            c.id === parentCommentId ? { ...c, replies: [...(c.replies || []), newComment] } : c,
-          );
-          return { ...a, comments: updatedComments };
-        }
-        return { ...a, comments: [...comments, newComment] };
-      }
-      return a;
-    });
+    const mentions = parseMentions(text, globalMembers);
 
     try {
-      await setDoc(docRef('screens', screen.id), { ...screen, annotations: updatedAnnotations });
+      // 신규 댓글은 comments 컬렉션에 저장 (screens 문서 update 없음 → viewer 작성 가능)
+      await createComment({
+        projectId: project.id,
+        screenId: screen.id,
+        annotationId: annId,
+        parentCommentId,
+        body: text,
+        author: { uid: user.uid, email: user.email, displayName: authorName, photoURL: user.photoURL },
+        mentions,
+        source: 'annotation',
+      });
       setReplyingToCommentId(null);
 
-      if (mentionedUsers.length > 0) {
+      if (mentions.length > 0) {
+        // 앱 내부 멘션 알림 (mockEmails). 6단계에서 notifications/이메일 발송으로 확장 예정.
         const baseUrl = window.location.origin + window.location.pathname;
         const linkUrl = `${baseUrl}#screen_${screen.id}_ann_${annId}`;
         const targetAnn = annotations.find((a) => a.id === annId);
+        const receivers = mentions.map((m) => m.name).filter(Boolean) as string[];
         await addDoc(col('mockEmails'), {
           author: authorName,
-          receivers: mentionedUsers,
+          receivers,
           screenName: screen.name,
           projectName: project.name,
           uiTitle: targetAnn ? targetAnn.title : '알 수 없음',
@@ -569,10 +629,11 @@ export default function ScreenEditor({
           createdAt: nowMs(),
           isRead: false,
         });
-        showToast(`[알림 발송] ${mentionedUsers.join(', ')}님에게 멘션 알림이 전송되었습니다.`);
+        showToast(`[알림 발송] ${receivers.join(', ')}님에게 멘션 알림이 전송되었습니다.`);
       }
     } catch (err) {
       console.error(err);
+      showToast('댓글 저장에 실패했습니다.', 'error');
     }
   };
 
@@ -946,7 +1007,7 @@ export default function ScreenEditor({
                       <MessageCircle size={14} /> 댓글 및 논의
                     </h4>
 
-                    {(ann.comments || []).map((comment) => (
+                    {(commentsByAnnotation[ann.id] || []).map((comment) => (
                       <div key={comment.id} className="space-y-3">
                         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-sm">
                           <div className="flex justify-between items-center mb-2">
