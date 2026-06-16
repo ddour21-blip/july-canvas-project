@@ -5,6 +5,7 @@ import type {
   Project,
   ProjectActivation,
   ProjectDocument,
+  ProjectMode,
 } from '@/types';
 
 interface DocMeta {
@@ -36,7 +37,127 @@ const EMPTY_HINT = '아직 입력되지 않았습니다. 문서 화면에서 보
 // "아직 조사/입력되지 않음"을 나타내는 연구형 안내(시장조사/제품화전략 상세 섹션용).
 const RESEARCH_HINT = '조사 필요 — 아이디어를 바탕으로 직접 보완하거나 AI 초안 생성을 사용하세요.';
 
-export const generateBrief = (project: Project, a: ProjectActivation): string => `# ${project.name} — 프로젝트 브리프
+// 요구사항/RFP 모드의 미작성 상세 섹션 안내.
+const PLANNING_HINT = '작성 필요 — 전달받은 요구사항을 바탕으로 보완하세요.';
+
+/**
+ * 활성화 데이터의 mode를 정규화한다.
+ * 저장되지 않았거나 'legacy'인 경우(기존 프로젝트)는 idea_productization으로 처리한다.
+ */
+export const resolveProjectMode = (a: ProjectActivation): Exclude<ProjectMode, 'legacy'> =>
+  a.mode === 'requirement_planning' ? 'requirement_planning' : 'idea_productization';
+
+/** 요구사항/RFP 모드에서 사용할 초기 3종 문서의 제목. */
+const REQUIREMENT_DOC_TITLES: Partial<Record<DocumentType, string>> = {
+  brief: '요구사항 분석 및 서비스 기획 초안',
+  market_research: '레퍼런스 조사 및 유사 서비스 분석',
+  product_strategy: '구현 전략 및 프로토타입 제작 계획',
+};
+
+/** mode에 맞는 초기 문서 제목. 요구사항 모드면 재라벨, 아니면 기본 DOCUMENT_META 제목. */
+export const activationDocTitle = (type: DocumentType, mode: ProjectMode): string =>
+  mode === 'requirement_planning'
+    ? REQUIREMENT_DOC_TITLES[type] ?? DOCUMENT_META[type].title
+    : DOCUMENT_META[type].title;
+
+// --- 요구사항/RFP 모드 초기 3종 문서 생성기 (DocumentType은 그대로, content 프레이밍만 다름) ---
+
+const generateRequirementBrief = (project: Project, a: ProjectActivation): string => `# ${project.name} — 요구사항 분석 및 서비스 기획 초안
+
+## 요구사항 요약
+${fallback(a.intent, EMPTY_HINT)}
+
+## 해결해야 할 과제
+${fallback(a.problem, EMPTY_HINT)}
+
+## 대상 사용자 / 이해관계자
+${fallback(a.customer, EMPTY_HINT)}
+
+## 기대 가치 / 목표
+${fallback(a.value, EMPTY_HINT)}
+
+## 핵심 차별 요소
+${fallback(a.differentiator, EMPTY_HINT)}
+
+## 비즈니스 / 운영 모델
+${fallback(a.revenue, EMPTY_HINT)}
+
+## 적용 범위 / 환경 (플랫폼·대상)
+${fallback(a.market, EMPTY_HINT)}
+
+## 1차(MVP) 구현 범위
+${fallback(a.mvpScope, EMPTY_HINT)}
+
+## 후속 확장 범위
+${fallback(a.laterScope, EMPTY_HINT)}
+
+## 참고 자료 / 전달 문서
+${fallback(a.references, EMPTY_HINT)}
+
+## 서비스 기획 방향 (초안)
+- 위 요구사항을 바탕으로 한 서비스 기획 방향을 정리하세요.
+- IA / 기능정의서는 확정된 프로토타입을 기반으로 역작성합니다.
+`;
+
+const generateRequirementReferences = (project: Project, a: ProjectActivation): string => `# 레퍼런스 조사 및 유사 서비스 분석
+
+## 조사 목적
+- 요구사항을 충족하는 구현 방향과 UX 레퍼런스를 확보한다.
+
+## 참고 서비스 / 전달받은 레퍼런스
+${fallback(a.references, PLANNING_HINT)}
+
+## 유사 서비스 분석
+- 비교 대상 / 강점 / 약점 / 우리가 가져갈 점 — _(${PLANNING_HINT})_
+
+## 대상 사용자 관점
+${fallback(a.customer, PLANNING_HINT)}
+
+## 해결 과제 관점
+${fallback(a.problem, PLANNING_HINT)}
+
+## 차별화 포인트
+${fallback(a.differentiator, PLANNING_HINT)}
+
+## 벤치마킹 체크리스트
+- 화면 구성 / 핵심 플로우 / 권한 구분 / 플랫폼(앱·웹·관리자) 대응 — _(${PLANNING_HINT})_
+
+## 레퍼런스 기반 시사점
+_(${PLANNING_HINT})_
+`;
+
+const generateRequirementStrategy = (project: Project, a: ProjectActivation): string => `# 구현 전략 및 프로토타입 제작 계획
+
+## 1. 구현 방향
+${fallback(a.intent, EMPTY_HINT)}
+
+## 2. 핵심 요구사항 → 기능 매핑
+- 해결 과제: ${fallback(a.problem, PLANNING_HINT)}
+- 핵심 가치/목표: ${fallback(a.value, PLANNING_HINT)}
+- 요구사항별 상세 기능 매핑은 프로토타입 단계에서 구체화합니다.
+
+## 3. 플랫폼 / 범위 구분
+- 적용 환경: ${fallback(a.market, PLANNING_HINT)}
+- 1차 범위(MVP): ${fallback(a.mvpScope, PLANNING_HINT)}
+- 후속 범위: ${fallback(a.laterScope, PLANNING_HINT)}
+
+## 4. 프로토타입 제작 계획
+- 우선 제작할 핵심 화면 / 플로우 — _(${PLANNING_HINT})_
+- 사용자 앱 / 관리자(어드민) 영역 구분 — _(${PLANNING_HINT})_
+- 정책 주석으로 기능·권한·예외를 표시
+
+## 5. 개발 전달 준비
+- 확정된 프로토타입 코드·화면·플로우를 기반으로 IA / 기능정의서를 역작성합니다.
+- 최종 전달물(예): DEVELOPMENT_HANDOFF / PRD / USER_APP_UI_SPEC / (필요 시) ADMIN_UI_SPEC
+
+## 6. 리스크 / 제약
+- 비즈니스·운영 모델: ${fallback(a.revenue, PLANNING_HINT)}
+- 일정 / 기술 / 외부 의존 제약 — _(${PLANNING_HINT})_
+`;
+
+export const generateBrief = (project: Project, a: ProjectActivation): string => {
+  if (resolveProjectMode(a) === 'requirement_planning') return generateRequirementBrief(project, a);
+  return `# ${project.name} — 프로젝트 브리프
 
 ## 서비스 한 줄 요약 / 기획 의도
 ${fallback(a.intent, EMPTY_HINT)}
@@ -68,12 +189,16 @@ ${fallback(a.laterScope, EMPTY_HINT)}
 ## 참고 UI / 서비스 / 레퍼런스
 ${fallback(a.references, EMPTY_HINT)}
 `;
+};
 
 /**
  * 시장조사 문서 — "시장 조사 전략 및 방법" 템플릿 구조(14 섹션).
  * 입력 필드가 매핑되는 곳은 채우고, 외부 조사가 필요한 곳은 RESEARCH_HINT로 표시한다.
+ * 요구사항/RFP 모드에서는 "레퍼런스 조사 및 유사 서비스 분석"으로 생성한다.
  */
-export const generateMarketResearch = (project: Project, a: ProjectActivation): string => `# 시장 조사 전략 및 방법
+export const generateMarketResearch = (project: Project, a: ProjectActivation): string => {
+  if (resolveProjectMode(a) === 'requirement_planning') return generateRequirementReferences(project, a);
+  return `# 시장 조사 전략 및 방법
 
 ## 핵심 원칙
 - 누가 왜 돈을 내는가? — ${fallback(a.customer, RESEARCH_HINT)}
@@ -181,12 +306,16 @@ _(${RESEARCH_HINT})_
 ## 14. 현실적인 제품 철학
 - 작게, 수동으로, 검증 우선. 자동화는 수요가 증명된 다음.
 `;
+};
 
 /**
  * 제품화전략 문서 — "아이디어 제품화 전략" 템플릿 구조(13 섹션).
  * 프로젝트 개요/전략은 입력 필드로 채우고, 시스템/개발 구조는 RESEARCH_HINT로 표시한다.
+ * 요구사항/RFP 모드에서는 "구현 전략 및 프로토타입 제작 계획"으로 생성한다.
  */
-export const generateProductStrategy = (project: Project, a: ProjectActivation): string => `# 아이디어 제품화 전략
+export const generateProductStrategy = (project: Project, a: ProjectActivation): string => {
+  if (resolveProjectMode(a) === 'requirement_planning') return generateRequirementStrategy(project, a);
+  return `# 아이디어 제품화 전략
 
 ## 1. 가장 중요한 원칙
 - 바로 기능 구현하지 않기
@@ -258,6 +387,7 @@ ${fallback(a.mvpScope, RESEARCH_HINT)}
 ## 13. 현실적인 MVP 철학
 - 가장 작은 검증 가능한 버전부터. 과설계 금지.
 `;
+};
 
 /** AI 초안 생성 프롬프트에서 구조를 그대로 따르도록 전달하는 템플릿 스켈레톤(헤딩 구조만). */
 export const MARKET_RESEARCH_SKELETON = `# 시장 조사 전략 및 방법
@@ -293,34 +423,40 @@ export const PRODUCT_STRATEGY_SKELETON = `# 아이디어 제품화 전략
 ## 12. 현실적인 최적 전략
 ## 13. 현실적인 MVP 철학`;
 
-/** 활성화 시 자동 생성되는 3개 기본 문서의 초안 페이로드. aiDocs가 있으면 그것을 우선 사용. */
+/**
+ * 활성화 시 자동 생성되는 3개 기본 문서의 초안 페이로드. aiDocs가 있으면 그것을 우선 사용.
+ * mode(activation.mode)에 따라 제목·content 프레이밍이 달라진다. DocumentType은 항상 동일.
+ */
 export const buildActivationDocuments = (
   project: Project,
   a: ProjectActivation,
   aiDocs?: { projectBrief?: string; marketResearch?: string; productStrategy?: string },
-): Array<Pick<ProjectDocument, 'type' | 'title' | 'content' | 'version' | 'status'>> => [
-  {
-    type: 'brief',
-    title: DOCUMENT_META.brief.title,
-    content: aiDocs?.projectBrief?.trim() || generateBrief(project, a),
-    version: '1.0',
-    status: 'draft',
-  },
-  {
-    type: 'market_research',
-    title: DOCUMENT_META.market_research.title,
-    content: aiDocs?.marketResearch?.trim() || generateMarketResearch(project, a),
-    version: '1.0',
-    status: 'draft',
-  },
-  {
-    type: 'product_strategy',
-    title: DOCUMENT_META.product_strategy.title,
-    content: aiDocs?.productStrategy?.trim() || generateProductStrategy(project, a),
-    version: '1.0',
-    status: 'draft',
-  },
-];
+): Array<Pick<ProjectDocument, 'type' | 'title' | 'content' | 'version' | 'status'>> => {
+  const mode = resolveProjectMode(a);
+  return [
+    {
+      type: 'brief',
+      title: activationDocTitle('brief', mode),
+      content: aiDocs?.projectBrief?.trim() || generateBrief(project, a),
+      version: '1.0',
+      status: 'draft',
+    },
+    {
+      type: 'market_research',
+      title: activationDocTitle('market_research', mode),
+      content: aiDocs?.marketResearch?.trim() || generateMarketResearch(project, a),
+      version: '1.0',
+      status: 'draft',
+    },
+    {
+      type: 'product_strategy',
+      title: activationDocTitle('product_strategy', mode),
+      content: aiDocs?.productStrategy?.trim() || generateProductStrategy(project, a),
+      version: '1.0',
+      status: 'draft',
+    },
+  ];
+};
 
 /**
  * PRD 본문의 "## 14. 프로토타입 URL" 섹션만 최신 URL로 교체.

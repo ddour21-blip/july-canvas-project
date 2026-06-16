@@ -17,7 +17,8 @@ interface GenerateInput {
 }
 
 // 생성 함수가 채우는 10개 보강 필드 (기존 ProjectActivation 그대로).
-const FIELD_KEYS: (keyof ProjectActivation)[] = [
+// 텍스트 입력 필드만 다룬다(mode는 위저드가 설정, AI 생성 대상 아님).
+const FIELD_KEYS: Exclude<keyof ProjectActivation, 'mode'>[] = [
   'intent', 'problem', 'customer', 'value', 'differentiator',
   'revenue', 'market', 'mvpScope', 'laterScope', 'references',
 ];
@@ -55,7 +56,7 @@ const mergeFields = (idea: string, current?: Partial<ProjectActivation>): Projec
 const projectFor = (name?: string): Project => ({ id: '', name: name?.trim() || '프로젝트', ownerId: null });
 
 // AI 키가 없을 때 보강 정보 필드를 비워두지 않도록 채우는 편집형 가이드(데이터가 아닌 안내문).
-const TEMPLATE_SEED: Record<Exclude<keyof ProjectActivation, 'intent'>, string> = {
+const TEMPLATE_SEED: Record<Exclude<keyof ProjectActivation, 'intent' | 'mode'>, string> = {
   problem: '해결하려는 핵심 문제를 적어주세요.',
   customer: '핵심 고객(타겟 사용자)을 적어주세요.',
   value: '고객에게 주는 핵심 가치를 적어주세요.',
@@ -73,7 +74,7 @@ function templateDraft(input: GenerateInput, mode: ActivationDraftResult['mode']
   // UI로 돌려줄 fields는 빈 항목을 편집형 가이드로 채워 "자동 채워짐"을 보장한다.
   const docFields = mergeFields(input.idea, input.currentFields);
   const uiFields: ProjectActivation = { ...docFields };
-  (Object.keys(TEMPLATE_SEED) as Exclude<keyof ProjectActivation, 'intent'>[]).forEach((k) => {
+  (Object.keys(TEMPLATE_SEED) as Exclude<keyof ProjectActivation, 'intent' | 'mode'>[]).forEach((k) => {
     if (!uiFields[k]?.trim()) uiFields[k] = TEMPLATE_SEED[k];
   });
   const project = projectFor(input.projectName);

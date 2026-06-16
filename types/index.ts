@@ -13,8 +13,18 @@ export type ProjectStatus = 'draft' | 'active' | 'review' | 'approved' | 'archiv
 
 export type ProjectRole = 'owner' | 'editor' | 'viewer' | 'guest';
 
+/**
+ * 프로젝트 시작 방식.
+ * - idea_productization: 아이디어를 시장조사/제품화 전략으로 발전 (기존 기본 흐름)
+ * - requirement_planning: 전달받은 요구사항/RFP를 분석해 기획 초안/레퍼런스/구현 전략으로 정리
+ * - legacy: mode가 저장되지 않은 기존 프로젝트 (idea_productization과 동일하게 처리)
+ */
+export type ProjectMode = 'idea_productization' | 'requirement_planning' | 'legacy';
+
 /** 프로젝트 활성화 시 입력받는 기획 정보 (브리프 + 제품화전략 원천 데이터) */
 export interface ProjectActivation {
+  /** 프로젝트 시작 방식. 미지정(기존 프로젝트)은 idea_productization으로 폴백. */
+  mode?: ProjectMode;
   /** 기획 의도 */
   intent: string;
   /** 해결하려는 문제 */

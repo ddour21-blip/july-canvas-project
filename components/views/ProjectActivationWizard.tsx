@@ -1,16 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
 import { showToast } from '@/lib/utils';
-import { buildActivationDocuments } from '@/lib/documents';
+import { activationDocTitle, buildActivationDocuments } from '@/lib/documents';
 import { Button } from '@/components/common/Button';
-import { Check, CheckCircle2, ChevronLeft, ChevronRight, FileText, Loader2, Rocket, Sparkles, X } from 'lucide-react';
+import { Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, FileText, Lightbulb, Loader2, Rocket, Sparkles, X } from 'lucide-react';
 import { EMPTY_ACTIVATION, type ActivationDraftResult, type Project, type ProjectActivation } from '@/types';
 
+/** 위저드에서 선택 가능한 모드 (legacy 제외) */
+type WizardMode = 'idea_productization' | 'requirement_planning';
+
+/** 텍스트 입력 필드 키 (mode 제외) */
+type ActivationTextKey = Exclude<keyof ProjectActivation, 'mode'>;
+
 interface Field {
-  key: keyof ProjectActivation;
+  key: ActivationTextKey;
   label: string;
   placeholder: string;
   required?: boolean;
@@ -18,40 +24,82 @@ interface Field {
   big?: boolean;
 }
 
-// 3단계: 1) 아이디어(자유 입력, 유일 필수) 2) 보강 정보(선택) 3) 문서 생성 확인.
-// 기존 10개 항목(ProjectActivation)은 모두 유지 — intent는 1단계, 나머지 9개는 2단계 선택 입력.
-const STEPS: { id: 'idea' | 'detail' | 'confirm'; title: string; desc: string; fields: Field[] }[] = [
+const MODE_OPTIONS: { value: WizardMode; title: string; desc: string; icon: typeof Lightbulb }[] = [
+  {
+    value: 'idea_productization',
+    title: '아이디어 제품화',
+    desc: '아이디어를 시장조사와 제품화 전략으로 발전시킵니다. 누가 돈을 낼지, 어떤 MVP부터 검증할지 정리합니다.',
+    icon: Lightbulb,
+  },
+  {
+    value: 'requirement_planning',
+    title: '요구사항/RFP 기반 기획',
+    desc: '전달받은 요구사항을 분석해 서비스 기획 초안, 레퍼런스, 프로토타입 제작 방향, 개발 전달 문서로 정리합니다.',
+    icon: ClipboardList,
+  },
+];
+
+// 모드별 1단계(아이디어/요구사항) 입력 라벨·placeholder.
+const IDEA_FIELD: Record<WizardMode, { label: string; placeholder: string }> = {
+  idea_productization: {
+    label: '무엇을 만들고 싶나요?',
+    placeholder:
+      '예: 여행 장소와 일정을 자동으로 정리해주는 앱을 만들고 싶습니다. 사용자는 구글맵에 저장한 장소나 참고 URL을 넣으면, AI가 여행 일정표와 예산, 날씨 준비까지 정리해줍니다.',
+  },
+  requirement_planning: {
+    label: '전달받은 요구사항이나 RFP 내용을 입력해주세요.',
+    placeholder:
+      '예: 고객사에서 모바일 앱과 PC 관리자 페이지가 포함된 서비스를 요청했습니다. 사용자는 Google/Apple 로그인을 통해 앱에 접속하고, 관리자는 PC에서 클래스/영상/회원 정보를 관리해야 합니다. 참고 문서와 기존 프로토타입 코드가 있습니다.',
+  },
+};
+
+// 모드별 1단계 설명 문구.
+const IDEA_STEP_DESC: Record<WizardMode, string> = {
+  idea_productization: '만들고 싶은 서비스나 아이디어를 자유롭게 설명해주세요. 이 내용으로 기획 문서 초안이 만들어집니다.',
+  requirement_planning: '전달받은 요구사항이나 RFP 내용을 입력해주세요. 이 내용으로 기획 초안이 만들어집니다.',
+};
+
+// 모드별 2단계(보강 정보) 안내 문구.
+const DETAIL_DESC: Record<WizardMode, string> = {
+  idea_productization:
+    '상세 정보를 더 입력하면 시장조사와 제품화 전략 품질이 좋아집니다. 비워두고 나중에 문서 화면에서 보완해도 됩니다.',
+  requirement_planning:
+    '요구사항의 범위, 참고 서비스, 플랫폼 구분, 필수 기능을 입력하면 기획 초안 품질이 좋아집니다. 비워두고 나중에 문서 화면에서 보완해도 됩니다.',
+};
+
+// 모드별 마지막 단계(문서 생성 안내) 문구.
+const CONFIRM_DESC: Record<WizardMode, string> = {
+  idea_productization:
+    '활성화하면 브리프, 시장조사, 제품화전략 초안이 생성됩니다. IA와 기능정의서는 프로토타입 등록 후 생성할 수 있습니다.',
+  requirement_planning:
+    '활성화하면 요구사항 분석, 레퍼런스 조사, 구현 전략 초안이 생성됩니다. IA와 기능정의서는 확정된 프로토타입 코드와 화면 플로우를 기반으로 역작성합니다.',
+};
+
+// 보강 정보 단계의 9개 선택 입력 필드(모드 공통, 의미만 모드에 따라 해석).
+const DETAIL_FIELDS: Field[] = [
+  { key: 'problem', label: '해결하려는 문제', placeholder: '어떤 문제를 해결하는가? (선택)' },
+  { key: 'customer', label: '핵심 고객', placeholder: '누구를 위한 제품인가? (선택)' },
+  { key: 'value', label: '핵심 가치', placeholder: '고객에게 주는 핵심 가치 (선택)' },
+  { key: 'differentiator', label: '핵심 차별점', placeholder: '경쟁/대안 대비 차별점 (선택)' },
+  { key: 'revenue', label: '수익 구조', placeholder: '어떻게 수익을 내는가? (선택)' },
+  { key: 'market', label: '최초 진입 시장', placeholder: '가장 먼저 공략할 시장/세그먼트 (선택)' },
+  { key: 'mvpScope', label: 'MVP 범위', placeholder: '최소 기능 범위 (선택)' },
+  { key: 'laterScope', label: '나중에 추가할 기능', placeholder: 'MVP 이후 확장 기능 (선택)' },
+  { key: 'references', label: '참고 UI / 서비스 / 레퍼런스', placeholder: '참고할 서비스 또는 URL (선택)' },
+];
+
+type StepId = 'mode' | 'idea' | 'detail' | 'confirm';
+
+// 4단계: 0) 시작 방식(모드 선택) 1) 아이디어/요구사항(유일 필수) 2) 보강 정보(선택) 3) 문서 생성 확인.
+const buildSteps = (mode: WizardMode): { id: StepId; title: string; desc: string; fields: Field[] }[] => [
+  { id: 'mode', title: '시작 방식', desc: '', fields: [] },
   {
     id: 'idea',
-    title: '아이디어',
-    desc: '만들고 싶은 서비스나 아이디어를 자유롭게 설명해주세요. 이 내용으로 기획 문서 초안이 만들어집니다.',
-    fields: [
-      {
-        key: 'intent',
-        label: '무엇을 만들고 싶나요?',
-        placeholder:
-          '예: 여행 장소와 일정을 자동으로 정리해주는 앱을 만들고 싶습니다. 사용자는 구글맵에 저장한 장소나 참고 URL을 넣으면, AI가 여행 일정표와 예산, 날씨 준비까지 정리해줍니다.',
-        required: true,
-        big: true,
-      },
-    ],
+    title: mode === 'requirement_planning' ? '요구사항' : '아이디어',
+    desc: IDEA_STEP_DESC[mode],
+    fields: [{ key: 'intent', label: IDEA_FIELD[mode].label, placeholder: IDEA_FIELD[mode].placeholder, required: true, big: true }],
   },
-  {
-    id: 'detail',
-    title: '보강 정보',
-    desc: '상세 정보를 더 입력하면 생성되는 문서의 품질이 좋아집니다. 지금은 비워두고 나중에 문서 화면에서 보완해도 됩니다.',
-    fields: [
-      { key: 'problem', label: '해결하려는 문제', placeholder: '어떤 문제를 해결하는가? (선택)' },
-      { key: 'customer', label: '핵심 고객', placeholder: '누구를 위한 제품인가? (선택)' },
-      { key: 'value', label: '핵심 가치', placeholder: '고객에게 주는 핵심 가치 (선택)' },
-      { key: 'differentiator', label: '핵심 차별점', placeholder: '경쟁/대안 대비 차별점 (선택)' },
-      { key: 'revenue', label: '수익 구조', placeholder: '어떻게 수익을 내는가? (선택)' },
-      { key: 'market', label: '최초 진입 시장', placeholder: '가장 먼저 공략할 시장/세그먼트 (선택)' },
-      { key: 'mvpScope', label: 'MVP 범위', placeholder: '최소 기능 범위 (선택)' },
-      { key: 'laterScope', label: '나중에 추가할 기능', placeholder: 'MVP 이후 확장 기능 (선택)' },
-      { key: 'references', label: '참고 UI / 서비스 / 레퍼런스', placeholder: '참고할 서비스 또는 URL (선택)' },
-    ],
-  },
+  { id: 'detail', title: '보강 정보', desc: DETAIL_DESC[mode], fields: DETAIL_FIELDS },
   { id: 'confirm', title: '문서 생성', desc: '', fields: [] },
 ];
 
@@ -64,21 +112,26 @@ interface Props {
 export default function ProjectActivationWizard({ project, onClose, onActivated }: Props) {
   const [step, setStep] = useState(0);
   const [data, setData] = useState<ProjectActivation>(project.activation ?? EMPTY_ACTIVATION);
+  // 시작 방식. 기존 프로젝트(legacy 포함)는 아이디어 제품화로 폴백.
+  const [mode, setMode] = useState<WizardMode>(
+    project.activation?.mode === 'requirement_planning' ? 'requirement_planning' : 'idea_productization',
+  );
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   // AI가 생성한 문서 초안 (있으면 활성화 시 템플릿 대신 사용).
   const [draftDocs, setDraftDocs] = useState<ActivationDraftResult['documents'] | null>(null);
 
+  const STEPS = useMemo(() => buildSteps(mode), [mode]);
   const current = STEPS[step];
   const isLast = step === STEPS.length - 1;
   const isConfirm = current.id === 'confirm';
 
-  // 유일 필수 = 아이디어(intent). 나머지 단계/필드는 항상 통과.
+  // 유일 필수 = 아이디어/요구사항(intent). 나머지 단계/필드는 항상 통과.
   const stepValid = current.fields.every((f) => !f.required || data[f.key].trim());
   const ideaFilled = !!data.intent.trim();
 
-  const set = (key: keyof ProjectActivation, v: string) => setData((prev) => ({ ...prev, [key]: v }));
+  const set = (key: ActivationTextKey, v: string) => setData((prev) => ({ ...prev, [key]: v }));
 
   // 아이디어 → AI 초안 생성. 보강 정보 필드 자동 입력 + 문서 초안 보관. (Firestore 저장은 활성화 시점에)
   const handleGenerateAI = async () => {
@@ -112,17 +165,21 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
   const handleActivate = async () => {
     setSaving(true);
     try {
+      // 선택한 시작 방식을 activation에 포함해 저장 (스키마 변경 없음, optional 필드).
+      const activation: ProjectActivation = { ...data, mode };
+
       // 1) 프로젝트 활성화 (draft → active)
       await updateDoc(docRef('projects', project.id), {
-        activation: data,
+        activation,
         status: 'active',
         activatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
       // 2) 기본 문서 3종 자동 생성 (brief / market_research / product_strategy)
+      //    mode에 따라 제목·content 프레이밍이 달라진다(DocumentType은 동일).
       //    AI 초안(draftDocs)이 있으면 우선 사용, 없으면 템플릿.
-      const docs = buildActivationDocuments({ ...project, activation: data }, data, draftDocs ?? undefined);
+      const docs = buildActivationDocuments({ ...project, activation }, activation, draftDocs ?? undefined);
       await Promise.all(
         docs.map((d) =>
           addDoc(col('documents'), {
@@ -156,7 +213,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
             </div>
             <div>
               <h2 className="text-2xl font-extrabold text-[var(--text-strong)] tracking-tight">프로젝트 활성화</h2>
-              <p className="text-sm text-[var(--text-secondary)] mt-1">{project.name} · 아이디어만 입력하면 기획 문서 초안이 생성됩니다.</p>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">{project.name} · 시작 방식을 선택하고 내용을 입력하면 기획 문서 초안이 생성됩니다.</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 bg-[var(--surface-sunken)] rounded-full hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] transition-colors">
@@ -197,8 +254,51 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
         <div className="flex-1 overflow-y-auto p-7">
           {current.desc && <p className="text-sm text-[var(--text-secondary)] mb-5">{current.desc}</p>}
 
-          {/* AI 초안 생성 (보강 정보 단계) — 아이디어로 보강 정보 자동 입력 + 문서 초안 생성 */}
-          {current.id === 'detail' && (
+          {/* 시작 방식(모드) 선택 단계 */}
+          {current.id === 'mode' && (
+            <div>
+              <p className="text-base font-bold text-[var(--text-strong)] mb-4">어떤 방식으로 시작할까요?</p>
+              <div className="space-y-3">
+                {MODE_OPTIONS.map((opt) => {
+                  const selected = mode === opt.value;
+                  const Icon = opt.icon;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setMode(opt.value)}
+                      aria-pressed={selected}
+                      className={`w-full text-left flex items-start gap-3.5 p-4 rounded-[var(--radius-xl)] border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] ${
+                        selected
+                          ? 'border-[var(--color-primary)] bg-[var(--surface-active)] ring-2 ring-[var(--color-primary)]'
+                          : 'border-[var(--border-default)] bg-[var(--surface-card)] hover:bg-[var(--surface-hover)]'
+                      }`}
+                    >
+                      <span
+                        className={`shrink-0 w-10 h-10 rounded-[var(--radius-lg)] flex items-center justify-center ${
+                          selected
+                            ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]'
+                            : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        <Icon size={20} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-1.5 text-sm font-extrabold text-[var(--text-strong)]">
+                          {opt.title}
+                          {selected && <CheckCircle2 size={15} className="text-[var(--color-primary-text)]" />}
+                        </span>
+                        <span className="block text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">{opt.desc}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* AI 초안 생성 (보강 정보 단계, 아이디어 제품화 모드 한정) — 아이디어로 보강 정보 자동 입력 + 문서 초안 생성 */}
+          {current.id === 'detail' && mode === 'idea_productization' && (
             <div className="mb-5">
               <button
                 type="button"
@@ -251,11 +351,15 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
           {isConfirm && (
             <div className="space-y-4">
               <div className="rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
-                <div className="text-xs font-bold text-[var(--text-tertiary)] mb-1.5">입력한 아이디어</div>
+                <div className="text-xs font-bold text-[var(--text-tertiary)] mb-1.5">
+                  {mode === 'requirement_planning' ? '입력한 요구사항' : '입력한 아이디어'}
+                </div>
                 {ideaFilled ? (
                   <p className="text-sm text-[var(--text-body)] whitespace-pre-wrap leading-relaxed line-clamp-6">{data.intent}</p>
                 ) : (
-                  <p className="text-sm text-[var(--amber-700)]">아이디어가 비어 있습니다. 1단계에서 입력해주세요.</p>
+                  <p className="text-sm text-[var(--amber-700)]">
+                    {mode === 'requirement_planning' ? '요구사항이' : '아이디어가'} 비어 있습니다. 입력 단계에서 작성해주세요.
+                  </p>
                 )}
               </div>
 
@@ -265,23 +369,21 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                 </div>
                 <p className="text-xs text-[var(--text-secondary)] mt-1.5 mb-2.5">다음 기획 문서 초안이 자동 생성됩니다.</p>
                 <ul className="flex flex-wrap gap-2 mb-3">
-                  {['PROJECT_BRIEF', 'MARKET_RESEARCH', 'PRODUCT_STRATEGY'].map((d) => (
-                    <li key={d} className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold bg-[var(--surface-card)] border border-[var(--border-default)] text-[var(--text-body)] px-2.5 py-1 rounded-[var(--radius-md)]">
-                      <FileText size={12} className="text-[var(--color-primary-text)]" /> {d}
+                  {(['brief', 'market_research', 'product_strategy'] as const).map((t) => (
+                    <li key={t} className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-[var(--surface-card)] border border-[var(--border-default)] text-[var(--text-body)] px-2.5 py-1 rounded-[var(--radius-md)]">
+                      <FileText size={12} className="text-[var(--color-primary-text)]" /> {activationDocTitle(t, mode)}
                     </li>
                   ))}
                 </ul>
-                <p className="text-xs text-[var(--text-tertiary)]">
-                  IA / FEATURE_SPEC / PRD 와 비워둔 상세 정보는 이후 <span className="font-bold text-[var(--text-secondary)]">문서 화면</span>에서 생성·보완할 수 있습니다.
-                </p>
+                <p className="text-xs text-[var(--text-tertiary)]">{CONFIRM_DESC[mode]}</p>
               </div>
             </div>
           )}
 
-          {/* 미입력 validation 안내 (아이디어 단계 전용) */}
+          {/* 미입력 validation 안내 (입력 단계 전용) */}
           {!stepValid && (
             <p className="mt-4 text-xs font-medium text-[var(--amber-700)] bg-[var(--amber-50)] border border-[var(--amber-100)] rounded-[var(--radius-md)] px-3 py-2">
-              아이디어(<span className="text-[var(--red-600)] font-bold">*</span>)를 입력해야 다음 단계로 진행할 수 있습니다.
+              {mode === 'requirement_planning' ? '요구사항' : '아이디어'}(<span className="text-[var(--red-600)] font-bold">*</span>)을(를) 입력해야 다음 단계로 진행할 수 있습니다.
             </p>
           )}
         </div>
