@@ -27,6 +27,7 @@ import {
   Download,
   Edit2,
   ExternalLink,
+  Eye,
   FileText,
   GripVertical,
   History,
@@ -354,8 +355,8 @@ export default function ScreenEditor({
 
   if (!screen || !project) {
     return (
-      <div className="h-[calc(100vh-61px)] flex items-center justify-center bg-gray-50">
-        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+      <div className="h-[calc(100vh-61px)] flex items-center justify-center bg-[var(--surface-page)]">
+        <div className="w-8 h-8 border-4 border-[var(--brand-100)] border-t-[var(--color-primary)] rounded-full animate-spin" />
       </div>
     );
   }
@@ -715,29 +716,38 @@ export default function ScreenEditor({
 
       <div className="flex-1 flex overflow-hidden relative">
         <div className={`flex-1 flex flex-col relative bg-white transition-all duration-300 ${mode === 'annotate' ? 'mr-[420px]' : ''}`}>
-          <div className="absolute top-4 left-6 z-20 flex items-center gap-4 bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl shadow-sm border border-gray-200">
-            <button onClick={() => navigate(`#project_${project.id}`)} className="text-gray-400 hover:text-gray-800">
+          <div className="absolute top-4 left-6 z-20 flex items-center gap-3 bg-[var(--surface-card)] px-4 py-2.5 rounded-[var(--radius-lg)] shadow-[var(--shadow-md)] border border-[var(--border-default)]">
+            <button
+              onClick={() => navigate(`#project_${project.id}`)}
+              className="text-[var(--text-tertiary)] hover:text-[var(--text-strong)] transition-colors"
+              title="프로젝트로 돌아가기"
+            >
               <ArrowLeft size={20} />
             </button>
-            <div className="flex flex-col">
-              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                {project.name} {!isEditor && '(보기 전용)'}
+            <div className="w-px h-8 bg-[var(--border-default)]" />
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-wider whitespace-nowrap">
+                {project.name}
               </span>
-              <span className="text-sm font-extrabold text-gray-900 whitespace-nowrap">{screen.name}</span>
+              <span className="text-sm font-extrabold text-[var(--text-strong)] whitespace-nowrap">{screen.name}</span>
             </div>
+            <span
+              className={`ml-1 inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-[var(--radius-pill)] whitespace-nowrap ${
+                isEditor
+                  ? 'bg-[var(--surface-active)] text-[var(--color-primary-text)]'
+                  : 'bg-[var(--surface-hover)] text-[var(--text-secondary)]'
+              }`}
+            >
+              {isEditor ? '편집 가능' : <><Eye size={12} /> 보기 전용</>}
+            </span>
           </div>
           <div className="absolute top-4 right-6 z-20 flex gap-2">
-            <Button
-              variant="outline"
-              className="bg-white/90 backdrop-blur-md shadow-sm border-gray-200 text-blue-700 hover:bg-blue-50"
-              icon={Download}
-              onClick={() => setExportDocModalOpen(true)}
-            >
+            <Button variant="outline" className="shadow-[var(--shadow-sm)]" icon={Download} onClick={() => setExportDocModalOpen(true)}>
               문서 다운로드
             </Button>
             <Button
               variant="outline"
-              className="bg-white/90 backdrop-blur-md shadow-sm border-gray-200"
+              className="shadow-[var(--shadow-sm)]"
               icon={ExternalLink}
               onClick={() => setShareState({ isOpen: true, type: 'screen', id: screen.id })}
             >
@@ -746,8 +756,8 @@ export default function ScreenEditor({
           </div>
           {mode === 'annotate' && (
             <div
-              className={`absolute top-0 left-0 right-0 text-white text-center py-2 text-sm z-30 font-bold shadow-md backdrop-blur ${
-                isEditor ? 'bg-blue-600/90' : 'bg-gray-600/90'
+              className={`absolute top-0 left-0 right-0 text-center py-2 text-sm z-30 font-bold shadow-md backdrop-blur ${
+                isEditor ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]' : 'bg-[var(--ink-soft)] text-[var(--text-on-ink)]'
               }`}
             >
               {isEditor
@@ -1068,29 +1078,29 @@ export default function ScreenEditor({
           transitionProperty: isDragging ? 'none' : 'margin-left',
         }}
       >
-        <div className="bg-white rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 p-2 pl-3 flex items-center gap-2 flex-nowrap w-max max-w-none">
+        <div className="bg-[var(--surface-card)] rounded-full shadow-[var(--shadow-xl)] border border-[var(--border-default)] p-2 pl-3 flex items-center gap-2 flex-nowrap w-max max-w-none">
           <div
-            className="cursor-grab active:cursor-grabbing p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg flex items-center justify-center whitespace-nowrap"
+            className="cursor-grab active:cursor-grabbing p-1.5 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] rounded-[var(--radius-md)] flex items-center justify-center whitespace-nowrap"
             onMouseDown={handleDragStart}
             title="드래그하여 툴바 이동"
           >
             <GripVertical size={20} />
           </div>
-          <div className="w-px h-6 bg-gray-200 mx-1" />
-          <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-full mr-2 whitespace-nowrap">
-            <div className="w-2 h-2 bg-green-500 rounded-full shrink-0" />
-            <span className="text-sm font-bold text-green-700 tracking-tight whitespace-nowrap">실시간 공유 켜짐</span>
+          <div className="w-px h-6 bg-[var(--border-default)] mx-1" />
+          <div className="flex items-center gap-2 px-4 py-2 bg-[var(--green-50)] rounded-full mr-2 whitespace-nowrap">
+            <div className="w-2 h-2 bg-[var(--green-500)] rounded-full shrink-0 animate-pulse" />
+            <span className="text-sm font-bold text-[var(--green-700)] tracking-tight whitespace-nowrap">실시간 공유 켜짐</span>
           </div>
-          <div className="w-px h-8 bg-gray-200 mx-2" />
+          <div className="w-px h-8 bg-[var(--border-default)] mx-2" />
           <button
             onClick={() => setShowHistory(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors mr-2 group whitespace-nowrap"
+            className="flex items-center gap-2 px-5 py-2.5 bg-[var(--surface-active)] text-[var(--color-primary-text)] rounded-full hover:bg-[var(--brand-100)] transition-colors mr-2 group whitespace-nowrap"
           >
             <History size={18} className="group-hover:-rotate-45 transition-transform shrink-0" />
             <span className="text-sm font-extrabold tracking-tight whitespace-nowrap">전체 히스토리</span>
           </button>
           <div className="flex items-center gap-4 px-4 py-1.5 whitespace-nowrap">
-            <span className={`text-sm font-bold tracking-tight transition-colors whitespace-nowrap ${mode === 'interact' ? 'text-gray-700' : 'text-gray-400'}`}>프로토타입</span>
+            <span className={`text-sm font-bold tracking-tight transition-colors whitespace-nowrap ${mode === 'interact' ? 'text-[var(--text-strong)]' : 'text-[var(--text-tertiary)]'}`}>프로토타입</span>
             <button
               onClick={() => {
                 setMode(mode === 'interact' ? 'annotate' : 'interact');
@@ -1099,16 +1109,16 @@ export default function ScreenEditor({
                 setReplyingToCommentId(null);
               }}
               className={`w-[60px] h-[32px] rounded-full relative transition-colors duration-300 ease-in-out shadow-inner shrink-0 ${
-                mode === 'annotate' ? 'bg-blue-600' : 'bg-gray-300'
+                mode === 'annotate' ? 'bg-[var(--color-primary)]' : 'bg-[var(--border-strong)]'
               }`}
             >
               <div
-                className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 ease-in-out shadow-md ${
+                className={`absolute top-1 w-6 h-6 bg-[var(--surface-card)] rounded-full transition-transform duration-300 ease-in-out shadow-md ${
                   mode === 'annotate' ? 'translate-x-[32px]' : 'translate-x-1'
                 }`}
               />
             </button>
-            <span className={`text-sm font-bold tracking-tight transition-colors whitespace-nowrap ${mode === 'annotate' ? 'text-blue-600' : 'text-gray-400'}`}>기획/문서 모드</span>
+            <span className={`text-sm font-bold tracking-tight transition-colors whitespace-nowrap ${mode === 'annotate' ? 'text-[var(--color-primary-text)]' : 'text-[var(--text-tertiary)]'}`}>기획/문서 모드</span>
           </div>
         </div>
       </div>
