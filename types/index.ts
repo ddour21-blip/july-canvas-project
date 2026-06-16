@@ -37,6 +37,20 @@ export interface ProjectActivation {
   references: string;
 }
 
+/** AI(또는 템플릿 폴백) 초안 생성 결과. /api/generate/activation-draft 응답 본문. */
+export interface ActivationDraftResult {
+  ok: boolean;
+  /** 'ai' = Claude 생성, 'template' = 키 없음/실패로 템플릿 폴백 */
+  mode: 'ai' | 'template';
+  reason?: string;
+  fields: ProjectActivation;
+  documents: {
+    projectBrief: string;
+    marketResearch: string;
+    productStrategy: string;
+  };
+}
+
 export const EMPTY_ACTIVATION: ProjectActivation = {
   intent: '',
   problem: '',

@@ -6,8 +6,8 @@ import { col, docRef } from '@/lib/firestore';
 import { showToast } from '@/lib/utils';
 import { buildActivationDocuments } from '@/lib/documents';
 import { Button } from '@/components/common/Button';
-import { Check, CheckCircle2, ChevronLeft, ChevronRight, FileText, Rocket, X } from 'lucide-react';
-import { EMPTY_ACTIVATION, type Project, type ProjectActivation } from '@/types';
+import { Check, CheckCircle2, ChevronLeft, ChevronRight, FileText, Loader2, Rocket, Sparkles, X } from 'lucide-react';
+import { EMPTY_ACTIVATION, type ActivationDraftResult, type Project, type ProjectActivation } from '@/types';
 
 interface Field {
   key: keyof ProjectActivation;
@@ -65,6 +65,10 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
   const [step, setStep] = useState(0);
   const [data, setData] = useState<ProjectActivation>(project.activation ?? EMPTY_ACTIVATION);
   const [saving, setSaving] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
+  // AI가 생성한 문서 초안 (있으면 활성화 시 템플릿 대신 사용).
+  const [draftDocs, setDraftDocs] = useState<ActivationDraftResult['documents'] | null>(null);
 
   const current = STEPS[step];
   const isLast = step === STEPS.length - 1;
@@ -75,6 +79,35 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
   const ideaFilled = !!data.intent.trim();
 
   const set = (key: keyof ProjectActivation, v: string) => setData((prev) => ({ ...prev, [key]: v }));
+
+  // 아이디어 → AI 초안 생성. 보강 정보 필드 자동 입력 + 문서 초안 보관. (Firestore 저장은 활성화 시점에)
+  const handleGenerateAI = async () => {
+    if (!data.intent.trim() || aiLoading) return;
+    setAiLoading(true);
+    setAiNotice(null);
+    try {
+      const res = await fetch('/api/generate/activation-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idea: data.intent, currentFields: data, projectName: project.name }),
+      });
+      const result = (await res.json()) as ActivationDraftResult;
+      if (!result?.ok || !result.fields) throw new Error('생성 실패');
+      setData((prev) => ({ ...prev, ...result.fields }));
+      // AI 문서만 보관(풍부함 유지). 폴백(template)은 보관하지 않고 활성화 시
+      // 최종 입력값으로 재생성 → 사용자가 수정한 보강 정보가 문서에 반영된다.
+      setDraftDocs(result.mode === 'ai' ? (result.documents ?? null) : null);
+      setAiNotice(
+        result.mode === 'template'
+          ? 'AI 초안 생성을 사용할 수 없어 기본 초안을 만들었습니다. 내용을 직접 보완해주세요.'
+          : 'AI가 보강 정보와 문서 초안을 생성했습니다. 자유롭게 수정하세요.',
+      );
+    } catch {
+      setAiNotice('AI 초안 생성에 실패했습니다. 직접 입력하거나 다시 시도해주세요.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleActivate = async () => {
     setSaving(true);
@@ -88,7 +121,8 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
       });
 
       // 2) 기본 문서 3종 자동 생성 (brief / market_research / product_strategy)
-      const docs = buildActivationDocuments({ ...project, activation: data }, data);
+      //    AI 초안(draftDocs)이 있으면 우선 사용, 없으면 템플릿.
+      const docs = buildActivationDocuments({ ...project, activation: data }, data, draftDocs ?? undefined);
       await Promise.all(
         docs.map((d) =>
           addDoc(col('documents'), {
@@ -162,6 +196,26 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
         {/* 현재 단계 콘텐츠 */}
         <div className="flex-1 overflow-y-auto p-7">
           {current.desc && <p className="text-sm text-[var(--text-secondary)] mb-5">{current.desc}</p>}
+
+          {/* AI 초안 생성 (보강 정보 단계) — 아이디어로 보강 정보 자동 입력 + 문서 초안 생성 */}
+          {current.id === 'detail' && (
+            <div className="mb-5">
+              <button
+                type="button"
+                onClick={handleGenerateAI}
+                disabled={!ideaFilled || aiLoading}
+                className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-[var(--color-on-primary)] font-bold shadow-[var(--shadow-brand)] hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
+              >
+                {aiLoading ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+                {aiLoading ? 'AI가 초안을 만드는 중...' : 'AI로 초안 생성'}
+              </button>
+              {aiNotice && (
+                <p className="mt-2 text-xs font-medium text-[var(--color-primary-text)] bg-[var(--surface-active)] border border-[var(--brand-100)] rounded-[var(--radius-md)] px-3 py-2">
+                  {aiNotice}
+                </p>
+              )}
+            </div>
+          )}
 
           {!isConfirm && (
             <div className="space-y-4">
