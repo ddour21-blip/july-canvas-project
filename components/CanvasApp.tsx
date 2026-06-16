@@ -179,7 +179,9 @@ export default function CanvasApp() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
+    // min-w-[1024px]: 본문 최소 너비 확보. 더 좁은 뷰포트에서는 페이지 가로 스크롤로 전환되어
+    // 레이아웃이 글자 단위로 무너지지 않도록 안정화한다.
+    <div className="min-h-screen min-w-[1024px] bg-gray-50 text-gray-900 font-sans">
       {toast && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-6 py-3 rounded-full shadow-lg bg-gray-800 text-white animate-in slide-in-from-top-4 fade-in font-medium whitespace-nowrap">
           {toast.type === 'success' ? (

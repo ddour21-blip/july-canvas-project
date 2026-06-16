@@ -155,12 +155,12 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         </div>
       </div>
 
-      <div className="flex justify-between items-end mb-6">
+      <div className="flex flex-wrap justify-between items-end gap-6 mb-6">
         <div>
           <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">{project.name}</h1>
           <p className="text-gray-500 mt-3 text-lg">기획 문서와 프로토타입을 한 곳에서 관리합니다.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 shrink-0">
           <Button variant="outline" icon={ExternalLink} onClick={() => setShareState({ isOpen: true, type: 'project', id: project.id })}>
             공유 및 초대
           </Button>

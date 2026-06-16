@@ -133,12 +133,12 @@ export default function Dashboard({
         onConfirm={confirmState.action}
         onCancel={() => setConfirmState({ ...confirmState, isOpen: false })}
       />
-      <div className="flex justify-between items-end mb-10">
+      <div className="flex flex-wrap justify-between items-end gap-6 mb-10">
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900">내 프로젝트</h1>
           <p className="text-gray-500 mt-2">기획 문서와 프로토타입을 관리할 프로젝트를 선택하거나 접속 코드로 입장하세요.</p>
         </div>
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-4 items-center shrink-0">
           <form
             onSubmit={handleJoinByCode}
             className="flex bg-white border border-gray-300 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 shadow-sm h-[44px] transition-shadow"
