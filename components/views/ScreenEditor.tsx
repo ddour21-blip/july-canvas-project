@@ -229,13 +229,23 @@ export default function ScreenEditor({
           return { ...ann, isVisible, currentX, currentY };
         });
         setTrackedAnnotations((prev) => {
-          const changed = updated.some(
-            (u, i) =>
-              !prev[i] ||
-              prev[i].isVisible !== u.isVisible ||
-              Math.abs((prev[i].currentX ?? 0) - (u.currentX ?? 0)) > 1 ||
-              Math.abs((prev[i].currentY ?? 0) - (u.currentY ?? 0)) > 1,
-          );
+          // 가시성/위치뿐 아니라 내용(정책 텍스트·댓글/답글) 변경도 감지해야
+          // 새 댓글이 즉시 렌더된다. (내용 변경 미감지 시 재로드 전까지 안 보이는 버그 수정)
+          const changed =
+            prev.length !== updated.length ||
+            updated.some((u, i) => {
+              const p = prev[i];
+              if (!p) return true;
+              return (
+                p.isVisible !== u.isVisible ||
+                Math.abs((p.currentX ?? 0) - (u.currentX ?? 0)) > 1 ||
+                Math.abs((p.currentY ?? 0) - (u.currentY ?? 0)) > 1 ||
+                p.title !== u.title ||
+                p.description !== u.description ||
+                p.version !== u.version ||
+                JSON.stringify(p.comments) !== JSON.stringify(u.comments)
+              );
+            });
           return changed ? updated : prev;
         });
       } catch {
