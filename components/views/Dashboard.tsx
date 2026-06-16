@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ComponentType } from 'react';
 import type { User } from 'firebase/auth';
 import { addDoc, deleteDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
@@ -9,7 +9,7 @@ import { deleteProjectCascade } from '@/lib/projects';
 import { getTime, nowMs, showToast } from '@/lib/utils';
 import { Button } from '@/components/common/Button';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
-import { ChevronRight, Clock, Database, FileText, Folder, Globe, Layers, Layout, Plus, Trash2, User as UserIcon, Users, X } from 'lucide-react';
+import { Activity, CheckCircle2, ChevronRight, Clock, Database, FileText, Folder, FolderPlus, Globe, Layers, Layout, Plus, Trash2, User as UserIcon, Users, X } from 'lucide-react';
 import type { Member, Project, ProjectDocument, ProjectStatus, Screen } from '@/types';
 
 // 상태 배지: green-first 토큰(fg/bg)을 직접 소비. draft=neutral, active=green,
@@ -64,6 +64,86 @@ function MemberAvatars({ project }: { project: Project }) {
       </div>
       <span className="text-xs text-[var(--text-secondary)] font-medium">{count}명</span>
     </div>
+  );
+}
+
+type ActivityTint = 'brand' | 'neutral' | 'green' | 'amber';
+const TINT_CLS: Record<ActivityTint, string> = {
+  brand: 'bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]',
+  neutral: 'bg-[var(--surface-hover)] text-[var(--text-secondary)]',
+  green: 'bg-[var(--green-50)] text-[var(--green-700)]',
+  amber: 'bg-[var(--amber-50)] text-[var(--amber-700)]',
+};
+
+/**
+ * 최근 활동 패널 (UI-4-3).
+ * activity 컬렉션을 새로 만들지 않고, 이미 구독 중인 projects/screens/documents에서
+ * 표시 가능한 범위만 파생해 시간순으로 보여준다. (Firestore schema/구독 추가 없음)
+ * 보이는 프로젝트(visible)로 한정하고, 데이터가 없으면 fallback 문구를 표시한다.
+ */
+function RecentActivityPanel({
+  projects,
+  screens,
+  documents,
+}: {
+  projects: Project[];
+  screens: Screen[];
+  documents: ProjectDocument[];
+}) {
+  const visible = new Set(projects.map((p) => p.id));
+  const projName = (id: string) => projects.find((p) => p.id === id)?.name ?? '프로젝트';
+
+  type Item = { key: string; icon: ComponentType<{ size?: number }>; tint: ActivityTint; text: string; time: number };
+  const items: Item[] = [];
+  projects.forEach((p) =>
+    items.push({ key: `p_${p.id}`, icon: FolderPlus, tint: 'brand', text: `'${p.name}' 프로젝트 생성`, time: getTime(p.createdAt) }),
+  );
+  screens
+    .filter((s) => visible.has(s.projectId))
+    .forEach((s) =>
+      items.push({ key: `s_${s.id}`, icon: Layers, tint: 'neutral', text: `${projName(s.projectId)} · 화면 '${s.name}' 추가`, time: getTime(s.createdAt) }),
+    );
+  documents
+    .filter((d) => visible.has(d.projectId))
+    .forEach((d) => {
+      const meta =
+        d.status === 'approved'
+          ? { icon: CheckCircle2, tint: 'green' as ActivityTint, label: '승인' }
+          : d.status === 'review'
+            ? { icon: Clock, tint: 'amber' as ActivityTint, label: '리뷰 요청' }
+            : { icon: FileText, tint: 'neutral' as ActivityTint, label: '작성' };
+      items.push({ key: `d_${d.id}`, icon: meta.icon, tint: meta.tint, text: `${projName(d.projectId)} · ${d.title} ${meta.label}`, time: getTime(d.updatedAt ?? d.createdAt) });
+    });
+  items.sort((a, b) => b.time - a.time);
+  const recent = items.slice(0, 8);
+
+  return (
+    <aside className="w-full xl:w-[340px] shrink-0 bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] shadow-[var(--shadow-xs)] overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-[var(--border-subtle)]">
+        <Activity size={17} className="text-[var(--color-primary-text)]" />
+        <h2 className="text-sm font-bold text-[var(--text-strong)]">최근 활동</h2>
+      </div>
+      {recent.length === 0 ? (
+        <p className="px-5 py-10 text-center text-sm text-[var(--text-tertiary)]">최근 활동이 없습니다.</p>
+      ) : (
+        <ul className="divide-y divide-[var(--border-subtle)]">
+          {recent.map((it) => {
+            const Icon = it.icon;
+            return (
+              <li key={it.key} className="flex items-start gap-3 px-5 py-3">
+                <span className={`mt-0.5 shrink-0 w-8 h-8 rounded-[var(--radius-md)] flex items-center justify-center ${TINT_CLS[it.tint]}`}>
+                  <Icon size={15} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-[var(--text-body)] leading-snug break-words">{it.text}</p>
+                  <p className="text-xs text-[var(--text-tertiary)] mt-0.5">{formatRelative(it.time)}</p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </aside>
   );
 }
 
@@ -197,12 +277,12 @@ export default function Dashboard({
         onConfirm={confirmState.action}
         onCancel={() => setConfirmState({ ...confirmState, isOpen: false })}
       />
-      <div className="flex flex-wrap justify-between items-end gap-x-6 gap-y-5 mb-10">
-        <div>
+      <div className="flex flex-col gap-5 mb-10 xl:flex-row xl:flex-wrap xl:justify-between xl:items-end xl:gap-x-6">
+        <div className="shrink-0">
           <h1 className="text-3xl font-extrabold text-[var(--text-strong)] tracking-tight">내 프로젝트</h1>
           <p className="text-[var(--text-secondary)] mt-2">기획 문서와 프로토타입을 관리할 프로젝트를 선택하거나 접속 코드로 입장하세요.</p>
         </div>
-        <div className="flex flex-wrap gap-3 items-center shrink-0">
+        <div className="flex flex-wrap gap-3 items-center">
           <form
             onSubmit={handleJoinByCode}
             className="flex bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] overflow-hidden focus-within:ring-2 focus-within:ring-[var(--color-focus-ring)] shadow-[var(--shadow-sm)] h-[44px] transition-shadow"
@@ -240,7 +320,9 @@ export default function Dashboard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="flex flex-col xl:flex-row gap-8 items-start">
+        <div className="flex-1 min-w-0 w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-6">
         {myProjects.map((project) => {
           const status = STATUS_LABEL[project.status ?? 'draft'];
           const canDelete = getPermissions(project, user?.uid).canDelete; // owner만 삭제 노출
@@ -310,12 +392,22 @@ export default function Dashboard({
           );
         })}
         {myProjects.length === 0 && (
-          <div className="col-span-full py-16 text-center border-2 border-dashed border-[var(--border-strong)] rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)]">
-            <Layout size={48} className="mx-auto text-[var(--text-tertiary)] mb-4" />
+          <div className="col-span-full py-16 px-6 text-center border-2 border-dashed border-[var(--border-strong)] rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] flex flex-col items-center">
+            <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center mb-5">
+              <Layout size={32} />
+            </div>
             <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">등록된 프로젝트가 없습니다</h3>
-            <p className="text-[var(--text-secondary)] mb-6">위 입력창에 접속 코드를 입력하거나 새 프로젝트를 생성하세요.</p>
+            <p className="text-[var(--text-secondary)] mb-6 max-w-md">위 입력창에 접속 코드를 입력하거나, 새 프로젝트를 생성해 기획 문서와 프로토타입 관리를 시작하세요.</p>
+            {isGlobalEditor && (
+              <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="px-6 h-[44px]">
+                새 프로젝트
+              </Button>
+            )}
           </div>
         )}
+          </div>
+        </div>
+        <RecentActivityPanel projects={myProjects} screens={screens} documents={documents} />
       </div>
 
       {isModalOpen && isGlobalEditor && (
