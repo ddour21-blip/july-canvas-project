@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { User } from 'firebase/auth';
-import { addDoc, deleteDoc, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { addDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
+import { deleteProjectCascade } from '@/lib/projects';
 import { copyToClipboard, getTime, showToast } from '@/lib/utils';
+import { DOCUMENT_ORDER } from '@/lib/documents';
 import { Button } from '@/components/common/Button';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
 import { ShareState } from '@/components/modals/ShareModal';
@@ -25,13 +26,14 @@ import {
   Rocket,
   Trash2,
 } from 'lucide-react';
-import type { Project, ProjectDocument, ProjectStatus, Screen } from '@/types';
+import type { Project, ProjectDocument, ProjectMember, ProjectStatus, Screen } from '@/types';
 
 const STATUS_LABEL: Record<ProjectStatus, { label: string; cls: string }> = {
   draft: { label: '초안', cls: 'bg-gray-100 text-gray-600' },
   active: { label: '활성', cls: 'bg-blue-100 text-blue-700' },
   review: { label: '리뷰', cls: 'bg-amber-100 text-amber-700' },
   approved: { label: '승인', cls: 'bg-green-100 text-green-700' },
+  archived: { label: '보관', cls: 'bg-gray-200 text-gray-500' },
   handoff: { label: '전달됨', cls: 'bg-purple-100 text-purple-700' },
 };
 
@@ -54,6 +56,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
   const [screenCode, setScreenCode] = useState('');
   const [confirmState, setConfirmState] = useState<ConfirmState>({ isOpen: false, title: '', msg: '', action: null });
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
+  const [members, setMembers] = useState<ProjectMember[]>([]);
 
   const project = projects.find((p) => p.id === projectId);
   const projectScreens = useMemo(() => screens.filter((s) => s.projectId === projectId), [screens, projectId]);
@@ -64,6 +67,16 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
     const unsub = onSnapshot(col('documents'), (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ProjectDocument[];
       setDocuments(data.filter((d) => d.projectId === projectId).sort((a, b) => getTime(a.createdAt) - getTime(b.createdAt)));
+    });
+    return () => unsub();
+  }, [projectId]);
+
+  // 프로젝트 멤버 실시간 구독
+  useEffect(() => {
+    if (!projectId) return;
+    const unsub = onSnapshot(col('projectMembers'), (snap) => {
+      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ProjectMember[];
+      setMembers(data.filter((m) => m.projectId === projectId && m.status !== 'removed'));
     });
     return () => unsub();
   }, [projectId]);
@@ -97,11 +110,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
   };
 
   const executeDeleteProject = async () => {
-    await deleteDoc(docRef('projects', project.id));
-    const batch = writeBatch(db);
-    projectScreens.forEach((s) => batch.delete(docRef('screens', s.id)));
-    documents.forEach((d) => batch.delete(docRef('documents', d.id)));
-    await batch.commit();
+    // 프로젝트 + 화면 + 문서 + 멤버 일괄 삭제 (orphan 방지)
+    await deleteProjectCascade(project.id);
     setConfirmState((prev) => ({ ...prev, isOpen: false }));
     navigate('#');
     showToast('프로젝트가 삭제되었습니다.');
@@ -173,7 +183,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 setConfirmState({
                   isOpen: true,
                   title: '프로젝트 삭제',
-                  msg: `'${project.name}' 프로젝트와 하위 화면/문서가 모두 삭제됩니다. 복구할 수 없습니다. 진행하시겠습니까?`,
+                  msg: `'${project.name}' 프로젝트와 하위 화면·문서·멤버가 모두 삭제됩니다. 복구할 수 없습니다. 진행하시겠습니까?`,
                   action: executeDeleteProject,
                 })
               }
@@ -201,7 +211,15 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
 
       {/* 개요 탭 */}
       {tab === 'overview' && (
-        <div>
+        <div className="space-y-5">
+          <ProjectInfoCard
+            project={project}
+            statusLabel={status.label}
+            statusCls={status.cls}
+            members={members}
+            documents={documents}
+            screenCount={projectScreens.length}
+          />
           {!isActivated ? (
             <div className="py-16 text-center border-2 border-dashed border-blue-200 rounded-2xl bg-blue-50/30">
               <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-5">
@@ -364,6 +382,51 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ProjectInfoCard({
+  project,
+  statusLabel,
+  statusCls,
+  members,
+  documents,
+  screenCount,
+}: {
+  project: Project;
+  statusLabel: string;
+  statusCls: string;
+  members: ProjectMember[];
+  documents: ProjectDocument[];
+  screenCount: number;
+}) {
+  const owner = members.find((m) => m.role === 'owner');
+  const ownerLabel = owner?.displayName || owner?.email || (project.ownerId ? '소유자(레거시)' : '—');
+  const prd = documents.find((d) => d.type === 'prd');
+  const prdStatus = prd ? (prd.status === 'approved' ? '승인 완료' : '작성 중') : '미생성';
+  const docProgress = `${documents.length} / ${DOCUMENT_ORDER.length}`;
+
+  const items: { label: string; value: React.ReactNode }[] = [
+    { label: '상태', value: <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusCls}`}>{statusLabel}</span> },
+    { label: 'Owner', value: ownerLabel },
+    { label: '참여 멤버', value: `${members.length}명` },
+    { label: '문서 진행', value: docProgress },
+    { label: '프로토타입 화면', value: `${screenCount}개` },
+    { label: 'PRD 승인', value: prdStatus },
+  ];
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+      <h3 className="font-bold text-gray-900 text-lg mb-4">{project.name}</h3>
+      <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
+        {items.map((it) => (
+          <div key={it.label} className="flex flex-col gap-1">
+            <dt className="text-xs font-bold text-gray-400">{it.label}</dt>
+            <dd className="text-sm font-medium text-gray-800">{it.value}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }

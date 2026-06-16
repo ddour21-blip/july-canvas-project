@@ -2,26 +2,26 @@
 
 import { useState } from 'react';
 import type { User } from 'firebase/auth';
-import { addDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
+import { deleteProjectCascade } from '@/lib/projects';
 import { showToast } from '@/lib/utils';
 import { Button } from '@/components/common/Button';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
 import { ChevronRight, Database, Folder, Globe, Layout, Plus, Trash2, Users, X } from 'lucide-react';
-import type { Member, Project, ProjectStatus, Screen } from '@/types';
+import type { Member, Project, ProjectStatus } from '@/types';
 
 const STATUS_LABEL: Record<ProjectStatus, { label: string; cls: string }> = {
   draft: { label: '초안', cls: 'bg-gray-100 text-gray-600' },
   active: { label: '활성', cls: 'bg-blue-100 text-blue-700' },
   review: { label: '리뷰', cls: 'bg-amber-100 text-amber-700' },
   approved: { label: '승인', cls: 'bg-green-100 text-green-700' },
+  archived: { label: '보관', cls: 'bg-gray-200 text-gray-500' },
   handoff: { label: '전달됨', cls: 'bg-purple-100 text-purple-700' },
 };
 
 interface DashboardProps {
   projects: Project[];
-  screens: Screen[];
   navigate: (hash: string) => void;
   user: User | null;
   globalMembers: Member[];
@@ -31,7 +31,6 @@ interface DashboardProps {
 
 export default function Dashboard({
   projects,
-  screens,
   navigate,
   user,
   globalMembers,
@@ -57,6 +56,7 @@ export default function Dashboard({
       // 신규 프로젝트: 생성자를 owner로 등록 (roleByUid + projectMembers)
       const ref = await addDoc(col('projects'), {
         name: newProjectName,
+        organizationId: null, // 조직 단위 확장 대비 (현재 개인 프로젝트)
         ownerId: uid,
         roleByUid: uid ? { [uid]: 'owner' as const } : {},
         status: 'draft' as ProjectStatus,
@@ -125,15 +125,9 @@ export default function Dashboard({
     setConfirmState({
       isOpen: true,
       title: '프로젝트 삭제',
-      msg: `'${project.name}' 프로젝트와 하위 화면이 모두 삭제됩니다. 복구할 수 없습니다. 진행하시겠습니까?`,
+      msg: `'${project.name}' 프로젝트와 하위 화면·문서·멤버가 모두 삭제됩니다. 복구할 수 없습니다. 진행하시겠습니까?`,
       action: async () => {
-        const projectScreens = screens.filter((s) => s.projectId === project.id);
-        await deleteDoc(docRef('projects', project.id));
-        if (projectScreens.length > 0) {
-          const batch = writeBatch(db);
-          projectScreens.forEach((s) => batch.delete(docRef('screens', s.id)));
-          await batch.commit();
-        }
+        await deleteProjectCascade(project.id);
         setConfirmState((prev) => ({ ...prev, isOpen: false }));
         showToast('프로젝트가 삭제되었습니다.');
       },

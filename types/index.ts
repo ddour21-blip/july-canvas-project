@@ -9,7 +9,7 @@ export type FirestoreTime =
   | null
   | undefined;
 
-export type ProjectStatus = 'draft' | 'active' | 'review' | 'approved' | 'handoff';
+export type ProjectStatus = 'draft' | 'active' | 'review' | 'approved' | 'archived' | 'handoff';
 
 export type ProjectRole = 'owner' | 'editor' | 'viewer' | 'guest';
 
@@ -53,6 +53,8 @@ export const EMPTY_ACTIVATION: ProjectActivation = {
 export interface Project {
   id: string;
   name: string;
+  /** 조직 단위 확장 대비. 현재는 null(개인). 향후 organizations 컬렉션과 연결. */
+  organizationId?: string | null;
   ownerId: string | null;
   /** uid → 역할 맵. 신규 프로젝트부터 적용 (레거시 프로젝트는 없을 수 있음). */
   roleByUid?: Record<string, ProjectRole>;
@@ -214,4 +216,30 @@ export interface ParsedRoute {
   viewType: 'dashboard' | 'project' | 'screen' | string;
   viewId: string | null;
   extraParam: string | null;
+}
+
+// --- 조직 단위 확장 대비 예약 모델 (이번 단계에서는 기능 미구현, 구조만 준비) ---
+
+/** 조직(워크스페이스). 향후 organizations 컬렉션. */
+export interface Organization {
+  id: string;
+  name: string;
+  ownerId: string;
+  memberUids?: string[];
+  createdAt?: FirestoreTime;
+  updatedAt?: FirestoreTime;
+}
+
+export type OutputType = 'prd_md' | 'pptx' | 'ia_md' | 'feature_spec_md' | 'prototype_url';
+
+/** 프로젝트 산출물(다운로드/전달물). 향후 outputs 컬렉션. */
+export interface ProjectOutput {
+  id: string;
+  projectId: string;
+  type: OutputType;
+  title: string;
+  url?: string;
+  content?: string;
+  createdBy?: string;
+  createdAt?: FirestoreTime;
 }

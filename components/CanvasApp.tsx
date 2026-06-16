@@ -277,7 +277,6 @@ function CanvasAppInner() {
         {viewType === 'dashboard' && (
           <Dashboard
             projects={projects}
-            screens={screens}
             navigate={navigate}
             user={user}
             globalMembers={globalMembers}
