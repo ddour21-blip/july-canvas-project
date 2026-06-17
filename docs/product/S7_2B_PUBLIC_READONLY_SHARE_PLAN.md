@@ -29,8 +29,8 @@
 
 | 단계 | 범위 | 상태 |
 |------|------|------|
-| **S7-2B-1 인프라** | `firebase-admin` 의존성, `lib/firebaseAdmin.ts`(서버 전용 lazy init, env 누락 시 명확한 에러), `.env.local.example` 변수명, 본 문서 | ✅ 본 커밋 |
-| S7-2B-2 API | `app/api/share/[shareId]/route.ts` (GET): shareId 검증 → `isEnabled`/`expiresAt`/`accessType==='public_readonly'` 확인 → targetType별 sanitize 후 최소 데이터 반환. `lib/sharePublic.ts`(화이트리스트 sanitizer) | 예정 |
+| **S7-2B-1 인프라** | `firebase-admin` 의존성, `lib/firebaseAdmin.ts`(서버 전용 lazy init, env 누락 시 명확한 에러), `.env.local.example` 변수명, 본 문서 | ✅ 완료 |
+| **S7-2B-2 API** | `app/api/share/[shareId]/route.ts` (GET): shareId 검증 → `isEnabled`/`expiresAt`/`accessType==='public_readonly'` 확인 → targetType별 sanitize 후 최소 데이터 반환. `lib/publicShareSanitizer.ts`(화이트리스트 sanitizer). **public viewer UI / ShareModal public_readonly 생성은 미포함.** | ✅ 완료 |
 | S7-2B-3 공개 뷰 | `app/share/[shareId]/page.tsx` 비로그인 read-only 렌더(문서 MD / 화면 / handoff 4종) | 예정 |
 | S7-2B-4 생성 UI | `ShareModal`에 `public_readonly` 옵션 + 공개 URL(`/share/{shareId}`) 표시 | 예정 |
 | **S7-2C** | `public_review` + 비로그인 코멘트 | 별도 |
@@ -52,6 +52,20 @@
 - 기존 B 라인 흐름 / PRD 조립 로직 / CanvasApp / ShareModal 회귀 금지.
 - 서비스 계정 키 값·`.env.local` 커밋 금지. 자격증명 env에 `NEXT_PUBLIC_` 접두사 금지.
 - 비로그인 직접 Firestore 접근 금지(반드시 서버 매개).
+
+## 5-1. S7-2B-2 구현 메모 (완료)
+
+- 신규 `app/api/share/[shareId]/route.ts` (GET, `runtime='nodejs'`, `dynamic='force-dynamic'`).
+- shareId 검증: `^sh[A-Za-z0-9]{22}$` (S7-2A 생성 규칙과 일치).
+- 처리 순서: env 설정 확인 → shareId 형식 → shares 조회 → 존재 → `isEnabled` → `expiresAt`(null=무기한) → `accessType==='public_readonly'` → targetType별 조회/sanitize.
+- 실패 status: 400(형식) / 404(없음·타깃없음) / 403(비활성·만료·public_readonly 아님) / 500(env 미설정·내부오류).
+  - 에러 본문은 코드만(`{ok:false,error:"..."}`). private key/env 이름 상세·스택은 노출하지 않음.
+- `handoff_package`: Firestore 미저장 → 서버에서 project+documents+prototypeLock 로드 후 `buildHandoffPackage`(순수 함수) 재조립. 브라우저 전용 API 없음 → 별도 server helper 분리 불필요.
+- sanitizer(`lib/publicShareSanitizer.ts`): 출력은 화이트리스트로 새 객체 생성. 제거 필드 = `ownerId`/`memberUids`/`roleByUid`/`organizationId`/`createdBy`/`lockedBy`/내부 식별·권한 정보.
+
+> ⚠️ **screen.code 스크립트 실행 위험**: API는 `screen.code`(임의 마크업/스크립트 포함 가능)를 반환할 수 있다.
+> 후속 public viewer(S7-2B-3)에서 반드시 `iframe sandbox` 등 스크립트 실행 격리 정책을 별도 검토·적용해야 한다.
+> 비로그인 사용자에게 신뢰되지 않은 코드를 같은 오리진에서 실행시키면 안 된다.
 
 ## 6. S7-2B-1 완료 기준
 

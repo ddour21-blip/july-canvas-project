@@ -346,7 +346,9 @@ export interface ShareDoc {
 | S6 | 요구사항 보강 필드 자동 분해(분석 → activation fields, 수정 가능) | M2 AI 분해 재사용 |
 | **S7-1 ✅** | **내부 공유 딥링크**(로그인 멤버 전용): `#project_{id}` / `#project_{id}_documents` / `#project_{id}_document_{docId}` / `#screen_{id}`(기존 재사용). ShareModal에 바로가기 링크 옵션(프로젝트/문서/현재 문서/프로토타입) + 복사. `lib/shareLinks.ts` 신규. **accessCode/hash·Rules 무변경**(`feat: add internal share deep links`) | 라우팅 파서 확장(무위험) |
 | **S7-2A ✅(코드)** | **`shares` 컬렉션·shareId(sh+base62, `_` 없음) 링크 생성/비활성/만료(7d/30d)/복사 + `#share_{shareId}`→내부 딥링크 resolve**(internal, 로그인 멤버). ShareModal 공유 링크 섹션, `lib/shares.ts` 신규. **⚠️ `firestore.rules` shares 단계 A 규칙 콘솔 게시 필요**(게시 전 permission-denied). public_readonly/review는 데이터 모델만 | `shares` 신설, Rules 게시 |
-| S7-2B | public_readonly — 서버 매개 `/api/share/{shareId}`(유효성 검증 후 필요 문서만 반환, 비로그인) | route, Rules |
+| **S7-2B-1 ✅** | firebase-admin 인프라(`lib/firebaseAdmin.ts` 서버 lazy init, 서비스 계정 env 3종, `.env.local.example` 변수명). **Rules 무변경** | firebase-admin 도입 |
+| **S7-2B-2 ✅(코드)** | public_readonly **서버 매개 API** — `GET /api/share/{shareId}`(firebase-admin로 읽기→shareId/`isEnabled`/`expiresAt`/`public_readonly` 검증→targetType별 sanitize 반환). `lib/publicShareSanitizer.ts` 신규. **Firestore Rules public read 미개방**(Admin 우회). **public viewer UI / ShareModal public_readonly 생성은 미포함**(B-3). **라이브 검증은 서비스 계정 env 설정 후** | route, sanitizer (Rules 무변경) |
+| S7-2B-3 | public viewer UI — `app/share/[shareId]/page.tsx` 비로그인 read-only 렌더(문서/화면/handoff). ⚠️ screen.code는 iframe sandbox 등 스크립트 격리 검토 필수 | 공개 페이지 |
 | S7-2C | public_review — 비로그인 댓글/피드백 | route, Rules, 스팸/레이트리밋 |
 | S8 | 권한/Rules 정리(public_readonly/project_member, 리뷰어 댓글, 단계 B 충돌 검토) | Rules 설계·게시(주의) |
 

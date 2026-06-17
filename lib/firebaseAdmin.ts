@@ -9,7 +9,11 @@
 //
 // 이번 단계(S7-2B-1) 범위: lazy init + env 누락 시 명확한 에러. 실제 share 조회/API는 후속 단계.
 import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import {
+  getFirestore,
+  type CollectionReference,
+  type Firestore,
+} from 'firebase-admin/firestore';
 
 /** 서버 전용 서비스 계정 자격증명 env 변수명 (개별 3종). */
 const ENV_PROJECT_ID = 'FIREBASE_PROJECT_ID';
@@ -87,4 +91,19 @@ export function isAdminConfigured(): boolean {
   return Boolean(
     process.env[ENV_PROJECT_ID] && process.env[ENV_CLIENT_EMAIL] && process.env[ENV_PRIVATE_KEY],
   );
+}
+
+// ---- Firestore 경로 (클라이언트 lib/firestore.ts 와 동일 구조: artifacts/{appId}/public/data/{collection}) ----
+// 클라이언트 lib/firestore.ts 를 import 하면 클라이언트 firebase SDK가 서버 번들로 끌려오므로,
+// 서버용 경로 헬퍼를 여기(Admin 전용)에 별도로 둔다. APP_ID 기본값은 lib/firebase.ts 와 일치시킨다.
+const ADMIN_APP_ID = process.env.NEXT_PUBLIC_APP_ID || 'july-canvas-app';
+
+/** Admin Firestore 컬렉션 레퍼런스 (artifacts/{appId}/public/data/{name}). 서버 전용. */
+export function adminCol(name: string): CollectionReference {
+  return getAdminDb()
+    .collection('artifacts')
+    .doc(ADMIN_APP_ID)
+    .collection('public')
+    .doc('data')
+    .collection(name);
 }
