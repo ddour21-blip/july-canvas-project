@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import { addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
-import { getTime, nowMs, showToast } from '@/lib/utils';
+import { copyToClipboard, getTime, nowMs, showToast } from '@/lib/utils';
 import { DOCUMENT_META, DOCUMENT_ORDER, generatePRD, injectPrototypeUrl } from '@/lib/documents';
+import { buildPrototypePackage } from '@/lib/prototypePrompt';
 import { downloadTextFile } from '@/lib/export/exportMarkdown';
 import { Button } from '@/components/common/Button';
-import { CheckCircle2, Circle, Clock, Download, Eye, FileText, Lock, Plus, RefreshCw, Save } from 'lucide-react';
+import { Copy, CheckCircle2, Circle, Clock, Download, Eye, FileText, Lock, Plus, RefreshCw, Save, Sparkles, Wand2, X } from 'lucide-react';
+import { EMPTY_ACTIVATION } from '@/types';
 import type {
   DocumentStatus,
   DocumentType,
@@ -66,6 +68,14 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [selectedType, setSelectedType] = useState<DocumentType>(DOCUMENT_ORDER[0]);
+  // 프로토타입 제작 패키지 (로컬 생성 → 복사. Firestore 저장 안 함)
+  const [prototypePkg, setPrototypePkg] = useState<string | null>(null);
+  // 프로젝트 전환 시 이전 프로젝트의 패키지가 남지 않도록 초기화 (렌더 중 조정 패턴).
+  const [pkgProjectId, setPkgProjectId] = useState(project.id);
+  if (project.id !== pkgProjectId) {
+    setPkgProjectId(project.id);
+    setPrototypePkg(null);
+  }
 
   const byType = (t: DocumentType) => documents.find((d) => d.type === t);
 
@@ -163,6 +173,19 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     setEditingId(null);
   };
 
+  // 프로토타입 제작 패키지: 초기 문서 3종이 모두 생성된 뒤 활성화.
+  const initialDocsReady = (['brief', 'market_research', 'product_strategy'] as const).every((t) => byType(t));
+
+  const handleBuildPrototypePackage = () => {
+    setPrototypePkg(buildPrototypePackage(project, project.activation ?? EMPTY_ACTIVATION));
+  };
+
+  const handleCopyPrototypePackage = () => {
+    if (!prototypePkg) return;
+    if (copyToClipboard(prototypePkg)) showToast('프로토타입 제작 프롬프트를 복사했습니다.');
+    else showToast('복사 실패', 'error');
+  };
+
   return (
     <div className="space-y-5">
       {!isEditor && (
@@ -194,6 +217,60 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             )}
           </div>
         </div>
+      </div>
+
+      {/* 프로토타입 제작 패키지 (B2): 초기 문서 3종 기반 → 최소 IA/핵심 기능/Gemini Canvas 프롬프트 (로컬 생성·복사) */}
+      <div className="bg-[var(--surface-card)] border border-[var(--brand-200)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="shrink-0 w-10 h-10 rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
+              <Wand2 size={20} />
+            </span>
+            <div className="min-w-0">
+              <h3 className="font-bold text-[var(--text-strong)] text-lg">프로토타입 제작 패키지</h3>
+              <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
+                초기 문서 3종을 기반으로 Gemini Canvas 등에 붙여넣을 수 있는 최소 IA, 핵심 기능, 프로토타입 생성 프롬프트를 만듭니다.
+              </p>
+              {!initialDocsReady && (
+                <p className="text-xs text-[var(--amber-700)] mt-1.5">브리프·시장조사·제품화전략 문서가 모두 생성되면 사용할 수 있습니다.</p>
+              )}
+            </div>
+          </div>
+          <Button icon={Sparkles} onClick={handleBuildPrototypePackage} disabled={!initialDocsReady} className="shrink-0">
+            {prototypePkg ? '다시 생성' : '프로토타입 프롬프트 생성'}
+          </Button>
+        </div>
+
+        {prototypePkg && (
+          <div className="mt-5 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] overflow-hidden">
+            <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-[var(--border-default)] bg-[var(--surface-card)]">
+              <span className="text-xs font-bold text-[var(--text-secondary)]">생성된 프로토타입 제작 패키지 (초안)</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyPrototypePackage}
+                  className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:bg-[var(--color-primary-hover)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
+                >
+                  <Copy size={13} /> 프롬프트 복사
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrototypePkg(null)}
+                  aria-label="닫기"
+                  className="p-1.5 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] transition-colors"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+            <textarea
+              readOnly
+              value={prototypePkg}
+              rows={16}
+              className="w-full px-4 py-3 text-xs font-mono leading-relaxed resize-y bg-transparent text-[var(--text-body)] outline-none"
+            />
+          </div>
+        )}
       </div>
 
       {/* 문서 워크스페이스: 좌측 목록 + 중앙 에디터 */}
