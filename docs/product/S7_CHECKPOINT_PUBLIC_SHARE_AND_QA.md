@@ -84,16 +84,44 @@
 > ⚠️ 서버 전용 값에는 `NEXT_PUBLIC_` 접두사 금지. private key/service account/secret 실제 값은 문서·저장소에 절대 넣지 않는다(`.env.local`만, 커밋 금지).
 
 ### Firestore TTL / 운영 설정
-- **`rateLimits` 컬렉션은 TTL 설정 필요** — Firebase Console > Firestore > TTL 정책에서 **`expiresAt`(타임스탬프 필드 아님, ms number이므로 주의)** 기준 자동 삭제 권장. 미설정 시 rateLimits 문서가 계속 누적된다.
-  - ⚠️ 현재 `expiresAt`은 **ms number**로 저장됨. Firestore 네이티브 TTL은 Timestamp 필드를 요구하므로, TTL 적용 시 (a) `expiresAt`를 Timestamp로 저장하도록 보강하거나 (b) 스케줄드 정리(Cloud Functions/cron)로 대체해야 함 → 운영 결정 필요(후속).
+- **`rateLimits` 컬렉션 TTL** — **S7-2H에서 `expiresAt`을 Firestore Timestamp로 저장하도록 보강 완료**(Native TTL 호환). ms 참조용 `expiresAtMs`(number)도 병행 저장. Firebase Console > Firestore > TTL 정책에서 **`expiresAt`(Timestamp) 필드 기준** 자동 삭제 설정만 하면 됨. 미설정 시 누적되나 PII 없음(해시/카운트만).
 - **`publicReviews`는 TTL 삭제 대상 아님**(피드백 보존). 모더레이션 `deleted`는 소프트 삭제로 보존.
 
 ### 배포 전 남은 수동 확인 항목
 1. 운영 env 전체 설정(위 표) + `PUBLIC_REVIEW_HASH_SECRET`/CAPTCHA secret 실제 값.
-2. Cloudflare Turnstile 실제 site/secret 키 발급 + 도메인 등록.
-3. `rateLimits` TTL/정리 정책 결정·설정(expiresAt Timestamp 보강 또는 스케줄 정리).
+2. Cloudflare Turnstile 실제 site/secret 키 발급 + 도메인 등록(아래 S7-2H 절차).
+3. `rateLimits` Firestore Native TTL 정책을 **`expiresAt`** 필드에 설정(콘솔).
 4. `firestore.rules` 콘솔 게시 상태 재확인(S7-2 동안 미변경이나 최신 게시본 확인).
 5. (선택) 신규 pending 댓글 모더레이션 알림 — 후속.
+
+## 4-4. S7-2H — 운영 배포 하드닝 ✅
+
+### rateLimits TTL 호환 보강
+- `lib/rateLimit.ts`: `expiresAt`을 **Firestore Timestamp**(`Timestamp.fromMillis`)로 저장 → Firestore Native TTL 호환. 비교 로직(`windowStart` ms 기반)은 불변, ms 참조용 `expiresAtMs`(number) 병행 저장.
+- 저장 필드: `key / count / windowStart(ms) / expiresAt(Timestamp) / expiresAtMs(number) / createdAt / updatedAt`. **raw IP/UA/uid 없음 유지**(clientHash는 IP+UA HMAC).
+- rate limit 동작 불변: per-share 60초 3회 / global 600초 10회 / 초과 시 `429 RATE_LIMITED`(라이브 재확인). `rateLimits`는 서버 전용, Rules 변경 없음.
+
+### Firestore Native TTL 설정 대상
+- **컬렉션 `rateLimits`, 필드 `expiresAt`(Timestamp)** 에 TTL 정책 설정. (Console > Firestore Database > TTL > 정책 추가.)
+
+### Turnstile 운영 설정 절차
+1. Cloudflare 대시보드 > Turnstile > 위젯 추가 → **site key / secret key** 발급.
+2. 위젯 **허용 도메인(hostname) 등록**(운영 도메인 + 필요 시 스테이징).
+3. env 설정: `NEXT_PUBLIC_PUBLIC_REVIEW_CAPTCHA_SITE_KEY`(site key, public) + `PUBLIC_REVIEW_CAPTCHA_SECRET_KEY`(secret, 서버) + `PUBLIC_REVIEW_CAPTCHA_ENABLED=1`(서버).
+4. 배포 후 public viewer에서 위젯 노출 → 실제 토큰 발급 → 댓글 제출 시 서버 siteverify 통과(201 pending) 확인. 토큰 없음/실패 시 403 차단 확인.
+- 로컬 테스트: always-pass 테스트 키(site `1x00000000000000000000AA` / secret `1x0000000000000000000000000000000AA`)로 검증 가능. 비활성(키 미설정)이면 위젯 미노출 + 기존 흐름.
+
+### 운영 env 목록 (재정리)
+| env | 구분 |
+|-----|------|
+| `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` | 서버 전용 |
+| `PUBLIC_REVIEW_HASH_SECRET` | 서버 전용 |
+| `PUBLIC_REVIEW_CAPTCHA_ENABLED` / `PUBLIC_REVIEW_CAPTCHA_SECRET_KEY` | 서버 전용 |
+| `NEXT_PUBLIC_PUBLIC_REVIEW_CAPTCHA_SITE_KEY` | public(클라 노출) |
+
+> 서버 전용 값에 `NEXT_PUBLIC_` 금지. 실제 secret/private key 값은 문서·저장소에 미기재(`.env.local`만, 커밋 금지).
+
+- 커밋: `chore: harden rate limit ttl for production` (본 갱신 커밋).
 
 ## 5. QA 안정화 완료 항목 ✅
 
@@ -130,7 +158,8 @@
 ## 7. 최신 커밋 목록 (S7-2 시리즈 + QA, 최신순)
 
 ```
-<본 커밋> feat: connect captcha widget and finalize public share   # S7-2G (Turnstile 위젯 연결 + 운영 마감)
+<본 커밋> chore: harden rate limit ttl for production            # S7-2H (rateLimits TTL Timestamp + 운영 문서)
+699fd42 feat: connect captcha widget and finalize public share   # S7-2G (Turnstile 위젯 연결 + 운영 마감)
 4362480 feat: add public review spam protection                # S7-2F (레이트리밋 + CAPTCHA env-gated)
 8d3d0a7 feat: add public review moderation                       # S7-2E (모더레이션 + 정책 pending 전환)
 fbe1fd9 docs: update checkpoint with full s7-2 share series and qa
@@ -154,7 +183,7 @@ c7953a2 feat: add share records for internal share links         # S7-2A
 
 ## 9. 다음 단계 후보
 
-- `rateLimits` Firestore TTL/정리 정책 확정(`expiresAt` Timestamp 보강 또는 스케줄 정리) + 콘솔 설정.
+- (운영 수동) `rateLimits` Firestore Native TTL을 `expiresAt` 필드에 콘솔 설정 — 코드 보강은 S7-2H 완료.
 - 모더레이션 알림(새 pending 댓글 → owner/editor 알림).
 - (필요 시) 멤버십 기반 read(단계 B) / 완전 로그아웃 화면.
 
