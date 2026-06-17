@@ -149,22 +149,29 @@ function CanvasAppInner() {
     );
   }
 
-  // 라우트 파싱
+  // 라우트 파싱. `ws_{id}` 프리픽스를 떼어낸 뒤 동일 규칙으로 해석(프리픽스 유무 모두 지원).
   const routeParts = currentRoute.replace('#', '').split('_');
   let activeWorkspaceId = 'main';
-  let viewType = 'dashboard';
-  let viewId: string | null = null;
-  let extraParam: string | null = null;
-
+  let rest = routeParts;
   if (routeParts[0] === 'ws') {
-    activeWorkspaceId = routeParts[1];
-    viewType = routeParts[2] || 'dashboard';
-    viewId = routeParts[3] ?? null;
-    extraParam = routeParts[4] === 'ann' ? routeParts[5] : null;
-  } else {
-    viewType = routeParts[0] || 'dashboard';
-    viewId = routeParts[1] ?? null;
-    extraParam = routeParts[2] === 'ann' ? routeParts[3] : null;
+    activeWorkspaceId = routeParts[1] || 'main';
+    rest = routeParts.slice(2);
+  }
+
+  const viewType = rest[0] || 'dashboard';
+  const viewId: string | null = rest[1] ?? null;
+  // 화면 주석 딥링크: screen_{id}_ann_{annId}
+  const extraParam: string | null = rest[2] === 'ann' ? (rest[3] ?? null) : null;
+
+  // 프로젝트 내부 딥링크: project_{id}_documents / project_{id}_document_{docId} (S7-1)
+  let projectInitialTab: 'overview' | 'documents' | 'screens' | undefined;
+  let projectInitialDocId: string | null = null;
+  if (viewType === 'project') {
+    if (rest[2] === 'documents') projectInitialTab = 'documents';
+    else if (rest[2] === 'document') {
+      projectInitialTab = 'documents';
+      projectInitialDocId = rest[3] ?? null;
+    }
   }
 
   return (
@@ -186,6 +193,9 @@ function CanvasAppInner() {
         isOpen={shareState.isOpen}
         type={shareState.type}
         id={shareState.id}
+        projectId={shareState.projectId}
+        documentId={shareState.documentId}
+        screenId={shareState.screenId}
         onClose={() => setShareState({ ...shareState, isOpen: false })}
         workspaceId={activeWorkspaceId}
       />
@@ -298,6 +308,8 @@ function CanvasAppInner() {
             navigate={navigate}
             setShareState={setShareState}
             user={user}
+            initialTab={projectInitialTab}
+            initialDocId={projectInitialDocId}
           />
         )}
         {viewType === 'screen' && (

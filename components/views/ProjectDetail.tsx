@@ -67,10 +67,28 @@ interface ProjectDetailProps {
   navigate: (hash: string) => void;
   setShareState: (s: ShareState) => void;
   user: User | null;
+  /** 딥링크로 진입한 초기 탭 (예: project_{id}_documents) */
+  initialTab?: Tab;
+  /** 딥링크로 진입한 초기 선택 문서 id (예: project_{id}_document_{docId}) */
+  initialDocId?: string | null;
 }
 
-export default function ProjectDetail({ projectId, projects, screens, navigate, setShareState, user }: ProjectDetailProps) {
-  const [tab, setTab] = useState<Tab>('overview');
+export default function ProjectDetail({ projectId, projects, screens, navigate, setShareState, user, initialTab, initialDocId }: ProjectDetailProps) {
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'overview');
+  // 현재 문서 탭에서 선택된 문서 id (공유 '현재 문서 링크'용). ProjectDocuments가 보고.
+  const [currentDocId, setCurrentDocId] = useState<string | null>(initialDocId ?? null);
+  // 딥링크(해시) 변경 시에만 탭/문서를 동기화. 렌더 중 조정 패턴(effect 미사용 → 사용자 수동 탭 전환 보존).
+  const routeKey = `${initialTab ?? ''}|${initialDocId ?? ''}`;
+  const [appliedRouteKey, setAppliedRouteKey] = useState(routeKey);
+  if (routeKey !== appliedRouteKey) {
+    setAppliedRouteKey(routeKey);
+    if (initialDocId) {
+      setTab('documents');
+      setCurrentDocId(initialDocId);
+    } else if (initialTab) {
+      setTab(initialTab);
+    }
+  }
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [screenName, setScreenName] = useState('');
@@ -208,7 +226,20 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         </div>
         <div className="flex flex-wrap gap-3 items-center">
           {canInvite && (
-            <Button variant="outline" icon={ExternalLink} onClick={() => setShareState({ isOpen: true, type: 'project', id: project.id })}>
+            <Button
+              variant="outline"
+              icon={ExternalLink}
+              onClick={() =>
+                setShareState({
+                  isOpen: true,
+                  type: 'project',
+                  id: project.id,
+                  projectId: project.id,
+                  // 문서 탭에서 문서가 선택돼 있으면 '현재 문서 링크'도 제공
+                  documentId: tab === 'documents' && currentDocId ? currentDocId : undefined,
+                })
+              }
+            >
               공유 및 초대
             </Button>
           )}
@@ -324,7 +355,15 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               )}
             </div>
           ) : (
-            <ProjectDocuments project={project} documents={documents} screens={screens} isEditor={canEdit} isOwner={isOwner} />
+            <ProjectDocuments
+              project={project}
+              documents={documents}
+              screens={screens}
+              isEditor={canEdit}
+              isOwner={isOwner}
+              initialDocId={initialDocId}
+              onCurrentDocChange={setCurrentDocId}
+            />
           )}
         </>
       )}

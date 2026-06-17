@@ -749,7 +749,7 @@ export default function ScreenEditor({
               variant="outline"
               className="shadow-[var(--shadow-sm)]"
               icon={ExternalLink}
-              onClick={() => setShareState({ isOpen: true, type: 'screen', id: screen.id })}
+              onClick={() => setShareState({ isOpen: true, type: 'screen', id: screen.id, projectId: project.id, screenId: screen.id })}
             >
               공유 및 초대
             </Button>

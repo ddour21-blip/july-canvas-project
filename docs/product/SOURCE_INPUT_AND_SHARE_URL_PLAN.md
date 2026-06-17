@@ -344,7 +344,8 @@ export interface ShareDoc {
 | S4 | URL 등록·메타 저장(urlType 구분, status:'pending') | `projectSources` |
 | S5 | 파일/URL 분석 API 설계·구현(텍스트 추출·서버 fetch·SSRF 차단·실패 처리·`analysisResult`) | API route/worker, 키 서버전용 |
 | S6 | 요구사항 보강 필드 자동 분해(분석 → activation fields, 수정 가능) | M2 AI 분해 재사용 |
-| S7 | 프로젝트/문서/프로토타입 공유 URL(`shares`·`shareId`·`#share_{shareId}`(13-A)·서버 매개 read) | `shares` 신설, 라우팅/route |
+| **S7-1 ✅** | **내부 공유 딥링크**(로그인 멤버 전용): `#project_{id}` / `#project_{id}_documents` / `#project_{id}_document_{docId}` / `#screen_{id}`(기존 재사용). ShareModal에 바로가기 링크 옵션(프로젝트/문서/현재 문서/프로토타입) + 복사. `lib/shareLinks.ts` 신규. **accessCode/hash·Rules 무변경**(`feat: add internal share deep links`) | 라우팅 파서 확장(무위험) |
+| S7-2 | public 공유(`shares`·`shareId` 랜덤 토큰·public_readonly/review·만료·비활성·서버 매개 `/api/share/{shareId}`·비로그인) | `shares` 신설, route, Rules |
 | S8 | 권한/Rules 정리(public_readonly/project_member, 리뷰어 댓글, 단계 B 충돌 검토) | Rules 설계·게시(주의) |
 
 각 단계는 **독립 커밋 + 검증(tsc/eslint/build + 라이브) + KAKE 무손상 + graceful skip**(키/Storage/분석 없어도 기존 흐름 유지) 원칙을 따른다.

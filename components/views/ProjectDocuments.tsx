@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
 import { getTime, nowMs, showToast } from '@/lib/utils';
@@ -56,14 +56,34 @@ interface Props {
   screens: Screen[];
   isEditor: boolean;
   isOwner: boolean;
+  /** 딥링크로 진입한 초기 선택 문서 id (해당 문서 타입을 선택 상태로) */
+  initialDocId?: string | null;
+  /** 현재 선택된 문서 id를 상위로 보고 (공유 '현재 문서 링크'용) */
+  onCurrentDocChange?: (docId: string | null) => void;
 }
 
-export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner }: Props) {
+export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, initialDocId, onCurrentDocChange }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [selectedType, setSelectedType] = useState<DocumentType>(DOCUMENT_ORDER[0]);
 
   const byType = (t: DocumentType) => documents.find((d) => d.type === t);
+
+  // 딥링크 초기 문서 → 해당 문서 타입 선택 (렌더 중 조정 패턴, effect 미사용).
+  // 문서 구독이 늦게 도착할 수 있어, 해당 문서를 찾은 시점에만 1회 적용한다.
+  const [appliedDocId, setAppliedDocId] = useState<string | null>(null);
+  if (initialDocId && initialDocId !== appliedDocId) {
+    const doc = documents.find((d) => d.id === initialDocId);
+    if (doc) {
+      setAppliedDocId(initialDocId);
+      setSelectedType(doc.type);
+    }
+  }
+
+  // 현재 선택 타입의 문서 id를 상위로 보고 (없으면 null). 프롭 콜백이라 effect 사용 가능.
+  useEffect(() => {
+    onCurrentDocChange?.(documents.find((d) => d.type === selectedType)?.id ?? null);
+  }, [selectedType, documents, onCurrentDocChange]);
 
   const prototypeUrl = () => {
     const firstScreen = screens.find((s) => s.projectId === project.id);
