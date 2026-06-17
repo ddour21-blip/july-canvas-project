@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Copy, FileText, Folder, Layout, Link2, Package, Power, Share2, X } from 'lucide-react';
 import { Button } from '@/components/common/Button';
 import { copyToClipboard, formatDateTime, getTime, showToast } from '@/lib/utils';
-import { shareHash, toShareUrl } from '@/lib/shareLinks';
+import { shareHash, toPublicShareUrl, toShareUrl } from '@/lib/shareLinks';
 import { useAuth, useRole } from '@/lib/auth';
 import {
   EXPIRY_OPTIONS,
@@ -14,7 +14,14 @@ import {
   subscribeProjectShares,
   type ShareExpiry,
 } from '@/lib/shares';
-import type { Project, ShareRecord, ShareTargetType } from '@/types';
+import type { Project, ShareAccessType, ShareRecord, ShareTargetType } from '@/types';
+
+/** 이 모달에서 생성 가능한 접근 유형 (public_review는 S7-2C). */
+type CreatableAccess = Extract<ShareAccessType, 'internal' | 'public_readonly'>;
+
+/** share 레코드의 복사용 URL. internal=내부 해시 딥링크, public_readonly=비로그인 viewer 경로. */
+const shareUrlFor = (s: ShareRecord): string =>
+  s.accessType === 'public_readonly' ? toPublicShareUrl(s.shareId) : toShareUrl(shareHash.share(s.shareId));
 
 export interface ShareState {
   isOpen: boolean;
@@ -64,6 +71,7 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
   const { canEdit } = useRole(project ?? null);
   const [shares, setShares] = useState<ShareRecord[]>([]);
   const [expiry, setExpiry] = useState<ShareExpiry>('none');
+  const [accessType, setAccessType] = useState<CreatableAccess>('internal');
 
   // 프로젝트 공유 링크 실시간 구독 (모달 열렸고 프로젝트 컨텍스트가 있을 때).
   useEffect(() => {
@@ -77,15 +85,22 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
   // 공유 링크 관리(생성/토글)는 owner/editor만.
   const canManageShares = !!pid && canEdit;
 
-  // 생성 가능한 공유 대상 (컨텍스트에 따라)
-  const shareTargets: { targetType: ShareTargetType; targetId?: string; targetTitle: string; label: string }[] = [];
+  const isPublic = accessType === 'public_readonly';
+
+  // 생성 가능한 공유 대상 (컨텍스트에 따라).
+  const allTargets: { targetType: ShareTargetType; targetId?: string; targetTitle: string; label: string }[] = [];
   if (pid) {
-    shareTargets.push({ targetType: 'project', targetTitle: project?.name || '프로젝트', label: '프로젝트 공유 링크 만들기' });
-    shareTargets.push({ targetType: 'document', targetTitle: '문서 목록', label: '문서 공유 링크 만들기' });
-    if (documentId) shareTargets.push({ targetType: 'document', targetId: documentId, targetTitle: '현재 문서', label: '현재 문서 공유 링크 만들기' });
-    if (sid) shareTargets.push({ targetType: 'screen', targetId: sid, targetTitle: '프로토타입 화면', label: '프로토타입 공유 링크 만들기' });
-    shareTargets.push({ targetType: 'handoff_package', targetId: pid, targetTitle: '개발 전달 패키지', label: '개발 전달 패키지 공유 링크 만들기' });
+    allTargets.push({ targetType: 'project', targetTitle: project?.name || '프로젝트', label: '프로젝트 공유 링크 만들기' });
+    // 문서 목록(targetId 없는 document)은 internal 전용 — public viewer는 단일 문서만 표시한다.
+    allTargets.push({ targetType: 'document', targetTitle: '문서 목록', label: '문서 공유 링크 만들기' });
+    if (documentId) allTargets.push({ targetType: 'document', targetId: documentId, targetTitle: '현재 문서', label: '현재 문서 공유 링크 만들기' });
+    if (sid) allTargets.push({ targetType: 'screen', targetId: sid, targetTitle: '프로토타입 화면', label: '프로토타입 공유 링크 만들기' });
+    allTargets.push({ targetType: 'handoff_package', targetId: pid, targetTitle: '개발 전달 패키지', label: '개발 전달 패키지 공유 링크 만들기' });
   }
+  // public_readonly는 viewer가 지원하는 대상만(문서 목록=targetId 없는 document 제외).
+  const shareTargets = isPublic
+    ? allTargets.filter((t) => !(t.targetType === 'document' && !t.targetId))
+    : allTargets;
 
   const handleCreateShare = async (t: { targetType: ShareTargetType; targetId?: string; targetTitle: string }) => {
     if (!pid || !canManageShares) return;
@@ -95,11 +110,11 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
         targetType: t.targetType,
         targetId: t.targetId,
         targetTitle: t.targetTitle,
-        accessType: 'internal',
+        accessType,
         expiry,
         createdBy: user?.uid ?? 'anonymous',
       });
-      showToast('공유 링크가 생성되었습니다.');
+      showToast(isPublic ? '외부 읽기 전용 링크가 생성되었습니다.' : '내부 공유 링크가 생성되었습니다.');
     } catch (err) {
       console.error(err);
       showToast('공유 링크 생성 중 오류가 발생했습니다.', 'error');
@@ -198,12 +213,32 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
                 <Share2 size={16} className="text-[var(--color-primary-text)]" /> 공유 링크
               </div>
               <p className="text-xs text-[var(--text-tertiary)] mb-3">
-                공유용 shareId 링크를 생성합니다. 이번 단계에서는 로그인된 사용자 기준으로 동작하며, 비로그인 공개 공유는 후속 단계에서 지원합니다.
+                공유용 shareId 링크를 생성합니다. 내부 공유는 로그인 멤버 전용, 외부 읽기 전용은 로그인 없이 접근할 수 있습니다.
               </p>
 
-              {/* 접근 유형 + 만료 */}
+              {/* 접근 유형 토글 */}
+              <div className="inline-flex p-0.5 mb-3 rounded-[var(--radius-md)] bg-[var(--surface-sunken)] border border-[var(--border-default)]">
+                {([
+                  { v: 'internal', label: '내부 공유' },
+                  { v: 'public_readonly', label: '외부 읽기 전용' },
+                ] as const).map((o) => (
+                  <button
+                    key={o.v}
+                    type="button"
+                    onClick={() => setAccessType(o.v)}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-[var(--radius-sm)] transition-colors ${
+                      accessType === o.v
+                        ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-[var(--shadow-xs)]'
+                        : 'text-[var(--text-secondary)] hover:text-[var(--color-primary-text)]'
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* 만료 */}
               <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
-                <span className="font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-2 py-1 rounded">접근: Internal</span>
                 <span className="text-[var(--text-tertiary)]">만료</span>
                 <select
                   value={expiry}
@@ -213,9 +248,23 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
                   {EXPIRY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
-              <p className="text-[11px] text-[var(--text-tertiary)] mb-3">
-                Public Readonly는 S7-2B에서, Public Review는 S7-2C에서 지원 예정입니다.
-              </p>
+
+              {/* 외부 읽기 전용 안내 */}
+              {isPublic ? (
+                <div className="mb-3 rounded-[var(--radius-lg)] border border-[var(--amber-100)] bg-[var(--amber-50)] px-3 py-2.5 text-[11px] leading-relaxed text-[var(--amber-700)]">
+                  <p className="font-bold mb-1">외부 읽기 전용 링크 안내</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    <li>로그인 없이 누구나 링크로 열람할 수 있습니다.</li>
+                    <li>편집 · 승인 · 삭제 · 댓글 기능은 제공하지 않습니다.</li>
+                    <li>프로젝트 공유는 문서 본문이 포함되지 않습니다(요약/목록만).</li>
+                    <li>프로토타입 공유는 코드 보기만 제공하며 실행 미리보기는 제공하지 않습니다.</li>
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-[11px] text-[var(--text-tertiary)] mb-3">
+                  Public Review(비로그인 댓글)는 S7-2C에서 지원 예정입니다.
+                </p>
+              )}
 
               {/* 대상별 생성 버튼 */}
               <div className="flex flex-wrap gap-2 mb-3">
@@ -235,8 +284,10 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
               {shares.length > 0 && (
                 <ul className="space-y-2">
                   {shares.map((s) => {
-                    const url = toShareUrl(shareHash.share(s.shareId));
+                    const url = shareUrlFor(s);
                     const active = isShareActive(s);
+                    const publicReadonly = s.accessType === 'public_readonly';
+                    const accessLabel = publicReadonly ? '외부 읽기 전용' : s.accessType === 'public_review' ? '외부 리뷰' : '내부 전용';
                     const Icon = s.targetType === 'screen' ? Layout : s.targetType === 'handoff_package' ? Package : s.targetType === 'document' ? FileText : Folder;
                     return (
                       <li key={s.id} className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)]">
@@ -244,11 +295,16 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-[11px] font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-1.5 py-0.5 rounded">{TARGET_LABEL[s.targetType]}</span>
+                            <span
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${publicReadonly ? 'text-[var(--amber-700)] bg-[var(--amber-50)]' : 'text-[var(--text-secondary)] bg-[var(--surface-hover)]'}`}
+                            >
+                              {accessLabel}
+                            </span>
                             <span className="text-sm font-medium text-[var(--text-body)] truncate">{s.targetTitle || s.shareId}</span>
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${active ? 'text-[var(--green-700)] bg-[var(--green-50)]' : 'text-[var(--text-tertiary)] bg-[var(--surface-hover)]'}`}>{active ? '활성' : s.isEnabled ? '만료됨' : '비활성'}</span>
                           </div>
-                          <div className="text-[11px] text-[var(--text-tertiary)] mt-0.5 truncate">
-                            {s.accessType} · {s.expiresAt ? `만료 ${formatDateTime(s.expiresAt)}` : '만료 없음'}{getTime(s.createdAt) ? ` · ${formatDateTime(s.createdAt)}` : ''}
+                          <div className="text-[11px] text-[var(--text-tertiary)] mt-0.5 truncate" title={url}>
+                            {publicReadonly ? '/share 링크' : '내부 딥링크'} · {s.expiresAt ? `만료 ${formatDateTime(s.expiresAt)}` : '만료 없음'}{getTime(s.createdAt) ? ` · ${formatDateTime(s.createdAt)}` : ''}
                           </div>
                         </div>
                         <button type="button" onClick={() => { if (copyToClipboard(url)) showToast('공유 링크를 복사했습니다.'); else showToast('복사 실패', 'error'); }} aria-label="링크 복사" className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={15} /></button>

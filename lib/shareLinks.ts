@@ -19,3 +19,15 @@ export const shareHash = {
 /** 해시를 현재 origin/path 기준 절대 URL로. (서버 렌더 시 해시만 반환) */
 export const toShareUrl = (hash: string): string =>
   typeof window === 'undefined' ? hash : `${window.location.origin}${window.location.pathname}${hash}`;
+
+/**
+ * public_readonly 공유 viewer 경로 (S7-2B). 해시 딥링크(internal)와 달리 비로그인 path 라우트.
+ * `/share/{shareId}` → app/share/[shareId]/page.tsx (서버 매개 /api/share 만 호출).
+ */
+export const publicSharePath = (shareId: string): string => `/share/${shareId}`;
+
+/** public_readonly 공유 절대 URL. (서버 렌더 시 경로만 반환) */
+export const toPublicShareUrl = (shareId: string): string =>
+  typeof window === 'undefined'
+    ? publicSharePath(shareId)
+    : `${window.location.origin}${publicSharePath(shareId)}`;

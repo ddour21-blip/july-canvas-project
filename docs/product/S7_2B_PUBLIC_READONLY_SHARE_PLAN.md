@@ -32,7 +32,7 @@
 | **S7-2B-1 인프라** | `firebase-admin` 의존성, `lib/firebaseAdmin.ts`(서버 전용 lazy init, env 누락 시 명확한 에러), `.env.local.example` 변수명, 본 문서 | ✅ 완료 |
 | **S7-2B-2 API** | `app/api/share/[shareId]/route.ts` (GET): shareId 검증 → `isEnabled`/`expiresAt`/`accessType==='public_readonly'` 확인 → targetType별 sanitize 후 최소 데이터 반환. `lib/publicShareSanitizer.ts`(화이트리스트 sanitizer). **public viewer UI / ShareModal public_readonly 생성은 미포함.** | ✅ 완료 |
 | **S7-2B-3 공개 뷰** | `app/share/[shareId]/page.tsx`(서버 컴포넌트, noindex) + `components/share/ShareViewer.tsx`(`'use client'`) — `/api/share/[shareId]`만 호출(Firebase client 미접근), targetType별 read-only 렌더(project/document/screen/handoff 4탭) + 상태별 안내(loading/400/403×3/404/500). **screen.code는 `<pre>` 텍스트로만 표시(dangerouslySetInnerHTML/iframe 미사용 → 스크립트 실행 불가).** | ✅ 완료 |
-| S7-2B-4 생성 UI | `ShareModal`에 `public_readonly` 옵션 + 공개 URL(`/share/{shareId}`) 표시 | 예정 |
+| **S7-2B-4 생성 UI** | `ShareModal`에 **내부 공유 / 외부 읽기 전용 접근 토글** + 외부 안내문구. public_readonly는 `/share/{shareId}` URL 복사, internal은 `#share_` 딥링크(목록에서 배지로 구분). public 생성 시 "문서 목록"(targetId 없는 document) 대상 제외(viewer 단일 문서만 지원). `lib/shareLinks.ts`에 `publicSharePath`/`toPublicShareUrl` 추가. owner/editor만 생성(기존 게이트 유지). | ✅ 완료 |
 | **S7-2C** | `public_review` + 비로그인 코멘트 | 별도 |
 
 ## 4. 반환 데이터 화이트리스트 (S7-2B-2에서 적용 예정)
