@@ -38,7 +38,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!isFirebaseConfigured) return;
     const unsub = onAuthStateChanged(auth, (u) => {
       if (!u) {
-        // 로그인 사용자가 없으면 익명 로그인으로 폴백 (다음 콜백에서 사용자 세팅됨)
+        // 로그아웃/무사용자 전이: 먼저 사용자 상태를 비우고 로딩으로 전환한다.
+        // → CanvasApp이 로딩 화면으로 바뀌며 projects/documents/shares/projectMembers 등
+        //   보호 컬렉션 onSnapshot 구독을 띄운 뷰들이 모두 언마운트되어 구독이 정리된다
+        //   (인증 토큰이 사라진 구간에 보호 컬렉션을 읽어 permission-denied가 나는 것을 방지).
+        //   그 뒤 익명 폴백으로 재로그인하면 다음 콜백에서 사용자가 다시 세팅된다.
+        setFirebaseUser(null);
+        setLoading(true);
         signInAnonymously(auth).catch((e) => console.error('Anonymous fallback error:', e));
         return;
       }
