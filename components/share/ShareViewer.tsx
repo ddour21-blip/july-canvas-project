@@ -467,8 +467,13 @@ function CommentsSection({ shareId }: { shareId: string }) {
   const [listState, setListState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [name, setName] = useState('');
   const [content, setContent] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+
+  // CAPTCHA site key가 설정된 경우에만 보안 확인 영역 노출(env-gated). 미설정=비활성(로컬/기본).
+  // NOTE(S7-2F): 실제 위젯(Turnstile 등) 연동은 후속. 현재는 토큰 입력 구조만 — provider 연결 필요.
+  const captchaSiteKey = process.env.NEXT_PUBLIC_PUBLIC_REVIEW_CAPTCHA_SITE_KEY || '';
 
   const load = async () => {
     try {
@@ -505,6 +510,12 @@ function CommentsSection({ shareId }: { shareId: string }) {
         return `내용은 ${REVIEW_LIMITS.contentMax}자 이내로 입력해주세요.`;
       case 'NAME_TOO_LONG':
         return `이름은 ${REVIEW_LIMITS.authorNameMax}자 이내로 입력해주세요.`;
+      case 'RATE_LIMITED':
+        return '잠시 후 다시 시도해주세요.';
+      case 'CAPTCHA_REQUIRED':
+        return '보안 확인(CAPTCHA)을 완료해주세요.';
+      case 'CAPTCHA_FAILED':
+        return '보안 확인에 실패했습니다. 다시 시도해주세요.';
       case 'SHARE_DISABLED':
       case 'SHARE_EXPIRED':
       case 'NOT_PUBLIC_READONLY':
@@ -523,7 +534,7 @@ function CommentsSection({ shareId }: { shareId: string }) {
       const res = await fetch(`/api/share/${encodeURIComponent(shareId)}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authorName: name.trim(), content: trimmed }),
+        body: JSON.stringify({ authorName: name.trim(), content: trimmed, captchaToken: captchaToken.trim() }),
       });
       const body = await res.json().catch(() => null);
       if (res.ok && body?.ok) {
@@ -573,6 +584,26 @@ function CommentsSection({ shareId }: { shareId: string }) {
           className="w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none"
           style={{ borderColor: 'var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-body)' }}
         />
+        {/* CAPTCHA 영역(env-gated): site key 설정 시에만 노출. 실제 위젯 연동은 후속 — 현재 토큰 입력 구조만. */}
+        {captchaSiteKey && (
+          <div
+            className="rounded-lg border px-3 py-2.5 text-xs"
+            style={{ borderColor: 'var(--border-default)', background: 'var(--surface-sunken)', color: 'var(--text-secondary)' }}
+          >
+            <p className="font-semibold">보안 확인(CAPTCHA)</p>
+            <p className="mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+              스팸 방지를 위해 보안 확인이 필요합니다. (위젯 연동 예정)
+            </p>
+            <input
+              type="text"
+              value={captchaToken}
+              onChange={(e) => setCaptchaToken(e.target.value)}
+              placeholder="보안 확인 토큰"
+              className="mt-2 w-full rounded-md border px-2 py-1.5 text-xs outline-none"
+              style={{ borderColor: 'var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-body)' }}
+            />
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs" style={{ color: notice ? (notice.kind === 'success' ? 'var(--color-success)' : 'var(--color-danger)') : 'var(--text-tertiary)' }}>
             {notice ? notice.msg : `${content.length}/${REVIEW_LIMITS.contentMax}`}

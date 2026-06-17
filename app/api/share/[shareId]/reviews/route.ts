@@ -10,6 +10,8 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminCol } from '@/lib/firebaseAdmin';
 import { resolveActivePublicShare } from '@/lib/shareServer';
+import { verifyCaptcha } from '@/lib/captcha';
+import { allowReviewPost } from '@/lib/rateLimit';
 import {
   REVIEW_DEFAULT_AUTHOR,
   REVIEW_LIMITS,
@@ -61,12 +63,16 @@ export async function POST(
     if (!resolved.ok) return fail(resolved.status, resolved.error);
     const share = resolved.share;
 
-    let body: { authorName?: unknown; content?: unknown };
+    let body: { authorName?: unknown; content?: unknown; captchaToken?: unknown };
     try {
       body = await request.json();
     } catch {
       return fail(400, 'INVALID_BODY');
     }
+
+    // CAPTCHA (env-gated): 비활성이면 통과. 활성+토큰없음→CAPTCHA_REQUIRED, 검증실패→CAPTCHA_FAILED.
+    const captcha = await verifyCaptcha(typeof body.captchaToken === 'string' ? body.captchaToken : null);
+    if (!captcha.ok) return fail(403, captcha.error);
 
     // content: 필수, 트림 후 1자 이상 / 상한 초과 차단.
     const content = (typeof body.content === 'string' ? body.content : '').trim();
@@ -77,6 +83,9 @@ export async function POST(
     const rawName = (typeof body.authorName === 'string' ? body.authorName : '').trim();
     if (rawName.length > REVIEW_LIMITS.authorNameMax) return fail(400, 'NAME_TOO_LONG');
     const authorName = rawName || REVIEW_DEFAULT_AUTHOR;
+
+    // 레이트리밋: 잘 형성된(캡차 통과) 제출만 카운트. 초과 시 429.
+    if (!(await allowReviewPost(request, shareId))) return fail(429, 'RATE_LIMITED');
 
     const ref = await adminCol(REVIEWS).add({
       shareId,

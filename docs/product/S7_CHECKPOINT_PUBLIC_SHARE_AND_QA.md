@@ -45,7 +45,22 @@
 - **모더레이션 API**: `PATCH /api/projects/[projectId]/reviews/[reviewId]` body `{action}` — approve→`visible` / hide→`hidden` / delete→`deleted`(소프트 삭제). `requireProjectEditor` 재사용(owner/editor만), 대상 리뷰가 해당 projectId 소속인지 확인(교차 조작 방지). 비로그인 401 / viewer·비멤버 403.
 - **관리 UI 확장**(`ProjectReviews.tsx`): 상태 필터(전체/대기/공개/숨김) + 대상 필터, 카드별 승인/숨김/삭제 액션 버튼 + 처리중 표시 + 액션 후 목록 갱신. content는 계속 React 텍스트 렌더만.
 - 라이브 검증: POST→pending(공개 미노출)·승인→공개 노출·숨김→공개 사라짐·삭제→관리/공개 모두 제외·타 프로젝트 PATCH 403·토큰 없음 401·XSS 미실행·민감 필드 누출 0. UI 승인 클릭 → 배지 공개 전환 + viewer 노출.
-- 커밋: `feat: add public review moderation` (본 갱신 커밋).
+- 커밋: `8d3d0a7`.
+
+## 4-2. S7-2F — 스팸 방지 / 레이트리밋 ✅
+
+- **서버 레이트리밋**(`lib/rateLimit.ts`): public review POST 대상. 클라이언트 식별은 **IP+UA의 HMAC-SHA256 해시(clientHash)** 만 저장(raw IP/UA 미저장). 해시 secret = `PUBLIC_REVIEW_HASH_SECRET`(미설정 시 개발용 폴백, **운영 필수**). `rateLimits` 컬렉션(서버 전용, Rules 미등록=기본 거부), 필드 = `key/count/windowStart/expiresAt/createdAt/updatedAt`. 고정 윈도우 트랜잭션.
+  - 정책(코드 상수 `RATE_LIMITS`): per-share **60초 3회**, global(클라이언트 전체) **600초 10회**. 초과 시 `429 RATE_LIMITED`.
+- **CAPTCHA(env-gated)**(`lib/captcha.ts`): provider = `turnstile`(Cloudflare). 비활성(기본)이면 통과 → 로컬 테스트 그대로. 활성 시 토큰 없으면 `403 CAPTCHA_REQUIRED`, 검증 실패/secret 미설정이면 `403 CAPTCHA_FAILED`(fail-closed). env: `PUBLIC_REVIEW_CAPTCHA_ENABLED` / `PUBLIC_REVIEW_CAPTCHA_SECRET_KEY` / `NEXT_PUBLIC_PUBLIC_REVIEW_CAPTCHA_SITE_KEY`(위젯 site key, 설정 시 viewer에 보안 확인 영역 노출). **실제 위젯 프론트 연동은 후속(provider 연결 필요)** — 현재 서버 siteverify + 토큰 입력 구조까지.
+- POST 검사 순서: share 활성/public_readonly → CAPTCHA → content/name 검증 → 레이트리밋 → 생성(pending).
+- ShareViewer: 실패 케이스 안내(RATE_LIMITED/CAPTCHA_REQUIRED/CAPTCHA_FAILED/EMPTY_CONTENT/CONTENT_TOO_LONG/SHARE_DISABLED/SHARE_EXPIRED), pending 안내 유지, content React 텍스트 렌더만.
+- 라이브 검증: 같은 클라이언트 4회째 POST `429`, rateLimits 필드에 raw IP/uid 없음, CAPTCHA 활성 시 토큰 없음→CAPTCHA_REQUIRED·잘못된 토큰→CAPTCHA_FAILED, 비활성 시 정상 201 pending.
+- 커밋: `feat: add public review spam protection` (본 갱신 커밋).
+
+### 운영 전 설정 필요 (S7-2F)
+- `PUBLIC_REVIEW_HASH_SECRET` 설정(레이트리밋 해시 secret).
+- CAPTCHA 활성화: `PUBLIC_REVIEW_CAPTCHA_ENABLED=1` + `PUBLIC_REVIEW_CAPTCHA_SECRET_KEY` + `NEXT_PUBLIC_PUBLIC_REVIEW_CAPTCHA_SITE_KEY` + **프론트 위젯(Turnstile) 연동**.
+- **TTL/정리 TODO**: `rateLimits` 문서는 `expiresAt`(ms) 보유 → Firestore TTL 정책(필드 `expiresAt`)으로 자동 삭제 설정 권장(콘솔/배포 설정, 코드 아님).
 
 ## 5. QA 안정화 완료 항목 ✅
 
@@ -76,12 +91,14 @@
 - **완전 로그아웃 정책 변경 보류** — 로그아웃 시 익명 폴백 복귀(별도 로그인 전용 화면 없음). 전이 구간 protected read는 cleanup으로 차단됨.
 - 팀/멤버십 기반 타인 프로젝트 열람 확장 보류(현재 단계 A: `read: if signedIn()`).
 - **댓글 모더레이션(S7-2E)**: 신규 댓글 `pending` → owner/editor 승인 시 공개. 삭제는 소프트 삭제(`deleted`). 모든 모더레이션은 서버 API + firebase-admin + ID token(owner/editor)만.
+- **스팸 방지(S7-2F)**: 레이트리밋/CAPTCHA는 서버 API + firebase-admin만. **raw IP/UA/uid 저장 금지** — IP+UA는 HMAC 해시(clientHash)로만. `rateLimits` 컬렉션도 클라이언트 직접 접근 불가(Rules 미등록).
 - `.env.local`/서비스 계정 키 커밋 금지.
 
 ## 7. 최신 커밋 목록 (S7-2 시리즈 + QA, 최신순)
 
 ```
-<본 커밋> feat: add public review moderation                     # S7-2E (모더레이션 + 정책 pending 전환)
+<본 커밋> feat: add public review spam protection                # S7-2F (레이트리밋 + CAPTCHA env-gated)
+8d3d0a7 feat: add public review moderation                       # S7-2E (모더레이션 + 정책 pending 전환)
 fbe1fd9 docs: update checkpoint with full s7-2 share series and qa
 d95e581 feat: add internal review management for owner editor   # S7-2D
 fe3fd0b feat: add public review comments for readonly shares     # S7-2C
@@ -103,5 +120,6 @@ c7953a2 feat: add share records for internal share links         # S7-2A
 
 ## 9. 다음 단계 후보
 
-- **S7-2F 스팸 방지**: reCAPTCHA/레이트리밋 (**운영 전 필수** — `reviews` POST 라우트에 TODO 명시). 모더레이션(S7-2E) 완료 후 다음 우선순위.
-- (필요 시) 멤버십 기반 read(단계 B) / 완전 로그아웃 화면 / 모더레이션 알림.
+- **CAPTCHA 프론트 위젯 연동**(Turnstile 등) — S7-2F는 서버 검증 + env-gated 구조까지. 운영 활성화 시 위젯 연결 필요.
+- `rateLimits` Firestore TTL 정책 설정(`expiresAt` 기준, 콘솔/배포 설정).
+- (필요 시) 멤버십 기반 read(단계 B) / 완전 로그아웃 화면 / 모더레이션 알림(새 pending 댓글 알림).
