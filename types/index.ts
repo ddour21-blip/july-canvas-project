@@ -120,6 +120,33 @@ export interface ProjectMember {
   updatedAt?: FirestoreTime;
 }
 
+// --- 공유 링크 (shares 컬렉션) — S7-2A ---
+
+export type ShareTargetType = 'project' | 'document' | 'screen' | 'handoff_package';
+
+/**
+ * - internal: 로그인 멤버용(현 단계). shareId로 내부 딥링크 resolve.
+ * - public_readonly / public_review: 데이터 모델만 준비, 비로그인 접근은 후속(S7-2B/C).
+ */
+export type ShareAccessType = 'internal' | 'public_readonly' | 'public_review';
+
+/** 공유 링크 레코드 (shares 컬렉션). shareId는 추측 불가 토큰. */
+export interface ShareRecord {
+  id: string;
+  shareId: string;
+  projectId: string;
+  targetType: ShareTargetType;
+  targetId?: string;
+  targetTitle?: string;
+  accessType: ShareAccessType;
+  isEnabled: boolean;
+  /** 만료 시각. null/미설정이면 만료 없음. */
+  expiresAt?: FirestoreTime | null;
+  createdAt?: FirestoreTime;
+  createdBy: string;
+  updatedAt?: FirestoreTime;
+}
+
 /** 로그인 사용자 정보 */
 export interface AuthUser {
   uid: string;

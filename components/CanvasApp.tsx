@@ -15,7 +15,8 @@ import {
 import { db, isFirebaseConfigured } from '@/lib/firebase';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { col, docRef } from '@/lib/firestore';
-import { formatDateTime, getTime } from '@/lib/utils';
+import { formatDateTime, getTime, showToast } from '@/lib/utils';
+import { isShareActive, resolveShareHash } from '@/lib/shares';
 import { Button } from '@/components/common/Button';
 import { WorkspaceSidebar } from '@/components/common/WorkspaceSidebar';
 import { ShareModal, type ShareState } from '@/components/modals/ShareModal';
@@ -24,7 +25,7 @@ import { VirtualInboxModal, EmailSimulationModal } from '@/components/modals/Inb
 import Dashboard from '@/components/views/Dashboard';
 import ProjectDetail from '@/components/views/ProjectDetail';
 import ScreenEditor from '@/components/views/ScreenEditor';
-import type { Member, MockEmail, Project, ProjectDocument, Screen, ToastDetail } from '@/types';
+import type { Member, MockEmail, Project, ProjectDocument, Screen, ShareRecord, ToastDetail } from '@/types';
 
 function FirebaseNotice() {
   return (
@@ -49,6 +50,8 @@ function CanvasAppInner() {
   const [globalMembers, setGlobalMembers] = useState<Member[]>([]);
   const [mockEmails, setMockEmails] = useState<MockEmail[]>([]);
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
+  const [shares, setShares] = useState<ShareRecord[]>([]);
+  const [sharesLoaded, setSharesLoaded] = useState(false);
 
   const [toast, setToast] = useState<ToastDetail | null>(null);
   const [shareState, setShareState] = useState<ShareState>({ isOpen: false, type: '', id: '' });
@@ -124,18 +127,47 @@ function CanvasAppInner() {
       },
       (err) => console.error('Firestore Error:', err),
     );
+    const unsubShares = onSnapshot(
+      col('shares'),
+      (snap) => {
+        setShares(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ShareRecord[]);
+        setSharesLoaded(true);
+      },
+      (err) => console.error('Firestore Error:', err),
+    );
     return () => {
       unsubProjects();
       unsubScreens();
       unsubMembers();
       unsubEmails();
       unsubDocuments();
+      unsubShares();
     };
   }, [user]);
 
   const navigate = (hash: string) => {
     window.location.hash = hash;
   };
+
+  // 공유 링크 resolve (S7-2A): #share_{shareId} → 활성/만료 확인 후 내부 딥링크로 이동.
+  useEffect(() => {
+    const parts = currentRoute.replace('#', '').split('_');
+    const rest = parts[0] === 'ws' ? parts.slice(2) : parts;
+    if (rest[0] !== 'share' || !rest[1]) return;
+    if (!sharesLoaded) return; // 구독 도착 전엔 대기
+    const share = shares.find((s) => s.shareId === rest[1]);
+    if (!share) {
+      showToast('유효하지 않은 공유 링크입니다.', 'error');
+      navigate('#');
+      return;
+    }
+    if (!isShareActive(share)) {
+      showToast('비활성화되었거나 만료된 공유 링크입니다.', 'error');
+      navigate('#');
+      return;
+    }
+    navigate(resolveShareHash(share));
+  }, [currentRoute, shares, sharesLoaded]);
 
   const unreadCount = mockEmails.filter((e) => !e.isRead).length;
 
@@ -196,6 +228,7 @@ function CanvasAppInner() {
         projectId={shareState.projectId}
         documentId={shareState.documentId}
         screenId={shareState.screenId}
+        project={shareState.projectId ? projects.find((p) => p.id === shareState.projectId) ?? null : null}
         onClose={() => setShareState({ ...shareState, isOpen: false })}
         workspaceId={activeWorkspaceId}
       />
@@ -288,6 +321,12 @@ function CanvasAppInner() {
           <WorkspaceSidebar projects={projects} user={user} navigate={navigate} currentRoute={currentRoute} />
         )}
         <main className="flex-1 min-w-0 mx-auto max-w-[1600px]">
+        {viewType === 'share' && (
+          <div className="p-16 flex flex-col items-center justify-center text-center text-[var(--text-secondary)]">
+            <div className="w-8 h-8 border-4 border-[var(--brand-200)] border-t-[var(--color-primary)] rounded-full animate-spin mb-4" />
+            <p className="font-medium">공유 링크를 확인하는 중...</p>
+          </div>
+        )}
         {viewType === 'dashboard' && (
           <Dashboard
             projects={projects}

@@ -12,6 +12,8 @@ export const shareHash = {
   document: (projectId: string, documentId: string): string => `#project_${projectId}_document_${documentId}`,
   /** 프로토타입 화면(ScreenEditor) */
   screen: (screenId: string): string => `#screen_${screenId}`,
+  /** 공유 링크 (shareId → 내부 딥링크 resolve, S7-2A). shareId에는 '_'가 없어야 함. */
+  share: (shareId: string): string => `#share_${shareId}`,
 };
 
 /** 해시를 현재 origin/path 기준 절대 URL로. (서버 렌더 시 해시만 반환) */

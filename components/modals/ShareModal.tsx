@@ -1,9 +1,20 @@
 'use client';
 
-import { Copy, FileText, Folder, Layout, Link2, Share2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Copy, FileText, Folder, Layout, Link2, Package, Power, Share2, X } from 'lucide-react';
 import { Button } from '@/components/common/Button';
-import { copyToClipboard, showToast } from '@/lib/utils';
+import { copyToClipboard, formatDateTime, getTime, showToast } from '@/lib/utils';
 import { shareHash, toShareUrl } from '@/lib/shareLinks';
+import { useAuth, useRole } from '@/lib/auth';
+import {
+  EXPIRY_OPTIONS,
+  createShare,
+  isShareActive,
+  setShareEnabled,
+  subscribeProjectShares,
+  type ShareExpiry,
+} from '@/lib/shares';
+import type { Project, ShareRecord, ShareTargetType } from '@/types';
 
 export interface ShareState {
   isOpen: boolean;
@@ -23,6 +34,8 @@ interface ShareModalProps {
   projectId?: string;
   documentId?: string;
   screenId?: string;
+  /** 공유 링크 관리 권한 판정용 (shareState.projectId에 해당하는 프로젝트) */
+  project?: Project | null;
   onClose: () => void;
   workspaceId: string;
 }
@@ -35,12 +48,73 @@ interface LinkRow {
   icon: typeof Folder;
 }
 
-export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, onClose, workspaceId }: ShareModalProps) {
-  if (!isOpen) return null;
+const TARGET_LABEL: Record<ShareTargetType, string> = {
+  project: '프로젝트',
+  document: '문서',
+  screen: '프로토타입',
+  handoff_package: '개발 전달 패키지',
+};
 
+export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, project, onClose, workspaceId }: ShareModalProps) {
   // 컨텍스트가 명시되지 않은 레거시 호출(type/id만)도 동작하도록 보완.
   const pid = projectId ?? (type === 'project' ? id : undefined);
   const sid = screenId ?? (type === 'screen' ? id : undefined);
+
+  const { user } = useAuth();
+  const { canEdit } = useRole(project ?? null);
+  const [shares, setShares] = useState<ShareRecord[]>([]);
+  const [expiry, setExpiry] = useState<ShareExpiry>('none');
+
+  // 프로젝트 공유 링크 실시간 구독 (모달 열렸고 프로젝트 컨텍스트가 있을 때).
+  useEffect(() => {
+    if (!isOpen || !pid) return;
+    const unsub = subscribeProjectShares(pid, setShares);
+    return () => unsub();
+  }, [isOpen, pid]);
+
+  if (!isOpen) return null;
+
+  // 공유 링크 관리(생성/토글)는 owner/editor만.
+  const canManageShares = !!pid && canEdit;
+
+  // 생성 가능한 공유 대상 (컨텍스트에 따라)
+  const shareTargets: { targetType: ShareTargetType; targetId?: string; targetTitle: string; label: string }[] = [];
+  if (pid) {
+    shareTargets.push({ targetType: 'project', targetTitle: project?.name || '프로젝트', label: '프로젝트 공유 링크 만들기' });
+    shareTargets.push({ targetType: 'document', targetTitle: '문서 목록', label: '문서 공유 링크 만들기' });
+    if (documentId) shareTargets.push({ targetType: 'document', targetId: documentId, targetTitle: '현재 문서', label: '현재 문서 공유 링크 만들기' });
+    if (sid) shareTargets.push({ targetType: 'screen', targetId: sid, targetTitle: '프로토타입 화면', label: '프로토타입 공유 링크 만들기' });
+    shareTargets.push({ targetType: 'handoff_package', targetId: pid, targetTitle: '개발 전달 패키지', label: '개발 전달 패키지 공유 링크 만들기' });
+  }
+
+  const handleCreateShare = async (t: { targetType: ShareTargetType; targetId?: string; targetTitle: string }) => {
+    if (!pid || !canManageShares) return;
+    try {
+      await createShare({
+        projectId: pid,
+        targetType: t.targetType,
+        targetId: t.targetId,
+        targetTitle: t.targetTitle,
+        accessType: 'internal',
+        expiry,
+        createdBy: user?.uid ?? 'anonymous',
+      });
+      showToast('공유 링크가 생성되었습니다.');
+    } catch (err) {
+      console.error(err);
+      showToast('공유 링크 생성 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
+  const handleToggleShare = async (s: ShareRecord) => {
+    try {
+      await setShareEnabled(s.id, !s.isEnabled);
+      showToast(s.isEnabled ? '공유 링크를 비활성화했습니다.' : '공유 링크를 다시 활성화했습니다.');
+    } catch (err) {
+      console.error(err);
+      showToast('상태 변경 중 오류가 발생했습니다.', 'error');
+    }
+  };
 
   // 레거시 접속 코드/링크 (기존 방식 유지)
   const displayHash = `${type}_${id}`;
@@ -114,6 +188,76 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
                   );
                 })}
               </ul>
+            </div>
+          )}
+
+          {/* 공유 링크 (S7-2A): shareId 기반 링크 생성/관리. 현 단계 internal(로그인 멤버). owner/editor만. */}
+          {canManageShares && (
+            <div>
+              <div className="flex items-center gap-1.5 text-sm font-bold text-[var(--text-strong)] mb-1">
+                <Share2 size={16} className="text-[var(--color-primary-text)]" /> 공유 링크
+              </div>
+              <p className="text-xs text-[var(--text-tertiary)] mb-3">
+                공유용 shareId 링크를 생성합니다. 이번 단계에서는 로그인된 사용자 기준으로 동작하며, 비로그인 공개 공유는 후속 단계에서 지원합니다.
+              </p>
+
+              {/* 접근 유형 + 만료 */}
+              <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
+                <span className="font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-2 py-1 rounded">접근: Internal</span>
+                <span className="text-[var(--text-tertiary)]">만료</span>
+                <select
+                  value={expiry}
+                  onChange={(e) => setExpiry(e.target.value as ShareExpiry)}
+                  className="px-2 py-1.5 border border-[var(--border-strong)] rounded-[var(--radius-md)] bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none"
+                >
+                  {EXPIRY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <p className="text-[11px] text-[var(--text-tertiary)] mb-3">
+                Public Readonly는 S7-2B에서, Public Review는 S7-2C에서 지원 예정입니다.
+              </p>
+
+              {/* 대상별 생성 버튼 */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {shareTargets.map((t) => (
+                  <button
+                    key={`${t.targetType}-${t.targetId ?? 'list'}`}
+                    type="button"
+                    onClick={() => handleCreateShare(t)}
+                    className="inline-flex items-center gap-1 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"
+                  >
+                    <Link2 size={13} /> {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* 생성된 공유 링크 목록 */}
+              {shares.length > 0 && (
+                <ul className="space-y-2">
+                  {shares.map((s) => {
+                    const url = toShareUrl(shareHash.share(s.shareId));
+                    const active = isShareActive(s);
+                    const Icon = s.targetType === 'screen' ? Layout : s.targetType === 'handoff_package' ? Package : s.targetType === 'document' ? FileText : Folder;
+                    return (
+                      <li key={s.id} className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)]">
+                        <span className="shrink-0 w-8 h-8 rounded-[var(--radius-md)] bg-[var(--surface-card)] text-[var(--color-primary-text)] flex items-center justify-center border border-[var(--border-default)]"><Icon size={15} /></span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-1.5 py-0.5 rounded">{TARGET_LABEL[s.targetType]}</span>
+                            <span className="text-sm font-medium text-[var(--text-body)] truncate">{s.targetTitle || s.shareId}</span>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${active ? 'text-[var(--green-700)] bg-[var(--green-50)]' : 'text-[var(--text-tertiary)] bg-[var(--surface-hover)]'}`}>{active ? '활성' : s.isEnabled ? '만료됨' : '비활성'}</span>
+                          </div>
+                          <div className="text-[11px] text-[var(--text-tertiary)] mt-0.5 truncate">
+                            {s.accessType} · {s.expiresAt ? `만료 ${formatDateTime(s.expiresAt)}` : '만료 없음'}{getTime(s.createdAt) ? ` · ${formatDateTime(s.createdAt)}` : ''}
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => { if (copyToClipboard(url)) showToast('공유 링크를 복사했습니다.'); else showToast('복사 실패', 'error'); }} aria-label="링크 복사" className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={15} /></button>
+                        <button type="button" onClick={() => handleToggleShare(s)} className={`shrink-0 inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-[var(--radius-md)] border transition-colors ${s.isEnabled ? 'border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--red-600)]' : 'border-[var(--color-primary)] text-[var(--color-primary-text)] bg-[var(--surface-active)]'}`}><Power size={12} /> {s.isEnabled ? '비활성화' : '재활성화'}</button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           )}
 

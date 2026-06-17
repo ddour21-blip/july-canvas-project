@@ -345,7 +345,9 @@ export interface ShareDoc {
 | S5 | 파일/URL 분석 API 설계·구현(텍스트 추출·서버 fetch·SSRF 차단·실패 처리·`analysisResult`) | API route/worker, 키 서버전용 |
 | S6 | 요구사항 보강 필드 자동 분해(분석 → activation fields, 수정 가능) | M2 AI 분해 재사용 |
 | **S7-1 ✅** | **내부 공유 딥링크**(로그인 멤버 전용): `#project_{id}` / `#project_{id}_documents` / `#project_{id}_document_{docId}` / `#screen_{id}`(기존 재사용). ShareModal에 바로가기 링크 옵션(프로젝트/문서/현재 문서/프로토타입) + 복사. `lib/shareLinks.ts` 신규. **accessCode/hash·Rules 무변경**(`feat: add internal share deep links`) | 라우팅 파서 확장(무위험) |
-| S7-2 | public 공유(`shares`·`shareId` 랜덤 토큰·public_readonly/review·만료·비활성·서버 매개 `/api/share/{shareId}`·비로그인) | `shares` 신설, route, Rules |
+| **S7-2A ✅(코드)** | **`shares` 컬렉션·shareId(sh+base62, `_` 없음) 링크 생성/비활성/만료(7d/30d)/복사 + `#share_{shareId}`→내부 딥링크 resolve**(internal, 로그인 멤버). ShareModal 공유 링크 섹션, `lib/shares.ts` 신규. **⚠️ `firestore.rules` shares 단계 A 규칙 콘솔 게시 필요**(게시 전 permission-denied). public_readonly/review는 데이터 모델만 | `shares` 신설, Rules 게시 |
+| S7-2B | public_readonly — 서버 매개 `/api/share/{shareId}`(유효성 검증 후 필요 문서만 반환, 비로그인) | route, Rules |
+| S7-2C | public_review — 비로그인 댓글/피드백 | route, Rules, 스팸/레이트리밋 |
 | S8 | 권한/Rules 정리(public_readonly/project_member, 리뷰어 댓글, 단계 B 충돌 검토) | Rules 설계·게시(주의) |
 
 각 단계는 **독립 커밋 + 검증(tsc/eslint/build + 라이브) + KAKE 무손상 + graceful skip**(키/Storage/분석 없어도 기존 흐름 유지) 원칙을 따른다.
