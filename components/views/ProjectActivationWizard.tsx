@@ -109,7 +109,7 @@ const URL_TYPE_OPTIONS: { value: ProjectSourceUrlType; label: string; sourceType
   { value: 'service', label: '기존 서비스', sourceType: 'url' },
   { value: 'reference', label: '경쟁/레퍼런스', sourceType: 'reference_url' },
   { value: 'prototype', label: '프로토타입', sourceType: 'prototype_url' },
-  { value: 'document', label: '문서', sourceType: 'url' },
+  { value: 'document', label: '문서·Drive 링크', sourceType: 'url' },
   { value: 'other', label: '기타', sourceType: 'url' },
 ];
 
@@ -270,6 +270,8 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
   // 유일 필수 = 아이디어/요구사항(intent). 나머지 단계/필드는 항상 통과.
   const stepValid = current.fields.every((f) => !f.required || data[f.key].trim());
   const ideaFilled = !!data.intent.trim();
+  // 입력값이 Google Drive 링크인지 감지 (등록 시 공유 권한 안내용, UI 전용).
+  const isDriveLink = /drive\.google\.com|docs\.google\.com/i.test(urlValue);
 
   const set = (key: ActivationTextKey, v: string) => setData((prev) => ({ ...prev, [key]: v }));
 
@@ -509,8 +511,11 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                 <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-strong)] mb-1.5">
                   <Link2 size={15} className="text-[var(--color-primary-text)]" /> URL 등록
                 </div>
-                <p className="text-xs text-[var(--text-secondary)] mb-3 leading-relaxed">
-                  기존 서비스, 경쟁 서비스, 디자인 레퍼런스, 프로토타입 URL을 등록할 수 있습니다.
+                <p className="text-xs text-[var(--text-secondary)] mb-1.5 leading-relaxed">
+                  기존 서비스, 경쟁 서비스, 디자인 레퍼런스, 프로토타입 URL, Google Drive 공유 링크를 등록할 수 있습니다. Drive 파일은 공유 권한이 있는 링크만 이후 분석할 수 있습니다.
+                </p>
+                <p className="text-[11px] text-[var(--text-tertiary)] mb-3 leading-relaxed">
+                  Google Drive 문서를 등록하려면 Drive에서 “링크가 있는 사용자 보기 가능”으로 공유한 뒤 URL을 붙여넣어 주세요. 비공개 링크는 이후 분석 단계에서 접근이 제한될 수 있습니다.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <select
@@ -527,13 +532,18 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                     value={urlValue}
                     onChange={(e) => setUrlValue(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
-                    placeholder="https://example.com"
+                    placeholder="https://example.com 또는 Google Drive 공유 링크"
                     className="flex-1 min-w-0 px-4 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none"
                   />
                   <Button variant="secondary" icon={Plus} onClick={handleAddUrl} disabled={!urlValue.trim()}>
                     추가
                   </Button>
                 </div>
+                {isDriveLink && (
+                  <p className="mt-2 text-[11px] font-medium text-[var(--color-primary-text)] bg-[var(--surface-active)] border border-[var(--brand-100)] rounded-[var(--radius-md)] px-2.5 py-1.5 leading-relaxed">
+                    Google Drive 링크로 감지되었습니다. 공유 권한이 없으면 이후 분석이 실패할 수 있습니다.
+                  </p>
+                )}
               </div>
 
               {/* 등록 목록 */}

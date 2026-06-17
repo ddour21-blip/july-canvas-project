@@ -121,7 +121,7 @@ Drive 링크/파일 분석 시:
 
 | 단계 | 내용 | 의존/위험 |
 |---|---|---|
-| **D1** | Drive **링크 등록 정책·문구 개선** — 현 URL 등록으로 Drive 링크 수용(urlType=document/reference), 공유 권한 안내. **별도 OAuth 없음, 스키마 변경 없음.** | 거의 없음(문구) |
+| **D1 ✅** | Drive **링크 등록 정책·문구 개선** — URL 등록 영역에 Drive 공유 링크 안내문구 + 공유 권한 가이드, 유형 라벨 "문서·Drive 링크"(urlType=document 유지), Drive 링크 감지 안내(drive/docs.google.com). **OAuth/스키마 변경 없음**(`chore: clarify drive link source input`). | 없음(문구·UI) |
 | D2 | Drive **링크 분석 API**(S5 일부) — 공개 Drive 링크만 처리, 접근 불가 시 `skipped`, 문서 유형별 텍스트 추출 분기 | API route/worker, 도메인 allow-list |
 | D3 | Google **Picker 검토** — OAuth scope(`drive.file`), `fileId` 저장 설계, 사용자 권한·서버 분석 권한, Google 검증 절차 | OAuth scope 추가(인증 변경) |
 | D4 | Drive **파일 선택 UI** — 요구사항/RFP 모드에 "Google Drive에서 선택" 버튼, 선택 결과를 `projectSources`(안 B)에 저장 | Picker + 안 B 스키마 |
