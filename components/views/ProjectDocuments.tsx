@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
-import { copyToClipboard, getTime, nowMs, showToast } from '@/lib/utils';
+import { copyToClipboard, formatDateTime, getTime, nowMs, showToast } from '@/lib/utils';
 import { DOCUMENT_META, DOCUMENT_ORDER, generatePRD, injectPrototypeUrl } from '@/lib/documents';
 import { buildPrototypePackage } from '@/lib/prototypePrompt';
+import { buildInformationArchitecture, type IaTarget } from '@/lib/informationArchitecture';
 import { PROTOTYPE_KINDS, deletePrototypeUrl, lockPrototype, registerPrototypeScreen, registerPrototypeUrl, subscribePrototypeUrls, unlockPrototype } from '@/lib/prototypes';
 import { shareHash, toShareUrl } from '@/lib/shareLinks';
 import { useAuth } from '@/lib/auth';
@@ -185,6 +186,47 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     } catch (err) {
       console.error(err);
       showToast('삭제 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
+  // B5: 확정 프로토타입(lock) 기준 IA 초안 생성 → 기존 ia 문서 생성/업데이트. (IA만, FEATURE_SPEC/PRD 미변경)
+  const handleGenerateIA = async () => {
+    if (!lock) return;
+    let target: IaTarget | null = null;
+    if (lock.targetType === 'screen') {
+      const sc = screens.find((s) => s.id === lock.targetId);
+      if (!sc) { showToast('확정된 화면을 찾을 수 없습니다.', 'error'); return; }
+      target = { kind: 'screen', screen: sc };
+    } else {
+      const src = prototypeUrls.find((p) => p.id === lock.targetId);
+      if (!src) { showToast('확정된 URL 프로토타입을 찾을 수 없습니다.', 'error'); return; }
+      target = { kind: 'source', source: src };
+    }
+    const existing = byType('ia');
+    if (existing && !window.confirm('기존 IA 문서가 있습니다. 확정 프로토타입 기준으로 다시 생성하면 기존 내용이 덮어써질 수 있습니다. 계속하시겠습니까?')) return;
+    const content = buildInformationArchitecture(project, lock, target, formatDateTime(nowMs()));
+    try {
+      if (existing) {
+        const cur = parseFloat(existing.version);
+        const nextV = isNaN(cur) ? existing.version : (cur + 0.1).toFixed(1);
+        await updateDoc(docRef('documents', existing.id), { content, status: 'draft' as DocumentStatus, version: nextV, updatedAt: serverTimestamp() });
+      } else {
+        await addDoc(col('documents'), {
+          projectId: project.id,
+          type: 'ia' as DocumentType,
+          title: DOCUMENT_META.ia.title,
+          content,
+          version: '1.0',
+          status: 'draft' as DocumentStatus,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      setSelectedType('ia');
+      showToast('확정 프로토타입 기반 IA 초안이 생성되었습니다.');
+    } catch (err) {
+      console.error(err);
+      showToast('IA 생성 중 오류가 발생했습니다.', 'error');
     }
   };
 
@@ -502,11 +544,22 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           </ul>
         )}
 
-        <p className={`mt-4 text-xs ${lock ? 'text-[var(--color-primary-text)] font-medium' : 'text-[var(--text-tertiary)]'}`}>
-          {lock
-            ? '확정된 프로토타입을 기준으로 다음 단계에서 IA와 기능정의서를 역작성할 수 있습니다.'
-            : '프로토타입을 확정하면 이 화면 구조를 기준으로 IA와 기능정의서를 생성할 수 있습니다.'}
-        </p>
+        {/* IA 생성 CTA (B5): 확정 프로토타입이 있을 때만 */}
+        {lock ? (
+          <div className="mt-4 flex items-start justify-between flex-wrap gap-3 border-t border-[var(--border-subtle)] pt-4">
+            <p className="text-xs text-[var(--color-primary-text)] font-medium min-w-0 flex-1">
+              확정된 프로토타입을 기준으로 IA 초안을 생성합니다. 생성 후 문서 화면에서 수정할 수 있습니다.
+              <span className="block text-[var(--text-tertiary)] font-normal mt-0.5">기능정의서는 이후 단계에서 IA와 확정 프로토타입을 기준으로 작성합니다.</span>
+            </p>
+            {isEditor && (
+              <Button icon={Sparkles} onClick={handleGenerateIA} className="shrink-0">확정 프로토타입 기반 IA 생성</Button>
+            )}
+          </div>
+        ) : (
+          <p className="mt-4 text-xs text-[var(--text-tertiary)]">
+            프로토타입을 확정하면 이 화면 구조를 기준으로 IA를 생성할 수 있습니다.
+          </p>
+        )}
       </div>
 
       {/* 문서 워크스페이스: 좌측 목록 + 중앙 에디터 */}
