@@ -5,7 +5,14 @@ import { addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
 import { formatDateTime, showToast } from '@/lib/utils';
 import { activationDocTitle, buildActivationDocuments } from '@/lib/documents';
-import { createProjectSource, deleteProjectSource, subscribeProjectSources } from '@/lib/projectSources';
+import {
+  createProjectSource,
+  deleteProjectSource,
+  subscribeProjectSources,
+  updateProjectSource,
+  uploadSourceFileToStorage,
+  validateSourceFile,
+} from '@/lib/projectSources';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/common/Button';
 import { Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, FileText, Lightbulb, Link2, Loader2, Paperclip, Plus, Rocket, Sparkles, Trash2, Upload, X } from 'lucide-react';
@@ -116,13 +123,13 @@ const SOURCE_TYPE_LABEL: Record<ProjectSource['type'], string> = {
   prototype_url: '프로토타입 URL',
 };
 
-// 분석 상태 → 표시 라벨 (S2에서는 pending/skipped만 사용).
+// 상태 → 표시 라벨. (파일: pending→uploaded, URL: pending 유지)
 const SOURCE_STATUS_LABEL: Record<ProjectSource['status'], string> = {
   pending: '분석 대기',
   uploaded: '업로드됨',
   analyzing: '분석 중',
   analyzed: '분석 완료',
-  failed: '분석 실패',
+  failed: '실패',
   skipped: '분석 건너뜀',
 };
 
@@ -169,10 +176,12 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
 
   const { user } = useAuth();
 
-  // 요구사항/RFP 입력 소스 (파일/URL 메타). 등록 즉시 projectSources에 저장되어 실시간 구독.
+  // 요구사항/RFP 입력 소스 (파일/URL). 등록 즉시 projectSources에 저장되어 실시간 구독.
   const [sources, setSources] = useState<ProjectSource[]>([]);
   const [urlValue, setUrlValue] = useState('');
   const [urlType, setUrlType] = useState<ProjectSourceUrlType>('service');
+  // 업로드 진행 중인 source id (UI 전용 상태). Firestore status는 pending→uploaded로 전이.
+  const [uploadingIds, setUploadingIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -180,13 +189,23 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
     return () => unsub();
   }, [project.id]);
 
-  // 파일 선택 → 메타만 저장 (실제 업로드/파싱 없음). 이미지면 screenshot, 그 외 file.
+  // 파일 선택 → 검증 → Storage 업로드 → projectSources 저장(pending→uploaded). 이미지면 screenshot.
   const handleAddFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
-    try {
-      await Promise.all(
-        Array.from(fileList).map((f) =>
-          createProjectSource({
+    const files = Array.from(fileList);
+    // 1) 검증: 거부 파일은 안내하고 제외.
+    const valid: File[] = [];
+    for (const f of files) {
+      const v = validateSourceFile(f);
+      if (v.ok) valid.push(f);
+      else showToast(v.reason ?? '업로드할 수 없는 파일입니다.', 'error');
+    }
+    // 2) 각 파일: 메타(pending) 생성 → 업로드 → uploaded로 갱신. 실패 시 failed.
+    await Promise.all(
+      valid.map(async (f) => {
+        let sourceId: string | null = null;
+        try {
+          sourceId = await createProjectSource({
             projectId: project.id,
             type: f.type.startsWith('image/') ? 'screenshot' : 'file',
             status: 'pending',
@@ -195,16 +214,20 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
             fileType: f.type || 'application/octet-stream',
             fileSize: f.size,
             createdBy: user?.uid ?? 'anonymous',
-          }),
-        ),
-      );
-      showToast('파일 메타 정보가 등록되었습니다. (분석은 다음 단계)');
-    } catch (err) {
-      console.error(err);
-      showToast('파일 등록 중 오류가 발생했습니다.', 'error');
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+          });
+          setUploadingIds((prev) => [...prev, sourceId as string]);
+          const { storagePath } = await uploadSourceFileToStorage(project.id, sourceId, f);
+          await updateProjectSource(sourceId, { status: 'uploaded', storagePath });
+        } catch (err) {
+          console.error('파일 업로드 실패:', err);
+          if (sourceId) await updateProjectSource(sourceId, { status: 'failed' }).catch(() => {});
+          showToast(`업로드 실패: ${f.name}`, 'error');
+        } finally {
+          if (sourceId) setUploadingIds((prev) => prev.filter((x) => x !== sourceId));
+        }
+      }),
+    );
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // URL 등록 → 메타만 저장 (실제 fetch/크롤링 없음).
@@ -230,12 +253,12 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
     }
   };
 
-  const handleDeleteSource = async (id: string) => {
+  const handleDeleteSource = async (source: ProjectSource) => {
     try {
-      await deleteProjectSource(id);
+      await deleteProjectSource(source.id, source.storagePath);
     } catch (err) {
       console.error(err);
-      showToast('삭제 중 오류가 발생했습니다.', 'error');
+      showToast('삭제 중 오류가 발생했습니다. (Storage 파일 삭제 실패)', 'error');
     }
   };
 
@@ -466,7 +489,8 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                   <Paperclip size={15} className="text-[var(--color-primary-text)]" /> 파일 등록
                 </div>
                 <p className="text-xs text-[var(--text-secondary)] mb-3 leading-relaxed">
-                  RFP, 요구사항 문서, 정책표, 화면 캡처를 등록할 수 있습니다. 이번 단계에서는 파일명과 메타 정보만 저장하고, 분석은 다음 단계에서 진행합니다.
+                  파일을 업로드하면 요구사항/RFP 분석 단계에서 원본 자료로 사용할 수 있습니다. 이번 단계에서는 파일 저장까지만 진행하며, 내용 분석은 다음 단계에서 진행합니다.
+                  <span className="block mt-1 text-[var(--text-tertiary)]">PDF · DOCX · XLSX · CSV · TXT · MD · PNG · JPG · WEBP / 최대 10MB</span>
                 </p>
                 <input
                   ref={fileInputRef}
@@ -535,7 +559,15 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                             </span>
                           </div>
                           <div className="flex items-center gap-2 text-[11px] text-[var(--text-tertiary)] mt-0.5">
-                            <span className="inline-flex items-center gap-1 font-medium text-[var(--amber-700)]">{SOURCE_STATUS_LABEL[s.status]}</span>
+                            {uploadingIds.includes(s.id) ? (
+                              <span className="inline-flex items-center gap-1 font-medium text-[var(--color-primary-text)]">
+                                <Loader2 size={11} className="animate-spin" /> 업로드 중
+                              </span>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1 font-medium ${s.status === 'failed' ? 'text-[var(--red-600)]' : s.status === 'uploaded' ? 'text-[var(--green-700)]' : 'text-[var(--amber-700)]'}`}>
+                                {SOURCE_STATUS_LABEL[s.status]}
+                              </span>
+                            )}
                             {s.fileType && <span>· {s.fileType}</span>}
                             {!!s.fileSize && <span>· {formatBytes(s.fileSize)}</span>}
                             <span>· {formatDateTime(s.createdAt)}</span>
@@ -543,9 +575,10 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleDeleteSource(s.id)}
+                          onClick={() => handleDeleteSource(s)}
+                          disabled={uploadingIds.includes(s.id)}
                           aria-label="삭제"
-                          className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--red-600)] transition-colors"
+                          className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--red-600)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
                           <Trash2 size={15} />
                         </button>

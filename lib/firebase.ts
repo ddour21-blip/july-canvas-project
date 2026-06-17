@@ -14,6 +14,7 @@
 import { initializeApp, getApps, getApp, type FirebaseOptions } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
 const firebaseConfig: FirebaseOptions = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -39,4 +40,15 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 // (미설정 시 CanvasApp이 안내 화면을 표시하고 auth/db 사용 경로는 모두 가드됩니다.)
 export const auth: Auth = isFirebaseConfigured ? getAuth(app) : (undefined as unknown as Auth);
 export const db: Firestore = getFirestore(app);
+// Storage: 미설정 시 사용 경로가 모두 가드되므로 설정된 경우에만 초기화.
+export const storage: FirebaseStorage = isFirebaseConfigured
+  ? getStorage(app)
+  : (undefined as unknown as FirebaseStorage);
+
+// Storage 미프로비저닝/네트워크 장애 시 SDK 기본 재시도(~2분) 대신 빨리 실패시켜
+// UI가 '업로드 중'에 무한정 멈추지 않도록 한다(graceful 실패 → status:'failed' 표시).
+if (storage) {
+  storage.maxUploadRetryTime = 20_000; // 20s
+  storage.maxOperationRetryTime = 15_000; // 15s (메타/삭제)
+}
 export default app;

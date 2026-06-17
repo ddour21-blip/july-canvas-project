@@ -168,10 +168,16 @@ export interface ProjectSource {
 [활용] §7 보강 필드 자동 분해 + 문서 초안 입력
 ```
 
-**저장소 선택 (S3에서 확정)**:
-- **권장: Firebase Storage** — 문서/PDF/엑셀은 수 MB가 흔해 Firestore 1MB 문서 한도를 초과. 메타데이터(`projectSources`)는 Firestore, 바이너리는 Storage(`storagePath`).
-- 선례인 `screen_images`의 base64-in-Firestore 방식은 **작은 이미지에만** 적합(문서 첨부엔 부적합). 둘을 혼용하지 말고 파일은 Storage로 통일 권장.
-- Storage 도입 시 **Storage 보안 규칙**(Firestore Rules와 별개)을 함께 설계해야 함 — 멤버만 read/write.
+**저장소 선택 (S3 확정 — Firebase Storage 채택)**:
+- **Firebase Storage** — 문서/PDF/엑셀은 수 MB가 흔해 Firestore 1MB 문서 한도를 초과. 메타데이터(`projectSources`)는 Firestore, 바이너리는 Storage(`storagePath`).
+- 선례인 `screen_images`의 base64-in-Firestore 방식은 **작은 이미지에만** 적합(문서 첨부엔 부적합). 파일은 Storage로 통일.
+- 경로: `artifacts/{appId}/projectSources/{projectId}/{sourceId}/{safeFileName}` (Firestore 네임스페이스와 동일, sourceId로 충돌 방지, 파일명 sanitize).
+- `downloadUrl`은 토큰 URL(규칙 우회 공개 접근 가능)이라 **Firestore에 저장하지 않음** — `storagePath`만 저장, 표시/다운로드는 후속 단계에서 인증 컨텍스트로 `getDownloadURL` 처리.
+
+**Storage 보안 규칙 (Firestore Rules와 별개 파일·별개 게시)**:
+- 레포에 [`storage.rules`](../../storage.rules) 추가. 단계 A 수준: read=로그인, write=로그인+10MB 미만+허용 contentType, delete=로그인.
+- **⚠️ 콘솔에서 (1) Firebase Storage 활성화(기본 버킷 생성) + (2) `storage.rules` 게시(Storage > Rules)가 필요**하다. 미활성 시 업로드 요청이 버킷 없음으로 `net::ERR_FAILED`(OPTIONS 404)되어 실패한다. Storage 미연결/실패 시 UI는 `maxUploadRetryTime`(20s) 후 graceful 실패(status `failed`)로 표시.
+- Storage Rules는 Firestore를 참조할 수 없어 멤버십 검증은 경로/auth 기반만. 멤버십 강화는 후속(서버 매개 발급 등).
 
 **보안**: 파일 크기/확장자/MIME 화이트리스트, 바이러스 스캔(선택), 분석은 서버에서만. 키/시크릿은 서버 전용.
 
@@ -333,7 +339,7 @@ export interface ShareDoc {
 |---|---|---|
 | **S1** | **입력 소스/공유 구조 설계 문서 (본 문서)** | 없음 |
 | **S2 ✅** | **요구사항/RFP 모드 UI에 파일/URL 등록 영역 추가(메타만 저장, 목록/삭제, 분석 X)** | `projectSources` 신설 + `ProjectSource` 타입 + `lib/projectSources.ts` + 캐스케이드 + 위저드 UI. **`firestore.rules`에 단계 A `projectSources` 규칙 추가(콘솔 게시 필요)** |
-| S3 | 파일 업로드 저장 구현(Firebase Storage 검토 + 메타 Firestore + 삭제/교체 + Storage 규칙) | Storage 도입 |
+| **S3 ✅(코드)** | **파일 Firebase Storage 업로드(검증→업로드→`storagePath` 저장, 삭제/캐스케이드 Storage 연동, 10MB·MIME 제한)** | `lib/firebase.ts` storage 초기화 + 업로드/검증 헬퍼 + `storage.rules` 신규. **⚠️ 콘솔에서 Firebase Storage 활성화 + `storage.rules` 게시 필요**(미활성 시 업로드 net::ERR_FAILED) |
 | S4 | URL 등록·메타 저장(urlType 구분, status:'pending') | `projectSources` |
 | S5 | 파일/URL 분석 API 설계·구현(텍스트 추출·서버 fetch·SSRF 차단·실패 처리·`analysisResult`) | API route/worker, 키 서버전용 |
 | S6 | 요구사항 보강 필드 자동 분해(분석 → activation fields, 수정 가능) | M2 AI 분해 재사용 |

@@ -4,6 +4,8 @@ July Canvas의 owner/editor/viewer 권한을 **서버(Firestore Rules)에서 강
 실제 규칙 코드는 [`firestore.rules`](../firestore.rules) 입니다.
 
 > ⚠️ 이 문서를 끝까지 읽고 적용하세요. 잘못 적용하면 앱이 즉시 깨질 수 있습니다.
+>
+> 📦 **Storage Rules는 별개입니다.** 파일 업로드(S3)용 **Firebase Storage 규칙**은 [`storage.rules`](../storage.rules)이며, 콘솔의 **Storage > Rules**에 게시합니다(Firestore Rules와 혼동/교차 붙여넣기 금지). Storage 사용 전 콘솔에서 **Firebase Storage 활성화**(기본 버킷 생성)도 필요합니다.
 
 ---
 

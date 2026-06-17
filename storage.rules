@@ -1,0 +1,43 @@
+rules_version = '2';
+
+// July Canvas — Firebase Storage 보안 규칙 (S3: 요구사항/RFP 입력 소스 파일 업로드)
+//
+// ⚠️ 이것은 Firestore Rules가 아니라 **Storage Rules**입니다. (firestore.rules 와 별개 파일/별개 게시)
+// 게시 위치: Firebase 콘솔 > Storage > Rules. (레포에 Firebase CLI 설정이 없어 콘솔 게시 필요)
+//
+// 정책 (초기 MVP):
+// - 경로: artifacts/{appId}/projectSources/{projectId}/{sourceId}/{fileName}
+// - read: 로그인 사용자 (Firestore 단계 A와 동일한 수준의 느슨한 읽기. 멤버십 강제는 후속)
+// - write(업로드): 로그인 + 10MB 미만 + 허용 contentType 만
+// - delete: 로그인 (delete 시 request.resource == null 이므로 size/type 조건 우회)
+//
+// 참고: Storage Rules는 Firestore에 접근할 수 없어, 프로젝트 멤버십 검증은 경로/auth 기반으로만 한다.
+// 멤버십 기반 강화는 서버 매개(다운로드 발급) 또는 후속 단계에서 검토.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // 요구사항/RFP 입력 소스 파일
+    match /artifacts/{appId}/projectSources/{projectId}/{allPaths=**} {
+      allow read: if request.auth != null;
+
+      // 업로드(create/update): 크기·형식 제한. 삭제(request.resource == null)는 통과.
+      allow write: if request.auth != null
+        && (
+          request.resource == null
+          || (
+            request.resource.size < 10 * 1024 * 1024
+            && request.resource.contentType.matches(
+              'application/pdf'
+              + '|application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              + '|application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+              + '|text/csv|text/plain|text/markdown'
+              + '|image/png|image/jpeg|image/webp'
+            )
+          )
+        );
+    }
+
+    // 그 외 경로는 기본 거부 (명시 규칙 없음 = deny).
+  }
+}
