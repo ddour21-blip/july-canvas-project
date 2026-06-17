@@ -31,7 +31,7 @@
 |------|------|------|
 | **S7-2B-1 인프라** | `firebase-admin` 의존성, `lib/firebaseAdmin.ts`(서버 전용 lazy init, env 누락 시 명확한 에러), `.env.local.example` 변수명, 본 문서 | ✅ 완료 |
 | **S7-2B-2 API** | `app/api/share/[shareId]/route.ts` (GET): shareId 검증 → `isEnabled`/`expiresAt`/`accessType==='public_readonly'` 확인 → targetType별 sanitize 후 최소 데이터 반환. `lib/publicShareSanitizer.ts`(화이트리스트 sanitizer). **public viewer UI / ShareModal public_readonly 생성은 미포함.** | ✅ 완료 |
-| S7-2B-3 공개 뷰 | `app/share/[shareId]/page.tsx` 비로그인 read-only 렌더(문서 MD / 화면 / handoff 4종) | 예정 |
+| **S7-2B-3 공개 뷰** | `app/share/[shareId]/page.tsx`(서버 컴포넌트, noindex) + `components/share/ShareViewer.tsx`(`'use client'`) — `/api/share/[shareId]`만 호출(Firebase client 미접근), targetType별 read-only 렌더(project/document/screen/handoff 4탭) + 상태별 안내(loading/400/403×3/404/500). **screen.code는 `<pre>` 텍스트로만 표시(dangerouslySetInnerHTML/iframe 미사용 → 스크립트 실행 불가).** | ✅ 완료 |
 | S7-2B-4 생성 UI | `ShareModal`에 `public_readonly` 옵션 + 공개 URL(`/share/{shareId}`) 표시 | 예정 |
 | **S7-2C** | `public_review` + 비로그인 코멘트 | 별도 |
 
