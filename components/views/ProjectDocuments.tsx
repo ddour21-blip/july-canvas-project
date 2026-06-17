@@ -8,12 +8,13 @@ import { DOCUMENT_META, DOCUMENT_ORDER, generatePRD, injectPrototypeUrl } from '
 import { buildPrototypePackage } from '@/lib/prototypePrompt';
 import { buildInformationArchitecture, type IaTarget } from '@/lib/informationArchitecture';
 import { buildFeatureSpec } from '@/lib/featureSpec';
+import { buildHandoffPackage, type HandoffPackage, type HandoffPrototype } from '@/lib/handoffPackage';
 import { PROTOTYPE_KINDS, deletePrototypeUrl, lockPrototype, registerPrototypeScreen, registerPrototypeUrl, subscribePrototypeUrls, unlockPrototype } from '@/lib/prototypes';
 import { shareHash, toShareUrl } from '@/lib/shareLinks';
 import { useAuth } from '@/lib/auth';
 import { downloadTextFile } from '@/lib/export/exportMarkdown';
 import { Button } from '@/components/common/Button';
-import { Code2, Copy, CheckCircle2, Circle, Clock, Download, ExternalLink, Eye, FileText, Link2, Lock, MonitorPlay, Plus, RefreshCw, Save, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { Code2, Copy, CheckCircle2, Circle, Clock, Download, ExternalLink, Eye, FileText, Link2, Lock, MonitorPlay, Package, Plus, RefreshCw, Save, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { EMPTY_ACTIVATION } from '@/types';
 import type {
   DocumentStatus,
@@ -79,11 +80,16 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   const [selectedType, setSelectedType] = useState<DocumentType>(DOCUMENT_ORDER[0]);
   // 프로토타입 제작 패키지 (로컬 생성 → 복사. Firestore 저장 안 함)
   const [prototypePkg, setPrototypePkg] = useState<string | null>(null);
+  // 개발 전달 패키지 (B7/B8): 로컬 생성 → 복사. Firestore 저장 안 함.
+  const [handoffPkg, setHandoffPkg] = useState<HandoffPackage | null>(null);
+  const [handoffTab, setHandoffTab] = useState(0);
   // 프로젝트 전환 시 이전 프로젝트의 패키지가 남지 않도록 초기화 (렌더 중 조정 패턴).
   const [pkgProjectId, setPkgProjectId] = useState(project.id);
   if (project.id !== pkgProjectId) {
     setPkgProjectId(project.id);
     setPrototypePkg(null);
+    setHandoffPkg(null);
+    setHandoffTab(0);
   }
 
   // 프로토타입 등록 (B3): URL은 projectSources(prototype_url), 코드는 screens 재사용.
@@ -270,6 +276,36 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       console.error(err);
       showToast('기능정의서 생성 중 오류가 발생했습니다.', 'error');
     }
+  };
+
+  // B7/B8: 개발 전달용 MD 패키지(4종) 로컬 생성 → 복사. (Firestore 저장 없음, PRD 조립/문서 content 미변경)
+  const handleBuildHandoff = () => {
+    let proto: HandoffPrototype | undefined;
+    if (lock) {
+      if (lock.targetType === 'screen') {
+        const sc = screens.find((s) => s.id === lock.targetId);
+        proto = { name: lock.title || sc?.name || '확정 화면', type: 'screen', link: toShareUrl(shareHash.screen(lock.targetId)) };
+      } else {
+        const src = prototypeUrls.find((p) => p.id === lock.targetId);
+        proto = { name: lock.title || src?.title || '외부 프로토타입', type: 'source', url: lock.url || src?.url, link: lock.url || src?.url };
+      }
+    }
+    setHandoffPkg(buildHandoffPackage(project, documents, { prototype: proto, generatedAt: formatDateTime(nowMs()) }));
+    setHandoffTab(0);
+  };
+
+  const handleCopyHandoffFile = () => {
+    const file = handoffPkg?.files[handoffTab];
+    if (!file) return;
+    if (copyToClipboard(file.content)) showToast(`${file.name}을(를) 복사했습니다.`);
+    else showToast('복사 실패', 'error');
+  };
+
+  const handleCopyHandoffAll = () => {
+    if (!handoffPkg) return;
+    const all = handoffPkg.files.map((file) => `===== ${file.name} =====\n\n${file.content}`).join('\n\n\n');
+    if (copyToClipboard(all)) showToast('개발 전달 패키지 전체를 복사했습니다.');
+    else showToast('복사 실패', 'error');
   };
 
   const copyLink = (link: string) => {
@@ -615,6 +651,71 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             프로토타입을 확정하면 이 화면 구조를 기준으로 IA를 생성할 수 있습니다. (기능정의서는 IA 생성 후 작성)
           </p>
         )}
+      </div>
+
+      {/* 개발 전달 패키지 (B7/B8): MD 4종 로컬 생성 → 복사 (Firestore 저장 없음) */}
+      <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="shrink-0 w-10 h-10 rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] text-[var(--color-primary-text)] flex items-center justify-center"><Package size={20} /></span>
+            <div className="min-w-0">
+              <h3 className="font-bold text-[var(--text-strong)] text-lg">개발 전달 패키지</h3>
+              <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
+                브리프, 시장조사/레퍼런스, 제품화/구현 전략, IA, 기능정의서, 확정 프로토타입 정보를 묶어 개발 전달용 MD 문서 패키지를 생성합니다.
+              </p>
+              {/* 준비 상태 칩 */}
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
+                {([
+                  ['브리프', !!byType('brief')],
+                  ['시장조사/레퍼런스', !!byType('market_research')],
+                  ['제품화/구현 전략', !!byType('product_strategy')],
+                  ['IA', !!byType('ia')],
+                  ['기능정의서', !!byType('feature_spec')],
+                  ['확정 프로토타입', !!lock],
+                ] as [string, boolean][]).map(([label, ready]) => (
+                  <span key={label} className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded ${ready ? 'text-[var(--green-700)] bg-[var(--green-50)]' : 'text-[var(--text-tertiary)] bg-[var(--surface-sunken)]'}`}>
+                    {ready ? <CheckCircle2 size={11} /> : <Circle size={11} />} {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          {isEditor && (
+            <Button icon={Sparkles} onClick={handleBuildHandoff} className="shrink-0">{handoffPkg ? '다시 생성' : '개발 전달 패키지 생성'}</Button>
+          )}
+        </div>
+
+        {handoffPkg && (
+          <div className="mt-5 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] overflow-hidden">
+            {/* 파일 탭 */}
+            <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--border-default)] bg-[var(--surface-card)] flex-wrap">
+              <div className="flex flex-wrap gap-1">
+                {handoffPkg.files.map((file, i) => (
+                  <button
+                    key={file.name}
+                    type="button"
+                    onClick={() => setHandoffTab(i)}
+                    className={`inline-flex items-center gap-1 text-[11px] font-mono font-semibold px-2.5 py-1.5 rounded-[var(--radius-md)] transition-colors ${
+                      i === handoffTab ? 'bg-[var(--surface-active)] text-[var(--color-primary-text)] border border-[var(--color-primary)]' : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] border border-transparent hover:bg-[var(--surface-hover)]'
+                    }`}
+                  >
+                    <FileText size={12} /> {file.name}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={handleCopyHandoffFile} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={13} /> 이 문서 복사</button>
+                <button type="button" onClick={handleCopyHandoffAll} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:bg-[var(--color-primary-hover)] transition-colors"><Copy size={13} /> 전체 복사</button>
+                <button type="button" onClick={() => setHandoffPkg(null)} aria-label="닫기" className="p-1.5 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] transition-colors"><X size={15} /></button>
+              </div>
+            </div>
+            <textarea readOnly value={handoffPkg.files[handoffTab]?.content ?? ''} rows={18} className="w-full px-4 py-3 text-xs font-mono leading-relaxed resize-y bg-transparent text-[var(--text-body)] outline-none" />
+          </div>
+        )}
+
+        <p className="mt-4 text-xs text-[var(--text-tertiary)]">
+          선행 문서가 일부 없어도 생성됩니다(없는 부분은 안내 문구로 표시). 이 패키지는 저장하지 않으며 복사해서 전달합니다. (ZIP 다운로드는 후속 단계)
+        </p>
       </div>
 
       {/* 문서 워크스페이스: 좌측 목록 + 중앙 에디터 */}
