@@ -62,6 +62,39 @@
 - CAPTCHA 활성화: `PUBLIC_REVIEW_CAPTCHA_ENABLED=1` + `PUBLIC_REVIEW_CAPTCHA_SECRET_KEY` + `NEXT_PUBLIC_PUBLIC_REVIEW_CAPTCHA_SITE_KEY` + **프론트 위젯(Turnstile) 연동**.
 - **TTL/정리 TODO**: `rateLimits` 문서는 `expiresAt`(ms) 보유 → Firestore TTL 정책(필드 `expiresAt`)으로 자동 삭제 설정 권장(콘솔/배포 설정, 코드 아님).
 
+## 4-3. S7-2G — 운영 전 마감 ✅
+
+### CAPTCHA 프론트 위젯 연결
+- `components/share/ShareViewer.tsx`에 **Cloudflare Turnstile** 위젯 연결(explicit render). `NEXT_PUBLIC_PUBLIC_REVIEW_CAPTCHA_SITE_KEY`가 있을 때만 스크립트 로드 + 위젯 노출. 성공 콜백 → token 캡처, 만료/에러 콜백 → token 초기화 + 안내, 제출 성공 후 위젯 reset(토큰 1회용).
+- 제출 시 token을 `POST /api/share/[shareId]/reviews`의 `captchaToken`으로 전달. 서버는 활성 시 siteverify로 검증(없음→`CAPTCHA_REQUIRED`, 실패→`CAPTCHA_FAILED`).
+- 로컬/기본(site key 미설정)은 위젯 미노출 + 서버 비활성 → 기존 테스트 그대로.
+- 라이브 검증(Turnstile 테스트 키, always-pass): 비활성=위젯 없음+제출 정상 / 활성=위젯 렌더+더미 토큰 캡처+서버 siteverify 성공→201 pending. 토큰없음/실패 차단은 S7-2F에서 확인.
+
+### 운영 필수 env (서버 전용 vs public 구분)
+| env | 구분 | 용도 |
+|-----|------|------|
+| `FIREBASE_PROJECT_ID` | 서버 | Admin 서비스 계정 |
+| `FIREBASE_CLIENT_EMAIL` | 서버 | Admin 서비스 계정 |
+| `FIREBASE_PRIVATE_KEY` | 서버 | Admin 서비스 계정(개행 `\n` escape) |
+| `PUBLIC_REVIEW_HASH_SECRET` | 서버 | 레이트리밋 clientHash HMAC secret |
+| `PUBLIC_REVIEW_CAPTCHA_ENABLED` | 서버 | CAPTCHA 활성 스위치('1'/'true') |
+| `PUBLIC_REVIEW_CAPTCHA_SECRET_KEY` | 서버 | Turnstile siteverify 비밀키 |
+| `NEXT_PUBLIC_PUBLIC_REVIEW_CAPTCHA_SITE_KEY` | **public(클라 노출)** | Turnstile 위젯 site key |
+
+> ⚠️ 서버 전용 값에는 `NEXT_PUBLIC_` 접두사 금지. private key/service account/secret 실제 값은 문서·저장소에 절대 넣지 않는다(`.env.local`만, 커밋 금지).
+
+### Firestore TTL / 운영 설정
+- **`rateLimits` 컬렉션은 TTL 설정 필요** — Firebase Console > Firestore > TTL 정책에서 **`expiresAt`(타임스탬프 필드 아님, ms number이므로 주의)** 기준 자동 삭제 권장. 미설정 시 rateLimits 문서가 계속 누적된다.
+  - ⚠️ 현재 `expiresAt`은 **ms number**로 저장됨. Firestore 네이티브 TTL은 Timestamp 필드를 요구하므로, TTL 적용 시 (a) `expiresAt`를 Timestamp로 저장하도록 보강하거나 (b) 스케줄드 정리(Cloud Functions/cron)로 대체해야 함 → 운영 결정 필요(후속).
+- **`publicReviews`는 TTL 삭제 대상 아님**(피드백 보존). 모더레이션 `deleted`는 소프트 삭제로 보존.
+
+### 배포 전 남은 수동 확인 항목
+1. 운영 env 전체 설정(위 표) + `PUBLIC_REVIEW_HASH_SECRET`/CAPTCHA secret 실제 값.
+2. Cloudflare Turnstile 실제 site/secret 키 발급 + 도메인 등록.
+3. `rateLimits` TTL/정리 정책 결정·설정(expiresAt Timestamp 보강 또는 스케줄 정리).
+4. `firestore.rules` 콘솔 게시 상태 재확인(S7-2 동안 미변경이나 최신 게시본 확인).
+5. (선택) 신규 pending 댓글 모더레이션 알림 — 후속.
+
 ## 5. QA 안정화 완료 항목 ✅
 
 | 항목 | 상태 | 비고/커밋 |
@@ -97,7 +130,8 @@
 ## 7. 최신 커밋 목록 (S7-2 시리즈 + QA, 최신순)
 
 ```
-<본 커밋> feat: add public review spam protection                # S7-2F (레이트리밋 + CAPTCHA env-gated)
+<본 커밋> feat: connect captcha widget and finalize public share   # S7-2G (Turnstile 위젯 연결 + 운영 마감)
+4362480 feat: add public review spam protection                # S7-2F (레이트리밋 + CAPTCHA env-gated)
 8d3d0a7 feat: add public review moderation                       # S7-2E (모더레이션 + 정책 pending 전환)
 fbe1fd9 docs: update checkpoint with full s7-2 share series and qa
 d95e581 feat: add internal review management for owner editor   # S7-2D
@@ -120,6 +154,30 @@ c7953a2 feat: add share records for internal share links         # S7-2A
 
 ## 9. 다음 단계 후보
 
-- **CAPTCHA 프론트 위젯 연동**(Turnstile 등) — S7-2F는 서버 검증 + env-gated 구조까지. 운영 활성화 시 위젯 연결 필요.
-- `rateLimits` Firestore TTL 정책 설정(`expiresAt` 기준, 콘솔/배포 설정).
-- (필요 시) 멤버십 기반 read(단계 B) / 완전 로그아웃 화면 / 모더레이션 알림(새 pending 댓글 알림).
+- `rateLimits` Firestore TTL/정리 정책 확정(`expiresAt` Timestamp 보강 또는 스케줄 정리) + 콘솔 설정.
+- 모더레이션 알림(새 pending 댓글 → owner/editor 알림).
+- (필요 시) 멤버십 기반 read(단계 B) / 완전 로그아웃 화면.
+
+## 10. 최종 QA 체크리스트 (S7-2 전체)
+
+| 영역 | 항목 | 상태 |
+|------|------|------|
+| S7-2A | internal share 생성/복사/비활성/만료 + `#share_` resolve | ✅ |
+| S7-2B | public_readonly viewer(project/document/screen/handoff) + 차단(internal/disabled/expired/404/400) | ✅ |
+| S7-2C | 비로그인 댓글 등록(POST) / 목록(GET, visible만) | ✅ |
+| S7-2D | 내부 리뷰 관리(owner/editor, ID token, viewer/비로그인 차단) | ✅ |
+| S7-2E | 모더레이션 pending/approve→visible/hide/delete(소프트) | ✅ |
+| S7-2F | 레이트리밋(429, HMAC clientHash, raw IP 미저장) | ✅ |
+| S7-2F/G | CAPTCHA env-gated + 위젯 연결(비활성=통과/활성=토큰 검증) | ✅ |
+| QA | Google 로그인 사용자만 프로젝트 생성 | ✅ |
+| QA | 익명 사용자 프로젝트 생성 차단(UI+함수+모달) | ✅ |
+| QA | 로그아웃 permission-denied 없음(subscription cleanup) | ✅ |
+| QA | 보강정보 파일/URL 등록 상단 노출(요구사항 모드) | ✅ |
+| QA | 프로토타입 코드 등록 → 화면 노출(iframe·새로고침 유지) | ✅ |
+| QA | 고유 접속 링크/코드 입장 resolve | ✅ |
+| QA | 팀원 직접 입장 가이드 ↔ 실제 동작 일치 | ✅ |
+| 회귀 | B라인 문서 생성/PRD 조립/buildHandoffPackage 무변경 | ✅ |
+| 회귀 | KAKE 무손상 | ✅ |
+| 보안 | Firestore Rules 무변경 / public read·write 미개방 / raw IP·uid 미저장 / XSS 텍스트 렌더 | ✅ |
+
+> 자동/스크립트 검증은 신선한 세션 실제 클릭 + admin 테스트 데이터 기준. Google OAuth 인터랙티브 경로는 사용자 로컬 세션에서 최종 확인 완료. CAPTCHA 활성 경로는 Turnstile 테스트 키로 확인(운영은 실제 키 + 위젯 도메인 등록 필요).

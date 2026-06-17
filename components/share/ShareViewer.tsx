@@ -7,8 +7,20 @@
 //    dangerouslySetInnerHTML 미사용 → JSX가 자동 이스케이프하므로 <script> 등은 실행되지 않고
 //    문자 그대로 보인다. ScreenEditor의 iframe/HTML 렌더 구조를 복사하지 않는다.
 //  - 편집/로그인/승인/삭제/공유관리 UI 없음(읽기 전용).
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { REVIEW_LIMITS } from '@/lib/publicShareSanitizer';
+
+// Cloudflare Turnstile (env-gated 위젯). 스크립트는 site key 설정 시에만 로드된다.
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (el: HTMLElement, opts: Record<string, unknown>) => string;
+      reset: (id?: string) => void;
+      remove: (id?: string) => void;
+    };
+  }
+}
+const TURNSTILE_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 import type {
   PublicDocument,
   PublicDocumentSummary,
@@ -471,9 +483,53 @@ function CommentsSection({ shareId }: { shareId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
-  // CAPTCHA site key가 설정된 경우에만 보안 확인 영역 노출(env-gated). 미설정=비활성(로컬/기본).
-  // NOTE(S7-2F): 실제 위젯(Turnstile 등) 연동은 후속. 현재는 토큰 입력 구조만 — provider 연결 필요.
+  // CAPTCHA site key가 설정된 경우에만 보안 확인 위젯 노출(env-gated). 미설정=비활성(로컬/기본).
   const captchaSiteKey = process.env.NEXT_PUBLIC_PUBLIC_REVIEW_CAPTCHA_SITE_KEY || '';
+  const captchaRef = useRef<HTMLDivElement | null>(null);
+  const widgetIdRef = useRef<string | null>(null);
+
+  // Turnstile 위젯 로드/렌더 (S7-2G): site key 있을 때만 스크립트 로드 후 explicit render.
+  useEffect(() => {
+    if (!captchaSiteKey) return;
+    let removed = false;
+    const renderWidget = () => {
+      if (removed || !window.turnstile || !captchaRef.current || widgetIdRef.current) return;
+      widgetIdRef.current = window.turnstile.render(captchaRef.current, {
+        sitekey: captchaSiteKey,
+        callback: (token: string) => setCaptchaToken(token),
+        'expired-callback': () => {
+          setCaptchaToken('');
+          setNotice({ kind: 'error', msg: '보안 확인이 만료되었습니다. 다시 시도해주세요.' });
+        },
+        'error-callback': () => setCaptchaToken(''),
+      });
+    };
+    if (window.turnstile) {
+      renderWidget();
+    } else {
+      let s = document.querySelector<HTMLScriptElement>('script[data-turnstile]');
+      if (!s) {
+        s = document.createElement('script');
+        s.src = TURNSTILE_SRC;
+        s.async = true;
+        s.defer = true;
+        s.setAttribute('data-turnstile', '1');
+        document.head.appendChild(s);
+      }
+      s.addEventListener('load', renderWidget);
+    }
+    return () => {
+      removed = true;
+      if (widgetIdRef.current && window.turnstile) {
+        try {
+          window.turnstile.remove(widgetIdRef.current);
+        } catch {
+          /* noop */
+        }
+        widgetIdRef.current = null;
+      }
+    };
+  }, [captchaSiteKey]);
 
   const load = async () => {
     try {
@@ -541,6 +597,15 @@ function CommentsSection({ shareId }: { shareId: string }) {
         setContent('');
         // S7-2E: 신규 댓글은 pending → 즉시 공개되지 않음. 검토 후 공개 안내.
         setNotice({ kind: 'success', msg: '댓글이 제출되었습니다. 검토 후 공개될 수 있습니다.' });
+        // Turnstile 토큰은 1회용 → 제출 후 위젯 리셋 + 토큰 초기화.
+        if (captchaSiteKey && window.turnstile) {
+          try {
+            window.turnstile.reset(widgetIdRef.current ?? undefined);
+          } catch {
+            /* noop */
+          }
+          setCaptchaToken('');
+        }
         await load();
       } else {
         setNotice({ kind: 'error', msg: errorMessage(body?.error) });
@@ -584,24 +649,17 @@ function CommentsSection({ shareId }: { shareId: string }) {
           className="w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none"
           style={{ borderColor: 'var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-body)' }}
         />
-        {/* CAPTCHA 영역(env-gated): site key 설정 시에만 노출. 실제 위젯 연동은 후속 — 현재 토큰 입력 구조만. */}
+        {/* CAPTCHA 위젯(env-gated, Cloudflare Turnstile): site key 설정 시에만 노출. */}
         {captchaSiteKey && (
           <div
-            className="rounded-lg border px-3 py-2.5 text-xs"
-            style={{ borderColor: 'var(--border-default)', background: 'var(--surface-sunken)', color: 'var(--text-secondary)' }}
+            className="rounded-lg border px-3 py-2.5"
+            style={{ borderColor: 'var(--border-default)', background: 'var(--surface-sunken)' }}
           >
-            <p className="font-semibold">보안 확인(CAPTCHA)</p>
-            <p className="mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-              스팸 방지를 위해 보안 확인이 필요합니다. (위젯 연동 예정)
+            <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>보안 확인</p>
+            <p className="mt-0.5 mb-2 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+              스팸 방지를 위해 아래 보안 확인을 완료해주세요.
             </p>
-            <input
-              type="text"
-              value={captchaToken}
-              onChange={(e) => setCaptchaToken(e.target.value)}
-              placeholder="보안 확인 토큰"
-              className="mt-2 w-full rounded-md border px-2 py-1.5 text-xs outline-none"
-              style={{ borderColor: 'var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-body)' }}
-            />
+            <div ref={captchaRef} />
           </div>
         )}
         <div className="flex items-center justify-between gap-3">
