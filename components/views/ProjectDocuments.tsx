@@ -7,6 +7,7 @@ import { copyToClipboard, formatDateTime, getTime, nowMs, showToast } from '@/li
 import { DOCUMENT_META, DOCUMENT_ORDER, generatePRD, injectPrototypeUrl } from '@/lib/documents';
 import { buildPrototypePackage } from '@/lib/prototypePrompt';
 import { buildInformationArchitecture, type IaTarget } from '@/lib/informationArchitecture';
+import { buildFeatureSpec } from '@/lib/featureSpec';
 import { PROTOTYPE_KINDS, deletePrototypeUrl, lockPrototype, registerPrototypeScreen, registerPrototypeUrl, subscribePrototypeUrls, unlockPrototype } from '@/lib/prototypes';
 import { shareHash, toShareUrl } from '@/lib/shareLinks';
 import { useAuth } from '@/lib/auth';
@@ -189,19 +190,24 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     }
   };
 
+  // 확정(lock) 대상(screen/source) 해석. 못 찾으면 null.
+  const resolveLockTarget = (): IaTarget | null => {
+    if (!lock) return null;
+    if (lock.targetType === 'screen') {
+      const sc = screens.find((s) => s.id === lock.targetId);
+      if (!sc) { showToast('확정된 화면을 찾을 수 없습니다.', 'error'); return null; }
+      return { kind: 'screen', screen: sc };
+    }
+    const src = prototypeUrls.find((p) => p.id === lock.targetId);
+    if (!src) { showToast('확정된 URL 프로토타입을 찾을 수 없습니다.', 'error'); return null; }
+    return { kind: 'source', source: src };
+  };
+
   // B5: 확정 프로토타입(lock) 기준 IA 초안 생성 → 기존 ia 문서 생성/업데이트. (IA만, FEATURE_SPEC/PRD 미변경)
   const handleGenerateIA = async () => {
     if (!lock) return;
-    let target: IaTarget | null = null;
-    if (lock.targetType === 'screen') {
-      const sc = screens.find((s) => s.id === lock.targetId);
-      if (!sc) { showToast('확정된 화면을 찾을 수 없습니다.', 'error'); return; }
-      target = { kind: 'screen', screen: sc };
-    } else {
-      const src = prototypeUrls.find((p) => p.id === lock.targetId);
-      if (!src) { showToast('확정된 URL 프로토타입을 찾을 수 없습니다.', 'error'); return; }
-      target = { kind: 'source', source: src };
-    }
+    const target = resolveLockTarget();
+    if (!target) return;
     const existing = byType('ia');
     if (existing && !window.confirm('기존 IA 문서가 있습니다. 확정 프로토타입 기준으로 다시 생성하면 기존 내용이 덮어써질 수 있습니다. 계속하시겠습니까?')) return;
     const content = buildInformationArchitecture(project, lock, target, formatDateTime(nowMs()));
@@ -227,6 +233,42 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     } catch (err) {
       console.error(err);
       showToast('IA 생성 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
+  // B6: 확정 프로토타입 + IA 기준 기능정의서(feature_spec) 초안 역작성. (IA/PRD content 미변경)
+  const handleGenerateFeatureSpec = async () => {
+    if (!lock) return;
+    const iaDoc = byType('ia');
+    if (!iaDoc) { showToast('먼저 IA를 생성해주세요.', 'error'); return; }
+    const target = resolveLockTarget();
+    if (!target) return;
+    const existing = byType('feature_spec');
+    if (existing && !window.confirm('기존 기능정의서가 있습니다. 확정 프로토타입과 IA 기준으로 다시 생성하면 기존 내용이 덮어써질 수 있습니다. 계속하시겠습니까?')) return;
+    const iaRef = `${iaDoc.title} (v${iaDoc.version})`;
+    const content = buildFeatureSpec(project, lock, target, iaRef, formatDateTime(nowMs()));
+    try {
+      if (existing) {
+        const cur = parseFloat(existing.version);
+        const nextV = isNaN(cur) ? existing.version : (cur + 0.1).toFixed(1);
+        await updateDoc(docRef('documents', existing.id), { content, status: 'draft' as DocumentStatus, version: nextV, updatedAt: serverTimestamp() });
+      } else {
+        await addDoc(col('documents'), {
+          projectId: project.id,
+          type: 'feature_spec' as DocumentType,
+          title: DOCUMENT_META.feature_spec.title,
+          content,
+          version: '1.0',
+          status: 'draft' as DocumentStatus,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      setSelectedType('feature_spec');
+      showToast('확정 프로토타입 기반 기능정의서 초안이 생성되었습니다.');
+    } catch (err) {
+      console.error(err);
+      showToast('기능정의서 생성 중 오류가 발생했습니다.', 'error');
     }
   };
 
@@ -544,20 +586,33 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           </ul>
         )}
 
-        {/* IA 생성 CTA (B5): 확정 프로토타입이 있을 때만 */}
+        {/* IA / 기능정의서 생성 CTA (B5/B6): 확정 프로토타입이 있을 때만 */}
         {lock ? (
-          <div className="mt-4 flex items-start justify-between flex-wrap gap-3 border-t border-[var(--border-subtle)] pt-4">
-            <p className="text-xs text-[var(--color-primary-text)] font-medium min-w-0 flex-1">
-              확정된 프로토타입을 기준으로 IA 초안을 생성합니다. 생성 후 문서 화면에서 수정할 수 있습니다.
-              <span className="block text-[var(--text-tertiary)] font-normal mt-0.5">기능정의서는 이후 단계에서 IA와 확정 프로토타입을 기준으로 작성합니다.</span>
-            </p>
-            {isEditor && (
-              <Button icon={Sparkles} onClick={handleGenerateIA} className="shrink-0">확정 프로토타입 기반 IA 생성</Button>
-            )}
+          <div className="mt-4 border-t border-[var(--border-subtle)] pt-4 space-y-3">
+            {/* IA 생성 (B5) */}
+            <div className="flex items-start justify-between flex-wrap gap-3">
+              <p className="text-xs text-[var(--color-primary-text)] font-medium min-w-0 flex-1">
+                확정된 프로토타입을 기준으로 IA 초안을 생성합니다. 생성 후 문서 화면에서 수정할 수 있습니다.
+              </p>
+              {isEditor && (
+                <Button icon={Sparkles} onClick={handleGenerateIA} className="shrink-0">확정 프로토타입 기반 IA 생성</Button>
+              )}
+            </div>
+            {/* 기능정의서 생성 (B6): IA가 있어야 활성 */}
+            <div className="flex items-start justify-between flex-wrap gap-3">
+              <p className="text-xs min-w-0 flex-1 font-medium" style={{ color: byType('ia') ? 'var(--color-primary-text)' : 'var(--text-tertiary)' }}>
+                {byType('ia')
+                  ? '확정된 프로토타입과 IA를 기준으로 기능정의서 초안을 생성합니다. 생성 후 문서 화면에서 수정할 수 있습니다.'
+                  : '먼저 확정 프로토타입 기반 IA를 생성해야 기능정의서를 작성할 수 있습니다.'}
+              </p>
+              {isEditor && (
+                <Button icon={Sparkles} onClick={handleGenerateFeatureSpec} disabled={!byType('ia')} className="shrink-0">확정 프로토타입 기반 기능정의서 생성</Button>
+              )}
+            </div>
           </div>
         ) : (
           <p className="mt-4 text-xs text-[var(--text-tertiary)]">
-            프로토타입을 확정하면 이 화면 구조를 기준으로 IA를 생성할 수 있습니다.
+            프로토타입을 확정하면 이 화면 구조를 기준으로 IA를 생성할 수 있습니다. (기능정의서는 IA 생성 후 작성)
           </p>
         )}
       </div>
