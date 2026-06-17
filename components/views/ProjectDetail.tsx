@@ -6,6 +6,7 @@ import { addDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firesto
 import { col, docRef } from '@/lib/firestore';
 import { useRole, roleLabel } from '@/lib/auth';
 import { deleteProjectCascade } from '@/lib/projects';
+import { unlockPrototype } from '@/lib/prototypes';
 import { copyToClipboard, getTime, nowMs, showToast } from '@/lib/utils';
 import { DOCUMENT_ORDER } from '@/lib/documents';
 import { Button } from '@/components/common/Button';
@@ -159,6 +160,10 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
   };
 
   const executeDeleteScreen = async (screenId: string) => {
+    // 확정(lock)된 화면을 삭제하면 prototypeLock이 orphan이 되므로 먼저 해제.
+    if (project.prototypeLock?.targetType === 'screen' && project.prototypeLock.targetId === screenId) {
+      await unlockPrototype(project.id);
+    }
     await deleteDoc(docRef('screens', screenId));
     setConfirmState((prev) => ({ ...prev, isOpen: false }));
     showToast('화면이 성공적으로 삭제되었습니다.');

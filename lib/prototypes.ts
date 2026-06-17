@@ -3,8 +3,8 @@
 // - 프로토타입 URL  → projectSources (type: 'prototype_url', urlType: 'prototype')
 // - 프로토타입 코드  → screens (name + code) → 기존 ScreenEditor가 렌더 (#screen_{id})
 // 이번 단계는 "등록"까지만. 분석/IA 생성/기능정의서 역작성/코드 실행은 하지 않는다.
-import { addDoc, serverTimestamp, type Unsubscribe } from 'firebase/firestore';
-import { col } from './firestore';
+import { addDoc, serverTimestamp, updateDoc, type Unsubscribe } from 'firebase/firestore';
+import { col, docRef } from './firestore';
 import {
   createProjectSource,
   deleteProjectSource,
@@ -54,6 +54,34 @@ export const subscribePrototypeUrls = (
   callback: (sources: ProjectSource[]) => void,
 ): Unsubscribe =>
   subscribeProjectSources(projectId, (all) => callback(all.filter((s) => s.type === 'prototype_url')));
+
+export interface LockPrototypeInput {
+  targetType: 'screen' | 'source';
+  targetId: string;
+  title?: string;
+  url?: string;
+  lockedBy: string;
+}
+
+/** 기준 프로토타입 확정(lock). project.prototypeLock에 저장 (새 컬렉션 없음). */
+export const lockPrototype = async (projectId: string, input: LockPrototypeInput): Promise<void> => {
+  await updateDoc(docRef('projects', projectId), {
+    prototypeLock: {
+      targetType: input.targetType,
+      targetId: input.targetId,
+      ...(input.title ? { title: input.title } : {}),
+      ...(input.url ? { url: input.url } : {}),
+      lockedAt: serverTimestamp(),
+      lockedBy: input.lockedBy,
+    },
+    updatedAt: serverTimestamp(),
+  });
+};
+
+/** 기준 프로토타입 확정 해제. */
+export const unlockPrototype = async (projectId: string): Promise<void> => {
+  await updateDoc(docRef('projects', projectId), { prototypeLock: null, updatedAt: serverTimestamp() });
+};
 
 /** 프로토타입 코드(HTML/React)를 screen으로 등록 → 기존 ScreenEditor가 렌더. 생성 screen id 반환. */
 export const registerPrototypeScreen = async (input: {

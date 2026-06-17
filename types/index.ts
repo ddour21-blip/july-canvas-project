@@ -88,9 +88,22 @@ export interface Project {
   description?: string;
   /** 활성화 입력 데이터 (활성화 완료 시 채워짐) */
   activation?: ProjectActivation;
+  /** 확정(lock)된 기준 프로토타입. 이후 IA/기능정의서 역작성의 기준. 미확정/해제 시 없음(null). */
+  prototypeLock?: PrototypeLock | null;
   activatedAt?: FirestoreTime;
   createdAt?: FirestoreTime;
   updatedAt?: FirestoreTime;
+}
+
+/** 확정된 기준 프로토타입 (Project.prototypeLock). 새 컬렉션 없이 project 문서에 저장. */
+export interface PrototypeLock {
+  /** screen = 등록된 화면(코드), source = projectSources prototype_url */
+  targetType: 'screen' | 'source';
+  targetId: string;
+  title?: string;
+  url?: string;
+  lockedAt: FirestoreTime;
+  lockedBy: string;
 }
 
 /** 프로젝트별 멤버 (projectMembers 컬렉션) */

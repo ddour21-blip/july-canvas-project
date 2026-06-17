@@ -6,7 +6,7 @@ import { col, docRef } from '@/lib/firestore';
 import { copyToClipboard, getTime, nowMs, showToast } from '@/lib/utils';
 import { DOCUMENT_META, DOCUMENT_ORDER, generatePRD, injectPrototypeUrl } from '@/lib/documents';
 import { buildPrototypePackage } from '@/lib/prototypePrompt';
-import { PROTOTYPE_KINDS, deletePrototypeUrl, registerPrototypeScreen, registerPrototypeUrl, subscribePrototypeUrls } from '@/lib/prototypes';
+import { PROTOTYPE_KINDS, deletePrototypeUrl, lockPrototype, registerPrototypeScreen, registerPrototypeUrl, subscribePrototypeUrls, unlockPrototype } from '@/lib/prototypes';
 import { shareHash, toShareUrl } from '@/lib/shareLinks';
 import { useAuth } from '@/lib/auth';
 import { downloadTextFile } from '@/lib/export/exportMarkdown';
@@ -146,8 +146,40 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     }
   };
 
+  // 확정 프로토타입 (Project.prototypeLock)
+  const lock = project.prototypeLock ?? null;
+  const isLockTarget = (targetType: 'screen' | 'source', id: string) =>
+    !!lock && lock.targetType === targetType && lock.targetId === id;
+
+  const handleLock = async (input: { targetType: 'screen' | 'source'; targetId: string; title?: string; url?: string }) => {
+    // 이미 다른 항목이 확정돼 있으면 변경 확인
+    if (lock && !(lock.targetType === input.targetType && lock.targetId === input.targetId)) {
+      const ok = window.confirm('이미 확정된 프로토타입이 있습니다. 기준 프로토타입을 변경하시겠습니까?\n변경하면 이후 IA/기능정의서 생성 기준이 바뀝니다.');
+      if (!ok) return;
+    }
+    try {
+      await lockPrototype(project.id, { ...input, lockedBy: user?.uid ?? 'anonymous' });
+      showToast('기준 프로토타입으로 확정되었습니다.');
+    } catch (err) {
+      console.error(err);
+      showToast('확정 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
+  const handleUnlock = async () => {
+    try {
+      await unlockPrototype(project.id);
+      showToast('확정이 해제되었습니다.');
+    } catch (err) {
+      console.error(err);
+      showToast('해제 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
   const handleDeleteUrl = async (id: string) => {
     try {
+      // 확정된 프로토타입이면 lock orphan 방지를 위해 먼저 확정 해제 후 삭제.
+      if (isLockTarget('source', id)) await unlockPrototype(project.id);
       await deletePrototypeUrl(id);
       showToast('프로토타입 URL이 삭제되었습니다.');
     } catch (err) {
@@ -416,30 +448,50 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             {projectScreens.map((s) => {
               const link = toShareUrl(shareHash.screen(s.id));
               return (
-                <li key={`screen-${s.id}`} className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)]">
+                <li key={`screen-${s.id}`} className={`flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border ${isLockTarget('screen', s.id) ? 'border-[var(--color-primary)] bg-[var(--surface-active)]' : 'border-[var(--border-default)] bg-[var(--surface-sunken)]'}`}>
                   <span className="shrink-0 w-8 h-8 rounded-[var(--radius-md)] bg-[var(--surface-card)] text-[var(--color-primary-text)] flex items-center justify-center border border-[var(--border-default)]"><MonitorPlay size={15} /></span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[11px] font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-1.5 py-0.5 rounded">화면(코드)</span>
                       <span className="text-sm font-medium text-[var(--text-body)] truncate">{s.name}</span>
+                      {isLockTarget('screen', s.id) && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--color-on-primary)] bg-[var(--color-primary)] px-1.5 py-0.5 rounded"><Lock size={10} /> 확정 프로토타입</span>
+                      )}
                     </div>
-                    <div className="text-[11px] text-[var(--text-tertiary)] mt-0.5">{formatRelative(s.createdAt)}</div>
+                    <div className="text-[11px] text-[var(--text-tertiary)] mt-0.5">
+                      {isLockTarget('screen', s.id) ? '이 프로토타입은 이후 IA와 기능정의서 역작성의 기준으로 사용됩니다.' : formatRelative(s.createdAt)}
+                    </div>
                   </div>
+                  {isEditor && (isLockTarget('screen', s.id) ? (
+                    <button type="button" onClick={handleUnlock} className="shrink-0 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] transition-colors">확정 해제</button>
+                  ) : (
+                    <button type="button" onClick={() => handleLock({ targetType: 'screen', targetId: s.id, title: s.name })} className="shrink-0 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors">기준으로 확정</button>
+                  ))}
                   <button type="button" onClick={() => navigate?.(`#screen_${s.id}`)} className="shrink-0 inline-flex items-center gap-1 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><ExternalLink size={13} /> 열기</button>
                   <button type="button" onClick={() => copyLink(link)} aria-label="링크 복사" className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={15} /></button>
                 </li>
               );
             })}
             {prototypeUrls.map((p) => (
-              <li key={`url-${p.id}`} className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)]">
+              <li key={`url-${p.id}`} className={`flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border ${isLockTarget('source', p.id) ? 'border-[var(--color-primary)] bg-[var(--surface-active)]' : 'border-[var(--border-default)] bg-[var(--surface-sunken)]'}`}>
                 <span className="shrink-0 w-8 h-8 rounded-[var(--radius-md)] bg-[var(--surface-card)] text-[var(--color-primary-text)] flex items-center justify-center border border-[var(--border-default)]"><Link2 size={15} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[11px] font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-1.5 py-0.5 rounded">{p.prototypeKind || '프로토타입 URL'}</span>
                     <span className="text-sm font-medium text-[var(--text-body)] truncate" title={p.url}>{p.title || p.url}</span>
+                    {isLockTarget('source', p.id) && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--color-on-primary)] bg-[var(--color-primary)] px-1.5 py-0.5 rounded"><Lock size={10} /> 확정 프로토타입</span>
+                    )}
                   </div>
-                  <div className="text-[11px] text-[var(--text-tertiary)] mt-0.5 truncate">{p.description ? `${p.description} · ` : ''}{formatRelative(p.createdAt)}</div>
+                  <div className="text-[11px] text-[var(--text-tertiary)] mt-0.5 truncate">
+                    {isLockTarget('source', p.id) ? '이 프로토타입은 이후 IA와 기능정의서 역작성의 기준으로 사용됩니다.' : `${p.description ? `${p.description} · ` : ''}${formatRelative(p.createdAt)}`}
+                  </div>
                 </div>
+                {isEditor && (isLockTarget('source', p.id) ? (
+                  <button type="button" onClick={handleUnlock} className="shrink-0 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] transition-colors">확정 해제</button>
+                ) : (
+                  <button type="button" onClick={() => handleLock({ targetType: 'source', targetId: p.id, title: p.title, url: p.url })} className="shrink-0 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors">기준으로 확정</button>
+                ))}
                 <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex items-center gap-1 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><ExternalLink size={13} /> 열기</a>
                 <button type="button" onClick={() => copyLink(p.url || '')} aria-label="URL 복사" className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={15} /></button>
                 {isEditor && (
@@ -450,8 +502,10 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           </ul>
         )}
 
-        <p className="mt-4 text-xs text-[var(--text-tertiary)]">
-          프로토타입이 확정되면 이후 이 화면 구조를 기준으로 IA와 기능정의서를 역작성합니다.
+        <p className={`mt-4 text-xs ${lock ? 'text-[var(--color-primary-text)] font-medium' : 'text-[var(--text-tertiary)]'}`}>
+          {lock
+            ? '확정된 프로토타입을 기준으로 다음 단계에서 IA와 기능정의서를 역작성할 수 있습니다.'
+            : '프로토타입을 확정하면 이 화면 구조를 기준으로 IA와 기능정의서를 생성할 수 있습니다.'}
         </p>
       </div>
 
