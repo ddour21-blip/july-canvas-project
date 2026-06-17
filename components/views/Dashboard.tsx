@@ -4,12 +4,12 @@ import { useState, type ComponentType } from 'react';
 import type { User } from 'firebase/auth';
 import { addDoc, deleteDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
-import { getPermissions } from '@/lib/auth';
+import { getPermissions, useAuth } from '@/lib/auth';
 import { deleteProjectCascade } from '@/lib/projects';
 import { getTime, nowMs, showToast } from '@/lib/utils';
 import { Button } from '@/components/common/Button';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
-import { Activity, CheckCircle2, ChevronRight, Clock, Database, FileText, Folder, FolderPlus, Globe, Layers, Layout, Plus, Trash2, User as UserIcon, Users, X } from 'lucide-react';
+import { Activity, CheckCircle2, ChevronRight, Clock, Database, FileText, Folder, FolderPlus, Globe, Layers, Layout, LogIn, Plus, Trash2, User as UserIcon, Users, X } from 'lucide-react';
 import type { Member, Project, ProjectDocument, ProjectStatus, Screen } from '@/types';
 
 // 상태 배지: green-first 토큰(fg/bg)을 직접 소비. draft=neutral, active=green,
@@ -176,17 +176,32 @@ export default function Dashboard({
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [confirmState, setConfirmState] = useState<ConfirmState>({ isOpen: false, title: '', msg: '', action: null });
 
+  const { signInWithGoogle } = useAuth();
   const isGlobalEditor = projects.length === 0 || projects.some((p) => !p.ownerId || p.ownerId === user?.uid);
-  // 새 프로젝트 생성은 로그인 사용자(익명 포함)라면 누구나 가능해야 한다.
-  // (기존 프로젝트 소유 여부=isGlobalEditor 와 무관. Firestore Rules도 signedIn+ownerId==uid 만 요구.)
-  const canCreateProject = !!user;
+  // 새 프로젝트 생성은 **Google 로그인 사용자만** 가능. 익명 폴백 사용자는 생성 불가
+  // (익명은 uid가 불안정해 만든 값이 계정에 안정적으로 유지되지 않으므로).
+  const isGoogleUser = !!user && !user.isAnonymous;
+  const canCreateProject = isGoogleUser;
   const myProjects = projects.filter((p) => !p.ownerId || p.ownerId === user?.uid);
+
+  const promptGoogleSignIn = () => {
+    signInWithGoogle().catch((e) => {
+      console.error('Google 로그인 실패:', e);
+      showToast('Google 로그인에 실패했습니다.', 'error');
+    });
+  };
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    // 생성 로직 레벨 차단: 익명/비로그인 사용자는 프로젝트를 만들 수 없다(UI 게이트와 별개로 강제).
+    if (!user || user.isAnonymous) {
+      setIsModalOpen(false);
+      showToast('Google 로그인 후 새 프로젝트를 만들 수 있습니다.', 'error');
+      return;
+    }
     if (!newProjectName.trim()) return;
     try {
-      const uid = user?.uid || null;
+      const uid = user.uid;
       // 신규 프로젝트: 생성자를 owner로 등록 (roleByUid + memberUids + projectMembers)
       const ref = await addDoc(col('projects'), {
         name: newProjectName,
@@ -317,9 +332,13 @@ export default function Dashboard({
               </Button>
             </>
           )}
-          {canCreateProject && (
+          {canCreateProject ? (
             <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="h-[44px] px-6">
               새 프로젝트
+            </Button>
+          ) : (
+            <Button icon={LogIn} onClick={promptGoogleSignIn} className="h-[44px] px-6">
+              Google 로그인하고 시작
             </Button>
           )}
         </div>
@@ -402,10 +421,18 @@ export default function Dashboard({
               <Layout size={32} />
             </div>
             <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">등록된 프로젝트가 없습니다</h3>
-            <p className="text-[var(--text-secondary)] mb-6 max-w-md">위 입력창에 접속 코드를 입력하거나, 새 프로젝트를 생성해 기획 문서와 프로토타입 관리를 시작하세요.</p>
-            {canCreateProject && (
+            <p className="text-[var(--text-secondary)] mb-6 max-w-md">
+              {canCreateProject
+                ? '위 입력창에 접속 코드를 입력하거나, 새 프로젝트를 생성해 기획 문서와 프로토타입 관리를 시작하세요.'
+                : 'Google 로그인 후 새 프로젝트를 만들 수 있습니다. 익명 상태에서는 프로젝트가 계정에 안정적으로 저장되지 않습니다.'}
+            </p>
+            {canCreateProject ? (
               <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="px-6 h-[44px]">
                 새 프로젝트
+              </Button>
+            ) : (
+              <Button icon={LogIn} onClick={promptGoogleSignIn} className="px-6 h-[44px]">
+                Google 로그인하고 시작
               </Button>
             )}
           </div>

@@ -459,29 +459,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
             </div>
           )}
 
-          {!isConfirm && (
-            <div className="space-y-4">
-              {current.fields.map((f) => {
-                const filled = !!data[f.key].trim();
-                return (
-                  <div key={f.key}>
-                    <label className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-body)] mb-1.5">
-                      {f.label} {f.required && <span className="text-[var(--red-600)]">*</span>}
-                      {filled && <CheckCircle2 size={13} className="text-[var(--green-600)]" />}
-                    </label>
-                    <textarea
-                      value={data[f.key]}
-                      onChange={(e) => set(f.key, e.target.value)}
-                      placeholder={f.placeholder}
-                      rows={f.big ? 6 : 2}
-                      className="w-full px-4 py-3 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-sm resize-y bg-[var(--surface-sunken)] focus:bg-[var(--surface-card)] text-[var(--text-body)] transition-colors"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
+          {/* 요구사항/RFP 모드: 파일/URL 등록을 보강 입력 필드보다 위(핵심 진입점)에 배치 (아이디어 모드는 fields만). */}
           {/* 요구사항/RFP 모드 전용: 파일 / URL 입력 소스 등록 (S2 — 메타만 저장) */}
           {current.id === 'detail' && mode === 'requirement_planning' && (
             <div className="mt-6 space-y-5">
@@ -597,6 +575,30 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                   </ul>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 보강 입력 필드 (아이디어 모드 detail 9필드 / 아이디어 자유입력 등). 요구사항 모드에선 파일·URL 등록 아래에 위치. */}
+          {!isConfirm && (
+            <div className={`space-y-4 ${current.id === 'detail' && mode === 'requirement_planning' ? 'mt-6' : ''}`}>
+              {current.fields.map((f) => {
+                const filled = !!data[f.key].trim();
+                return (
+                  <div key={f.key}>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-body)] mb-1.5">
+                      {f.label} {f.required && <span className="text-[var(--red-600)]">*</span>}
+                      {filled && <CheckCircle2 size={13} className="text-[var(--green-600)]" />}
+                    </label>
+                    <textarea
+                      value={data[f.key]}
+                      onChange={(e) => set(f.key, e.target.value)}
+                      placeholder={f.placeholder}
+                      rows={f.big ? 6 : 2}
+                      className="w-full px-4 py-3 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-sm resize-y bg-[var(--surface-sunken)] focus:bg-[var(--surface-card)] text-[var(--text-body)] transition-colors"
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
 
