@@ -10,12 +10,13 @@ import { col, docRef } from './firestore';
  * - documents (projectId 일치)
  * - projectMembers (projectId 일치)
  * - comments (projectId 일치) — 별도 컬렉션 분리(5단계) 후 포함
+ * - projectSources (projectId 일치) — 요구사항/RFP 입력 소스 메타(S2). Storage 파일은 아직 없어 메타만 삭제.
  */
 export async function deleteProjectCascade(projectId: string): Promise<void> {
   const batch = writeBatch(db);
   batch.delete(docRef('projects', projectId));
 
-  for (const name of ['screens', 'documents', 'projectMembers', 'comments'] as const) {
+  for (const name of ['screens', 'documents', 'projectMembers', 'comments', 'projectSources'] as const) {
     const snap = await getDocs(query(col(name), where('projectId', '==', projectId)));
     snap.forEach((d) => batch.delete(d.ref));
   }

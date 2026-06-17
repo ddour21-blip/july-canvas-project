@@ -17,7 +17,9 @@ artifacts/{appId}/public/data/{collection}/{docId}
 
 `{appId}` = `NEXT_PUBLIC_APP_ID` (기본값 `july-canvas-app`).
 
-사용 컬렉션: `projects`, `screens`, `documents`, `projectMembers`, `members`(전역), `mockEmails`, `screen_images` / 예약: `organizations`, `outputs`, (예정) `comments`, `notifications`.
+사용 컬렉션: `projects`, `screens`, `documents`, `projectMembers`, `projectSources`, `comments`, `members`(전역), `mockEmails`, `screen_images` / 예약: `organizations`, `outputs`, (예정) `notifications`.
+
+> ⚠️ **`projectSources`(S2 신규)**: 요구사항/RFP 입력 소스 메타 컬렉션. `firestore.rules`에 단계 A 스타일 규칙(read=로그인, create/update/delete=projectId 기반 owner|editor)이 추가되어 있습니다. **이 규칙을 콘솔에 게시하기 전에는 앱에서 등록/목록/삭제가 permission-denied로 동작하지 않습니다.** 아래 6번 절차대로 `firestore.rules` 전체를 다시 붙여넣어 게시하세요.
 
 기존 QA 규칙은 아래처럼 느슨합니다:
 
@@ -105,6 +107,8 @@ Firestore의 `list`(쿼리) 규칙은 **결과를 필터링하지 않고, 규칙
 | documents delete | ✅ | ❌ | ❌ | ❌ |
 | projectMembers read | ✅ | ✅ | ✅ | 단계A: ✅ / 단계B: ❌ |
 | projectMembers create/update/delete | ✅ | ❌ | ❌ | ❌ |
+| projectSources read | ✅ | ✅ | ✅ | 단계A: ✅ / 단계B: ❌ |
+| projectSources create/update/delete | ✅ | ✅ | ❌ | ❌ |
 | comments read (예정) | ✅ | ✅ | ✅ | ❌ |
 | comments create (예정) | ✅ | ✅ | ✅² | ❌ |
 | comments update/delete (예정) | 작성자/owner | 작성자 | 작성자 | ❌ |

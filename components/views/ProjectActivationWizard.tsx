@@ -1,13 +1,22 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
-import { showToast } from '@/lib/utils';
+import { formatDateTime, showToast } from '@/lib/utils';
 import { activationDocTitle, buildActivationDocuments } from '@/lib/documents';
+import { createProjectSource, deleteProjectSource, subscribeProjectSources } from '@/lib/projectSources';
+import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/common/Button';
-import { Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, FileText, Lightbulb, Loader2, Rocket, Sparkles, X } from 'lucide-react';
-import { EMPTY_ACTIVATION, type ActivationDraftResult, type Project, type ProjectActivation } from '@/types';
+import { Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, FileText, Lightbulb, Link2, Loader2, Paperclip, Plus, Rocket, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import {
+  EMPTY_ACTIVATION,
+  type ActivationDraftResult,
+  type Project,
+  type ProjectActivation,
+  type ProjectSource,
+  type ProjectSourceUrlType,
+} from '@/types';
 
 /** 위저드에서 선택 가능한 모드 (legacy 제외) */
 type WizardMode = 'idea_productization' | 'requirement_planning';
@@ -88,6 +97,42 @@ const DETAIL_FIELDS: Field[] = [
   { key: 'references', label: '참고 UI / 서비스 / 레퍼런스', placeholder: '참고할 서비스 또는 URL (선택)' },
 ];
 
+// URL 등록 유형 → projectSources의 type/urlType 매핑.
+const URL_TYPE_OPTIONS: { value: ProjectSourceUrlType; label: string; sourceType: ProjectSource['type'] }[] = [
+  { value: 'service', label: '기존 서비스', sourceType: 'url' },
+  { value: 'reference', label: '경쟁/레퍼런스', sourceType: 'reference_url' },
+  { value: 'prototype', label: '프로토타입', sourceType: 'prototype_url' },
+  { value: 'document', label: '문서', sourceType: 'url' },
+  { value: 'other', label: '기타', sourceType: 'url' },
+];
+
+// 입력 소스 유형 → 표시 라벨.
+const SOURCE_TYPE_LABEL: Record<ProjectSource['type'], string> = {
+  text: '텍스트',
+  file: '파일',
+  screenshot: '이미지',
+  url: 'URL',
+  reference_url: '레퍼런스 URL',
+  prototype_url: '프로토타입 URL',
+};
+
+// 분석 상태 → 표시 라벨 (S2에서는 pending/skipped만 사용).
+const SOURCE_STATUS_LABEL: Record<ProjectSource['status'], string> = {
+  pending: '분석 대기',
+  uploaded: '업로드됨',
+  analyzing: '분석 중',
+  analyzed: '분석 완료',
+  failed: '분석 실패',
+  skipped: '분석 건너뜀',
+};
+
+const formatBytes = (n?: number): string => {
+  if (!n || n <= 0) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 type StepId = 'mode' | 'idea' | 'detail' | 'confirm';
 
 // 4단계: 0) 시작 방식(모드 선택) 1) 아이디어/요구사항(유일 필수) 2) 보강 정보(선택) 3) 문서 생성 확인.
@@ -121,6 +166,78 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   // AI가 생성한 문서 초안 (있으면 활성화 시 템플릿 대신 사용).
   const [draftDocs, setDraftDocs] = useState<ActivationDraftResult['documents'] | null>(null);
+
+  const { user } = useAuth();
+
+  // 요구사항/RFP 입력 소스 (파일/URL 메타). 등록 즉시 projectSources에 저장되어 실시간 구독.
+  const [sources, setSources] = useState<ProjectSource[]>([]);
+  const [urlValue, setUrlValue] = useState('');
+  const [urlType, setUrlType] = useState<ProjectSourceUrlType>('service');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const unsub = subscribeProjectSources(project.id, setSources);
+    return () => unsub();
+  }, [project.id]);
+
+  // 파일 선택 → 메타만 저장 (실제 업로드/파싱 없음). 이미지면 screenshot, 그 외 file.
+  const handleAddFiles = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    try {
+      await Promise.all(
+        Array.from(fileList).map((f) =>
+          createProjectSource({
+            projectId: project.id,
+            type: f.type.startsWith('image/') ? 'screenshot' : 'file',
+            status: 'pending',
+            title: f.name,
+            fileName: f.name,
+            fileType: f.type || 'application/octet-stream',
+            fileSize: f.size,
+            createdBy: user?.uid ?? 'anonymous',
+          }),
+        ),
+      );
+      showToast('파일 메타 정보가 등록되었습니다. (분석은 다음 단계)');
+    } catch (err) {
+      console.error(err);
+      showToast('파일 등록 중 오류가 발생했습니다.', 'error');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // URL 등록 → 메타만 저장 (실제 fetch/크롤링 없음).
+  const handleAddUrl = async () => {
+    const value = urlValue.trim();
+    if (!value) return;
+    const opt = URL_TYPE_OPTIONS.find((o) => o.value === urlType) ?? URL_TYPE_OPTIONS[0];
+    try {
+      await createProjectSource({
+        projectId: project.id,
+        type: opt.sourceType,
+        status: 'pending',
+        title: value,
+        url: value,
+        urlType: opt.value,
+        createdBy: user?.uid ?? 'anonymous',
+      });
+      setUrlValue('');
+      showToast('URL이 등록되었습니다. (분석은 다음 단계)');
+    } catch (err) {
+      console.error(err);
+      showToast('URL 등록 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
+  const handleDeleteSource = async (id: string) => {
+    try {
+      await deleteProjectSource(id);
+    } catch (err) {
+      console.error(err);
+      showToast('삭제 중 오류가 발생했습니다.', 'error');
+    }
+  };
 
   const STEPS = useMemo(() => buildSteps(mode), [mode]);
   const current = STEPS[step];
@@ -337,6 +454,106 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* 요구사항/RFP 모드 전용: 파일 / URL 입력 소스 등록 (S2 — 메타만 저장) */}
+          {current.id === 'detail' && mode === 'requirement_planning' && (
+            <div className="mt-6 space-y-5">
+              {/* 파일 등록 */}
+              <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
+                <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-strong)] mb-1.5">
+                  <Paperclip size={15} className="text-[var(--color-primary-text)]" /> 파일 등록
+                </div>
+                <p className="text-xs text-[var(--text-secondary)] mb-3 leading-relaxed">
+                  RFP, 요구사항 문서, 정책표, 화면 캡처를 등록할 수 있습니다. 이번 단계에서는 파일명과 메타 정보만 저장하고, 분석은 다음 단계에서 진행합니다.
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={(e) => handleAddFiles(e.target.files)}
+                  className="hidden"
+                />
+                <Button variant="secondary" icon={Upload} onClick={() => fileInputRef.current?.click()}>
+                  파일 선택
+                </Button>
+              </div>
+
+              {/* URL 등록 */}
+              <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
+                <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-strong)] mb-1.5">
+                  <Link2 size={15} className="text-[var(--color-primary-text)]" /> URL 등록
+                </div>
+                <p className="text-xs text-[var(--text-secondary)] mb-3 leading-relaxed">
+                  기존 서비스, 경쟁 서비스, 디자인 레퍼런스, 프로토타입 URL을 등록할 수 있습니다.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <select
+                    value={urlType}
+                    onChange={(e) => setUrlType(e.target.value as ProjectSourceUrlType)}
+                    className="shrink-0 px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none"
+                  >
+                    {URL_TYPE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="url"
+                    value={urlValue}
+                    onChange={(e) => setUrlValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
+                    placeholder="https://example.com"
+                    className="flex-1 min-w-0 px-4 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none"
+                  />
+                  <Button variant="secondary" icon={Plus} onClick={handleAddUrl} disabled={!urlValue.trim()}>
+                    추가
+                  </Button>
+                </div>
+              </div>
+
+              {/* 등록 목록 */}
+              {sources.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-[var(--text-secondary)] mb-2">등록된 자료 ({sources.length})</div>
+                  <ul className="space-y-2">
+                    {sources.map((s) => (
+                      <li
+                        key={s.id}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-card)]"
+                      >
+                        <span className="shrink-0 w-8 h-8 rounded-[var(--radius-md)] bg-[var(--surface-sunken)] text-[var(--text-secondary)] flex items-center justify-center">
+                          {s.type === 'file' || s.type === 'screenshot' ? <FileText size={15} /> : <Link2 size={15} />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-1.5 py-0.5 rounded">
+                              {SOURCE_TYPE_LABEL[s.type]}
+                            </span>
+                            <span className="text-sm font-medium text-[var(--text-body)] truncate" title={s.url || s.fileName || s.title}>
+                              {s.url || s.fileName || s.title || '(제목 없음)'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-[var(--text-tertiary)] mt-0.5">
+                            <span className="inline-flex items-center gap-1 font-medium text-[var(--amber-700)]">{SOURCE_STATUS_LABEL[s.status]}</span>
+                            {s.fileType && <span>· {s.fileType}</span>}
+                            {!!s.fileSize && <span>· {formatBytes(s.fileSize)}</span>}
+                            <span>· {formatDateTime(s.createdAt)}</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSource(s.id)}
+                          aria-label="삭제"
+                          className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--red-600)] transition-colors"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 

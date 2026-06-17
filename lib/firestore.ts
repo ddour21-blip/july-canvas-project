@@ -14,6 +14,7 @@ export type CollectionName =
   | 'mockEmails'
   | 'documents'
   | 'comments'
+  | 'projectSources'
   | 'screen_images'
   // 조직 단위 확장 대비 예약 (아직 사용 안 함)
   | 'organizations'

@@ -116,6 +116,71 @@ export interface AuthUser {
   isAnonymous: boolean;
 }
 
+// --- 입력 소스(요구사항/RFP 첨부·링크) — projectSources 컬렉션 (M3/S2) ---
+
+export type ProjectSourceType =
+  | 'text'
+  | 'file'
+  | 'screenshot'
+  | 'url'
+  | 'reference_url'
+  | 'prototype_url';
+
+export type ProjectSourceStatus =
+  | 'pending'
+  | 'uploaded'
+  | 'analyzing'
+  | 'analyzed'
+  | 'failed'
+  | 'skipped';
+
+export type ProjectSourceUrlType = 'service' | 'reference' | 'prototype' | 'document' | 'other';
+
+/**
+ * 요구사항/RFP 모드 입력 소스(파일/URL/텍스트) 메타데이터. projectSources 컬렉션.
+ * S2 단계에서는 메타만 저장한다. 파일 업로드(storagePath/downloadUrl)와
+ * 분석 결과(extractedText/analysisResult)는 후속 단계(S3/S5)에서 채운다.
+ */
+export interface ProjectSource {
+  id: string;
+  projectId: string;
+  type: ProjectSourceType;
+  status: ProjectSourceStatus;
+
+  title?: string;
+  description?: string;
+
+  /** text 소스 본문 */
+  content?: string;
+
+  /** file / screenshot 메타 (S2: 업로드 없이 메타만) */
+  fileName?: string;
+  fileType?: string;
+  fileSize?: number;
+  storagePath?: string;
+  downloadUrl?: string;
+
+  /** url 계열 */
+  url?: string;
+  urlType?: ProjectSourceUrlType;
+
+  /** 분석 결과 (후속 단계에서 사용) */
+  extractedText?: string;
+  analysisSummary?: string;
+  analysisResult?: {
+    requirements?: string[];
+    features?: string[];
+    screens?: string[];
+    policies?: string[];
+    references?: string[];
+    risks?: string[];
+  };
+
+  createdBy: string;
+  createdAt?: FirestoreTime;
+  updatedAt?: FirestoreTime;
+}
+
 export type DocumentType =
   | 'brief'
   | 'market_research'

@@ -332,7 +332,7 @@ export interface ShareDoc {
 | 단계 | 내용 | 데이터/위험 |
 |---|---|---|
 | **S1** | **입력 소스/공유 구조 설계 문서 (본 문서)** | 없음 |
-| S2 | 요구사항/RFP 모드 UI에 파일/URL 등록 영역 추가(메타만 저장, 목록 표시, 분석 X) | `projectSources` 신설, ProjectActivationWizard 후속 |
+| **S2 ✅** | **요구사항/RFP 모드 UI에 파일/URL 등록 영역 추가(메타만 저장, 목록/삭제, 분석 X)** | `projectSources` 신설 + `ProjectSource` 타입 + `lib/projectSources.ts` + 캐스케이드 + 위저드 UI. **`firestore.rules`에 단계 A `projectSources` 규칙 추가(콘솔 게시 필요)** |
 | S3 | 파일 업로드 저장 구현(Firebase Storage 검토 + 메타 Firestore + 삭제/교체 + Storage 규칙) | Storage 도입 |
 | S4 | URL 등록·메타 저장(urlType 구분, status:'pending') | `projectSources` |
 | S5 | 파일/URL 분석 API 설계·구현(텍스트 추출·서버 fetch·SSRF 차단·실패 처리·`analysisResult`) | API route/worker, 키 서버전용 |

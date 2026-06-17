@@ -76,6 +76,14 @@ service cloud.firestore {
         allow delete: if isOwner(resource.data.projectId);
       }
 
+      // ---- projectSources (요구사항/RFP 입력 소스 메타: S2) ---- (projectId 필드 보유)
+      match /projectSources/{sourceId} {
+        allow read: if signedIn();
+        allow create: if isEditor(request.resource.data.projectId);
+        allow update: if isEditor(resource.data.projectId);
+        allow delete: if isEditor(resource.data.projectId);
+      }
+
       // ---- projectMembers ---- (id = {projectId}_{uid})
       match /projectMembers/{memberId} {
         allow read: if signedIn();
