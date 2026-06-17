@@ -528,7 +528,8 @@ function CommentsSection({ shareId }: { shareId: string }) {
       const body = await res.json().catch(() => null);
       if (res.ok && body?.ok) {
         setContent('');
-        setNotice({ kind: 'success', msg: '댓글이 등록되었습니다.' });
+        // S7-2E: 신규 댓글은 pending → 즉시 공개되지 않음. 검토 후 공개 안내.
+        setNotice({ kind: 'success', msg: '댓글이 제출되었습니다. 검토 후 공개될 수 있습니다.' });
         await load();
       } else {
         setNotice({ kind: 'error', msg: errorMessage(body?.error) });
@@ -549,7 +550,7 @@ function CommentsSection({ shareId }: { shareId: string }) {
         댓글 {listState === 'ready' ? `(${reviews.length})` : ''}
       </h3>
       <p className="mt-1 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-        로그인 없이 의견을 남길 수 있습니다. 이름은 선택이며 비우면 “{`익명`}”으로 표시됩니다.
+        로그인 없이 의견을 남길 수 있습니다. 이름은 선택이며 비우면 “{`익명`}”으로 표시됩니다. 작성한 댓글은 검토 후 공개됩니다.
       </p>
 
       {/* 입력 폼 */}

@@ -33,9 +33,11 @@ export async function GET(
     if (!auth.ok) return fail(auth.status, auth.error);
 
     // 단일 equality 쿼리 후 메모리 정렬(createdAt 내림차순) — 복합 색인 불필요.
+    // 소프트 삭제(deleted)는 관리 목록에서도 제외(pending/visible/hidden 만 노출).
     const snap = await adminCol(REVIEWS).where('projectId', '==', projectId).get();
     const reviews = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }) as PublicReviewRecord)
+      .filter((r) => r.status !== 'deleted')
       .sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt))
       .slice(0, REVIEW_LIMITS.listMax)
       .map(sanitizeReviewForManage);

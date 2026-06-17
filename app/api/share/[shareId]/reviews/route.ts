@@ -85,15 +85,17 @@ export async function POST(
       ...(share.targetId ? { targetId: share.targetId } : {}),
       authorName,
       content,
-      status: 'visible',
+      // S7-2E: 신규 댓글은 pending(검토 대기). owner/editor 승인 시 visible 로 전환되어 public viewer에 노출.
+      status: 'pending',
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    // 방금 작성한 코멘트를 즉시 반환(서버 타임스탬프는 아직 미확정일 수 있어 클라가 목록 갱신으로 보정).
+    // pending 으로 저장됨 — 즉시 공개되지 않는다(클라이언트는 "검토 후 공개" 안내).
     return Response.json(
       {
         ok: true,
+        status: 'pending',
         review: { id: ref.id, authorName, content },
       },
       { status: 201 },

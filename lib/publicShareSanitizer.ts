@@ -98,6 +98,15 @@ export const REVIEW_LIMITS = {
 /** 코멘트 기본 작성자명. */
 export const REVIEW_DEFAULT_AUTHOR = '익명';
 
+/**
+ * 코멘트 상태 (S7-2E 모더레이션).
+ * - pending: 신규 작성 기본값. public viewer 미노출, 관리 UI에서 검토 대기.
+ * - visible: owner/editor 승인. public viewer 노출.
+ * - hidden: owner/editor가 숨김. 미노출(복구 가능).
+ * - deleted: 소프트 삭제. 모든 목록에서 제외.
+ */
+export type ReviewStatus = 'pending' | 'visible' | 'hidden' | 'deleted';
+
 /** 공개 코멘트(응답용) — 작성자명/내용/작성시각만. uid·IP 등 식별 정보 없음. */
 export interface PublicReview {
   id: string;
@@ -115,7 +124,7 @@ export interface PublicReviewRecord {
   targetId?: string;
   authorName: string;
   content: string;
-  status: 'visible' | 'pending';
+  status: ReviewStatus;
   createdAt?: import('@/types').FirestoreTime;
   updatedAt?: import('@/types').FirestoreTime;
 }
@@ -220,7 +229,7 @@ export interface ManagedReview extends PublicReview {
   shareId: string;
   targetType: ShareTargetType;
   targetId?: string;
-  status: 'visible' | 'pending';
+  status: ReviewStatus;
 }
 
 export function sanitizeReviewForManage(r: PublicReviewRecord): ManagedReview {

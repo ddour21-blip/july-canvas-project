@@ -24,7 +24,8 @@
 
 ## 3. S7-2C — 비로그인 댓글 (public_review) ✅
 
-- `publicReviews` 컬렉션(**서버 전용, Rules 미등록 = 클라 기본 거부 + admin만**). 필드: shareId/projectId/targetType/targetId?/authorName/content/status('visible')/createdAt/updatedAt. **uid·IP 미저장**.
+- `publicReviews` 컬렉션(**서버 전용, Rules 미등록 = 클라 기본 거부 + admin만**). 필드: shareId/projectId/targetType/targetId?/authorName/content/status/createdAt/updatedAt. **uid·IP 미저장**.
+- ⚠️ **상태 정책 변경(S7-2E)**: S7-2C는 초기 `status:'visible'` 즉시 공개였으나, **S7-2E에서 신규 댓글 기본값을 `pending`(검토 대기)으로 변경**. public viewer에는 `visible`만 노출되며, owner/editor 승인 후 공개된다. viewer 등록 성공 안내도 "댓글이 제출되었습니다. 검토 후 공개될 수 있습니다."로 변경됨.
 - `GET/POST /api/share/[shareId]/reviews`(firebase-admin): `resolveActivePublicShare`로 share 활성·public_readonly 검증. content 1~1000자, authorName ≤40자(기본 '익명'), 빈/초과 차단.
 - ShareViewer에 댓글 영역(이름 선택/내용/등록/목록). **React 텍스트 렌더만**(dangerouslySetInnerHTML 금지).
 - `lib/shareServer.ts`(공유 검증 헬퍼, B-2 라우트는 회귀 방지 위해 미변경).
@@ -37,6 +38,14 @@
 - ProjectDetail 개요 탭 "외부 피드백" 섹션(`components/views/ProjectReviews.tsx`, `canEdit`만): targetType 필터(전체/project/document/screen/handoff_package) + 작성자/내용/일시/대상/shareId. **React 텍스트 렌더만**. "v1 즉시 공개, 승인/숨김/삭제 후속" 안내.
 - 라이브 검증: owner 200 / 비멤버 403 / 토큰 없음·오류 401, targetType 4종 구분, XSS 미실행, 민감 필드 누출 0, 공개 댓글과 동일 컬렉션 연동.
 - 커밋: `d95e581`.
+
+## 4-1. S7-2E — 댓글 모더레이션 (owner/editor) ✅
+
+- **상태 정책**: 신규 댓글 기본 `pending`. public viewer는 `visible`만 노출. 관리 UI는 pending/visible/hidden 확인(소프트 삭제 `deleted`는 모든 목록 제외).
+- **모더레이션 API**: `PATCH /api/projects/[projectId]/reviews/[reviewId]` body `{action}` — approve→`visible` / hide→`hidden` / delete→`deleted`(소프트 삭제). `requireProjectEditor` 재사용(owner/editor만), 대상 리뷰가 해당 projectId 소속인지 확인(교차 조작 방지). 비로그인 401 / viewer·비멤버 403.
+- **관리 UI 확장**(`ProjectReviews.tsx`): 상태 필터(전체/대기/공개/숨김) + 대상 필터, 카드별 승인/숨김/삭제 액션 버튼 + 처리중 표시 + 액션 후 목록 갱신. content는 계속 React 텍스트 렌더만.
+- 라이브 검증: POST→pending(공개 미노출)·승인→공개 노출·숨김→공개 사라짐·삭제→관리/공개 모두 제외·타 프로젝트 PATCH 403·토큰 없음 401·XSS 미실행·민감 필드 누출 0. UI 승인 클릭 → 배지 공개 전환 + viewer 노출.
+- 커밋: `feat: add public review moderation` (본 갱신 커밋).
 
 ## 5. QA 안정화 완료 항목 ✅
 
@@ -66,11 +75,14 @@
 - **익명 폴백 유지** — KAKE/기존 익명 데이터 호환. 단, 익명의 프로젝트 생성은 차단.
 - **완전 로그아웃 정책 변경 보류** — 로그아웃 시 익명 폴백 복귀(별도 로그인 전용 화면 없음). 전이 구간 protected read는 cleanup으로 차단됨.
 - 팀/멤버십 기반 타인 프로젝트 열람 확장 보류(현재 단계 A: `read: if signedIn()`).
+- **댓글 모더레이션(S7-2E)**: 신규 댓글 `pending` → owner/editor 승인 시 공개. 삭제는 소프트 삭제(`deleted`). 모든 모더레이션은 서버 API + firebase-admin + ID token(owner/editor)만.
 - `.env.local`/서비스 계정 키 커밋 금지.
 
 ## 7. 최신 커밋 목록 (S7-2 시리즈 + QA, 최신순)
 
 ```
+<본 커밋> feat: add public review moderation                     # S7-2E (모더레이션 + 정책 pending 전환)
+fbe1fd9 docs: update checkpoint with full s7-2 share series and qa
 d95e581 feat: add internal review management for owner editor   # S7-2D
 fe3fd0b feat: add public review comments for readonly shares     # S7-2C
 e4c8fd8 docs: add public share and qa stabilization checkpoint   # (본 문서 초판)
@@ -91,6 +103,5 @@ c7953a2 feat: add share records for internal share links         # S7-2A
 
 ## 9. 다음 단계 후보
 
-- 댓글 모더레이션: 삭제/숨김/승인(`status: pending` 전환) — 현재 v1은 `visible` 즉시 공개.
-- 스팸 방지: reCAPTCHA/레이트리밋 (**운영 전 필수** — `reviews` POST 라우트에 TODO 명시).
-- (필요 시) 멤버십 기반 read(단계 B) / 완전 로그아웃 화면.
+- **S7-2F 스팸 방지**: reCAPTCHA/레이트리밋 (**운영 전 필수** — `reviews` POST 라우트에 TODO 명시). 모더레이션(S7-2E) 완료 후 다음 우선순위.
+- (필요 시) 멤버십 기반 read(단계 B) / 완전 로그아웃 화면 / 모더레이션 알림.
