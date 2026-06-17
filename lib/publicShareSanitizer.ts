@@ -214,3 +214,21 @@ export function sanitizeReviewForPublic(r: PublicReviewRecord): PublicReview {
     ...(createdAt ? { createdAt } : {}),
   };
 }
+
+/** 내부 관리(owner/editor)용 코멘트 — 대상(targetType/targetId)·shareId·status 포함. uid·IP 등 식별 정보는 애초에 미저장. */
+export interface ManagedReview extends PublicReview {
+  shareId: string;
+  targetType: ShareTargetType;
+  targetId?: string;
+  status: 'visible' | 'pending';
+}
+
+export function sanitizeReviewForManage(r: PublicReviewRecord): ManagedReview {
+  return {
+    ...sanitizeReviewForPublic(r),
+    shareId: r.shareId,
+    targetType: r.targetType,
+    ...(r.targetId ? { targetId: r.targetId } : {}),
+    status: r.status ?? 'visible',
+  };
+}

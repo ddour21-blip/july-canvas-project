@@ -9,6 +9,7 @@
 //
 // 이번 단계(S7-2B-1) 범위: lazy init + env 누락 시 명확한 에러. 실제 share 조회/API는 후속 단계.
 import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
+import { getAuth, type Auth } from 'firebase-admin/auth';
 import {
   getFirestore,
   type CollectionReference,
@@ -81,6 +82,11 @@ export function getAdminDb(): Firestore {
   if (adminDb) return adminDb;
   adminDb = getFirestore(getAdminApp());
   return adminDb;
+}
+
+/** Admin Auth 반환(ID 토큰 검증용). 서버에서만 호출. */
+export function getAdminAuth(): Auth {
+  return getAuth(getAdminApp());
 }
 
 /**

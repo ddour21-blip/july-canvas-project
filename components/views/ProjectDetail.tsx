@@ -14,6 +14,7 @@ import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModa
 import { ShareState } from '@/components/modals/ShareModal';
 import ProjectActivationWizard from './ProjectActivationWizard';
 import ProjectDocuments from './ProjectDocuments';
+import ProjectReviews from './ProjectReviews';
 import {
   ArrowLeft,
   ChevronRight,
@@ -340,6 +341,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               </div>
             </div>
           )}
+          {/* 외부 피드백(public_review) — owner/editor만 (S7-2D) */}
+          {canEdit && <ProjectReviews projectId={project.id} user={user} />}
         </div>
       )}
 
