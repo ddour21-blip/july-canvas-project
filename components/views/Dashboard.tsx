@@ -177,6 +177,9 @@ export default function Dashboard({
   const [confirmState, setConfirmState] = useState<ConfirmState>({ isOpen: false, title: '', msg: '', action: null });
 
   const isGlobalEditor = projects.length === 0 || projects.some((p) => !p.ownerId || p.ownerId === user?.uid);
+  // 새 프로젝트 생성은 로그인 사용자(익명 포함)라면 누구나 가능해야 한다.
+  // (기존 프로젝트 소유 여부=isGlobalEditor 와 무관. Firestore Rules도 signedIn+ownerId==uid 만 요구.)
+  const canCreateProject = !!user;
   const myProjects = projects.filter((p) => !p.ownerId || p.ownerId === user?.uid);
 
   const handleCreateProject = async (e: React.FormEvent) => {
@@ -312,10 +315,12 @@ export default function Dashboard({
               <Button variant="secondary" icon={Users} onClick={() => setIsMemberModalOpen(true)} className="h-[44px] px-5">
                 팀원 관리 ({globalMembers.length})
               </Button>
-              <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="h-[44px] px-6">
-                새 프로젝트
-              </Button>
             </>
+          )}
+          {canCreateProject && (
+            <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="h-[44px] px-6">
+              새 프로젝트
+            </Button>
           )}
         </div>
       </div>
@@ -398,7 +403,7 @@ export default function Dashboard({
             </div>
             <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">등록된 프로젝트가 없습니다</h3>
             <p className="text-[var(--text-secondary)] mb-6 max-w-md">위 입력창에 접속 코드를 입력하거나, 새 프로젝트를 생성해 기획 문서와 프로토타입 관리를 시작하세요.</p>
-            {isGlobalEditor && (
+            {canCreateProject && (
               <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="px-6 h-[44px]">
                 새 프로젝트
               </Button>
@@ -410,7 +415,7 @@ export default function Dashboard({
         <RecentActivityPanel projects={myProjects} screens={screens} documents={documents} />
       </div>
 
-      {isModalOpen && isGlobalEditor && (
+      {isModalOpen && canCreateProject && (
         <div className="fixed inset-0 bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md animate-in zoom-in-95">
             <h2 className="text-2xl font-bold mb-6">새 프로젝트 생성</h2>
