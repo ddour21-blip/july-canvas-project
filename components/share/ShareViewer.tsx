@@ -8,10 +8,12 @@
 //    문자 그대로 보인다. ScreenEditor의 iframe/HTML 렌더 구조를 복사하지 않는다.
 //  - 편집/로그인/승인/삭제/공유관리 UI 없음(읽기 전용).
 import { useEffect, useState } from 'react';
+import { REVIEW_LIMITS } from '@/lib/publicShareSanitizer';
 import type {
   PublicDocument,
   PublicDocumentSummary,
   PublicProject,
+  PublicReview,
   PublicScreen,
   PublicShare,
 } from '@/lib/publicShareSanitizer';
@@ -448,6 +450,7 @@ export default function ShareViewer({ shareId }: { shareId: string }) {
               )}
             </div>
             <ShareBody payload={state.payload} />
+            <CommentsSection shareId={shareId} />
             <p className="mt-8 text-center text-xs" style={{ color: 'var(--text-tertiary)' }}>
               이 화면은 읽기 전용 공유 보기입니다. 편집하려면 July Canvas에 로그인하세요.
             </p>
@@ -455,6 +458,163 @@ export default function ShareViewer({ shareId }: { shareId: string }) {
         )}
       </div>
     </main>
+  );
+}
+
+/** 비로그인 코멘트 영역 (S7-2C). /api/share/{shareId}/reviews 만 호출(Firebase client 미접근). */
+function CommentsSection({ shareId }: { shareId: string }) {
+  const [reviews, setReviews] = useState<PublicReview[]>([]);
+  const [listState, setListState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [name, setName] = useState('');
+  const [content, setContent] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+
+  const load = async () => {
+    try {
+      const res = await fetch(`/api/share/${encodeURIComponent(shareId)}/reviews`, { cache: 'no-store' });
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.ok && Array.isArray(body.reviews)) {
+        setReviews(body.reviews as PublicReview[]);
+        setListState('ready');
+      } else {
+        setListState('error');
+      }
+    } catch {
+      setListState('error');
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await load();
+      if (cancelled) return;
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareId]);
+
+  const errorMessage = (code: string | undefined): string => {
+    switch (code) {
+      case 'EMPTY_CONTENT':
+        return '내용을 입력해주세요.';
+      case 'CONTENT_TOO_LONG':
+        return `내용은 ${REVIEW_LIMITS.contentMax}자 이내로 입력해주세요.`;
+      case 'NAME_TOO_LONG':
+        return `이름은 ${REVIEW_LIMITS.authorNameMax}자 이내로 입력해주세요.`;
+      case 'SHARE_DISABLED':
+      case 'SHARE_EXPIRED':
+      case 'NOT_PUBLIC_READONLY':
+        return '이 공유에는 댓글을 남길 수 없습니다.';
+      default:
+        return '댓글 등록에 실패했습니다. 잠시 후 다시 시도해주세요.';
+    }
+  };
+
+  const submit = async () => {
+    const trimmed = content.trim();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/share/${encodeURIComponent(shareId)}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authorName: name.trim(), content: trimmed }),
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.ok) {
+        setContent('');
+        setNotice({ kind: 'success', msg: '댓글이 등록되었습니다.' });
+        await load();
+      } else {
+        setNotice({ kind: 'error', msg: errorMessage(body?.error) });
+      }
+    } catch {
+      setNotice({ kind: 'error', msg: '네트워크 오류로 등록에 실패했습니다.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section
+      className="mt-6 rounded-2xl border bg-white p-5 sm:p-6"
+      style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-sm)' }}
+    >
+      <h3 className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
+        댓글 {listState === 'ready' ? `(${reviews.length})` : ''}
+      </h3>
+      <p className="mt-1 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+        로그인 없이 의견을 남길 수 있습니다. 이름은 선택이며 비우면 “{`익명`}”으로 표시됩니다.
+      </p>
+
+      {/* 입력 폼 */}
+      <div className="mt-4 space-y-2">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={REVIEW_LIMITS.authorNameMax}
+          placeholder="이름 (선택, 기본: 익명)"
+          className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+          style={{ borderColor: 'var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-body)' }}
+        />
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          maxLength={REVIEW_LIMITS.contentMax}
+          rows={3}
+          placeholder="의견을 입력하세요"
+          className="w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none"
+          style={{ borderColor: 'var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-body)' }}
+        />
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs" style={{ color: notice ? (notice.kind === 'success' ? 'var(--color-success)' : 'var(--color-danger)') : 'var(--text-tertiary)' }}>
+            {notice ? notice.msg : `${content.length}/${REVIEW_LIMITS.contentMax}`}
+          </span>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={submitting || !content.trim()}
+            className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}
+          >
+            {submitting ? '등록 중…' : '댓글 등록'}
+          </button>
+        </div>
+      </div>
+
+      {/* 목록 (텍스트로만 렌더 — dangerouslySetInnerHTML 미사용 → script/html 미실행) */}
+      <div className="mt-5 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+        {listState === 'loading' && (
+          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>댓글을 불러오는 중…</p>
+        )}
+        {listState === 'error' && (
+          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>댓글을 불러오지 못했습니다.</p>
+        )}
+        {listState === 'ready' && reviews.length === 0 && (
+          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>아직 댓글이 없습니다. 첫 의견을 남겨보세요.</p>
+        )}
+        {listState === 'ready' && reviews.length > 0 && (
+          <ul className="space-y-3">
+            {reviews.map((r) => (
+              <li key={r.id} className="rounded-xl px-3 py-2.5" style={{ background: 'var(--surface-sunken)' }}>
+                <div className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                  {r.authorName}
+                </div>
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm" style={{ color: 'var(--text-body)' }}>
+                  {r.content}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }
 

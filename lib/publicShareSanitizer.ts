@@ -85,6 +85,41 @@ export interface PublicShare {
   accessType: Extract<ShareAccessType, 'public_readonly'>;
 }
 
+// --- public_review (비로그인 코멘트) — S7-2C ---
+
+/** 코멘트 입력 길이 제한. */
+export const REVIEW_LIMITS = {
+  contentMax: 1000,
+  authorNameMax: 40,
+  /** 한 번에 반환하는 코멘트 최대 개수. */
+  listMax: 200,
+} as const;
+
+/** 코멘트 기본 작성자명. */
+export const REVIEW_DEFAULT_AUTHOR = '익명';
+
+/** 공개 코멘트(응답용) — 작성자명/내용/작성시각만. uid·IP 등 식별 정보 없음. */
+export interface PublicReview {
+  id: string;
+  authorName: string;
+  content: string;
+  createdAt?: number;
+}
+
+/** 코멘트 레코드(저장 형태). */
+export interface PublicReviewRecord {
+  id: string;
+  shareId: string;
+  projectId: string;
+  targetType: ShareTargetType;
+  targetId?: string;
+  authorName: string;
+  content: string;
+  status: 'visible' | 'pending';
+  createdAt?: import('@/types').FirestoreTime;
+  updatedAt?: import('@/types').FirestoreTime;
+}
+
 // ---- sanitizers ----
 
 /** share 레코드 → 공개 메타 (createdBy/projectId/내부 필드 제외). */
@@ -166,5 +201,16 @@ export function sanitizeScreenForPublic(screen: Screen): PublicScreen {
     id: screen.id,
     name: screen.name,
     code: screen.code ?? '',
+  };
+}
+
+/** 코멘트 → 공개 응답(작성자명/내용/시각만). content는 원문 그대로 반환하고 렌더 시 텍스트로만 표시한다. */
+export function sanitizeReviewForPublic(r: PublicReviewRecord): PublicReview {
+  const createdAt = getTime(r.createdAt);
+  return {
+    id: r.id,
+    authorName: r.authorName || REVIEW_DEFAULT_AUTHOR,
+    content: r.content ?? '',
+    ...(createdAt ? { createdAt } : {}),
   };
 }
