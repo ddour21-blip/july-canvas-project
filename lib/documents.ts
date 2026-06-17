@@ -37,8 +37,19 @@ const EMPTY_HINT = '아직 입력되지 않았습니다. 문서 화면에서 보
 // "아직 조사/입력되지 않음"을 나타내는 연구형 안내(시장조사/제품화전략 상세 섹션용).
 const RESEARCH_HINT = '조사 필요 — 아이디어를 바탕으로 직접 보완하거나 AI 초안 생성을 사용하세요.';
 
-// 요구사항/RFP 모드의 미작성 상세 섹션 안내.
-const PLANNING_HINT = '작성 필요 — 전달받은 요구사항을 바탕으로 보완하세요.';
+// 요구사항/RFP 모드에서 요구사항 문서/레퍼런스 분석이 선행되어야 하는 섹션 안내.
+const REQ_HINT = '요구사항 문서 또는 레퍼런스 분석 후 보완해주세요.';
+
+/** 비어 있는 활성화 항목을 "현재 부족한 정보" 목록으로 변환. 모두 채워지면 안내 1줄. */
+const missingFields = (
+  a: ProjectActivation,
+  fields: Array<{ key: keyof ProjectActivation; label: string }>,
+): string => {
+  const missing = fields
+    .filter((f) => !(a[f.key] as string | undefined)?.trim())
+    .map((f) => `- ${f.label}`);
+  return missing.length ? missing.join('\n') : '- 핵심 항목이 모두 입력되었습니다. (필요 시 문서 화면에서 보완)';
+};
 
 /**
  * 활성화 데이터의 mode를 정규화한다.
@@ -62,132 +73,163 @@ export const activationDocTitle = (type: DocumentType, mode: ProjectMode): strin
 
 // --- 요구사항/RFP 모드 초기 3종 문서 생성기 (DocumentType은 그대로, content 프레이밍만 다름) ---
 
-const generateRequirementBrief = (project: Project, a: ProjectActivation): string => `# ${project.name} — 요구사항 분석 및 서비스 기획 초안
+const generateRequirementBrief = (project: Project, a: ProjectActivation): string => `# 요구사항 분석 및 서비스 기획 초안
 
-## 요구사항 요약
+> ${project.name} · 전달받은 요구사항/RFP를 분석한 초안입니다.
+
+## 1. 요구사항 요약
 ${fallback(a.intent, EMPTY_HINT)}
 
-## 해결해야 할 과제
-${fallback(a.problem, EMPTY_HINT)}
+## 2. 프로젝트 목적
+${fallback(a.value, '요구사항의 목적과 기대 효과를 정리하세요.')}
 
-## 대상 사용자 / 이해관계자
+## 3. 신규 서비스 / 기존 서비스 확장 여부
+_(${REQ_HINT})_
+
+## 4. 핵심 사용자
 ${fallback(a.customer, EMPTY_HINT)}
 
-## 기대 가치 / 목표
-${fallback(a.value, EMPTY_HINT)}
+## 5. 필수 기능 범위
+${fallback(a.mvpScope, '요구사항에서 도출한 필수 기능을 정리하세요.')}
 
-## 핵심 차별 요소
-${fallback(a.differentiator, EMPTY_HINT)}
+## 6. 플랫폼 구분
+${fallback(a.market, '사용자 앱 / 관리자(웹) / 기타 플랫폼 구분을 정리하세요.')}
 
-## 비즈니스 / 운영 모델
-${fallback(a.revenue, EMPTY_HINT)}
+## 7. 모호한 요구사항
+- 해결 과제 관점: ${fallback(a.problem, REQ_HINT)}
+- 정의가 불명확하거나 추가 확인이 필요한 요구사항을 적으세요. _(${REQ_HINT})_
 
-## 적용 범위 / 환경 (플랫폼·대상)
-${fallback(a.market, EMPTY_HINT)}
+## 8. 추가 확인 질문
+- 대상 사용자/권한 범위는 명확한가?
+- 사용자 앱과 관리자 기능의 경계는?
+- 연동/외부 시스템·로그인 방식은?
+- 일정·우선순위 제약은?
 
-## 1차(MVP) 구현 범위
-${fallback(a.mvpScope, EMPTY_HINT)}
-
-## 후속 확장 범위
-${fallback(a.laterScope, EMPTY_HINT)}
-
-## 참고 자료 / 전달 문서
-${fallback(a.references, EMPTY_HINT)}
-
-## 서비스 기획 방향 (초안)
-- 위 요구사항을 바탕으로 한 서비스 기획 방향을 정리하세요.
-- IA / 기능정의서는 확정된 프로토타입을 기반으로 역작성합니다.
+## 9. 초기 기획 방향
+- 차별/강조 포인트: ${fallback(a.differentiator, REQ_HINT)}
+- 위 분석을 바탕으로 서비스 기획 방향을 정리하고 레퍼런스/구현 전략 문서로 이어갑니다.
+- IA / 기능정의서는 **확정된 프로토타입** 기반으로 역작성합니다(초기 미작성).
 `;
 
 const generateRequirementReferences = (project: Project, a: ProjectActivation): string => `# 레퍼런스 조사 및 유사 서비스 분석
 
-## 조사 목적
-- 요구사항을 충족하는 구현 방향과 UX 레퍼런스를 확보한다.
+> ${project.name} · 요구사항을 충족하는 구현 방향과 UX 레퍼런스를 확보합니다.
 
-## 참고 서비스 / 전달받은 레퍼런스
-${fallback(a.references, PLANNING_HINT)}
+## 1. 참고해야 할 서비스 유형
+- 대상 사용자: ${fallback(a.customer, REQ_HINT)}
+- 적용 도메인/시장: ${fallback(a.market, REQ_HINT)}
 
-## 유사 서비스 분석
-- 비교 대상 / 강점 / 약점 / 우리가 가져갈 점 — _(${PLANNING_HINT})_
+## 2. 기능 레퍼런스
+- 필수 기능(MVP) 기준 참고 기능: ${fallback(a.mvpScope, REQ_HINT)}
 
-## 대상 사용자 관점
-${fallback(a.customer, PLANNING_HINT)}
+## 3. UI/UX 레퍼런스
+_(${REQ_HINT})_
 
-## 해결 과제 관점
-${fallback(a.problem, PLANNING_HINT)}
+## 4. 운영/관리자 레퍼런스
+- 관리자(어드민) 화면·운영 흐름 참고 — _(${REQ_HINT})_
 
-## 차별화 포인트
-${fallback(a.differentiator, PLANNING_HINT)}
+## 5. 가격/비즈니스 모델 참고
+${fallback(a.revenue, REQ_HINT)}
 
-## 벤치마킹 체크리스트
-- 화면 구성 / 핵심 플로우 / 권한 구분 / 플랫폼(앱·웹·관리자) 대응 — _(${PLANNING_HINT})_
+## 6. 경쟁 서비스 비교 항목
+- 차별 포인트: ${fallback(a.differentiator, REQ_HINT)}
+- 비교 축: 기능 / UX / 권한 구조 / 플랫폼 대응 / 가격
 
-## 레퍼런스 기반 시사점
-_(${PLANNING_HINT})_
+## 7. 레퍼런스 조사 체크리스트
+- 화면 구성 / 핵심 플로우 / 권한 구분 / 사용자 앱·관리자 분리 / 반응형 / 로그인 방식
+
+## 8. 등록된 URL / Drive 링크
+${fallback(a.references, '등록된 참고 URL/Drive 링크가 없습니다. 보강 정보 또는 요구사항 모드 URL 등록에서 추가하세요.')}
+
+## 9. 추가 조사 필요 항목
+_(${REQ_HINT})_
 `;
 
 const generateRequirementStrategy = (project: Project, a: ProjectActivation): string => `# 구현 전략 및 프로토타입 제작 계획
 
-## 1. 구현 방향
+> ${project.name} · 요구사항을 프로토타입 제작 계획으로 구체화합니다.
+
+## 1. 구현 방향 요약
 ${fallback(a.intent, EMPTY_HINT)}
 
-## 2. 핵심 요구사항 → 기능 매핑
-- 해결 과제: ${fallback(a.problem, PLANNING_HINT)}
-- 핵심 가치/목표: ${fallback(a.value, PLANNING_HINT)}
-- 요구사항별 상세 기능 매핑은 프로토타입 단계에서 구체화합니다.
+## 2. MVP 범위
+${fallback(a.mvpScope, '요구사항에서 도출한 1차 구현 범위를 정리하세요.')}
 
-## 3. 플랫폼 / 범위 구분
-- 적용 환경: ${fallback(a.market, PLANNING_HINT)}
-- 1차 범위(MVP): ${fallback(a.mvpScope, PLANNING_HINT)}
-- 후속 범위: ${fallback(a.laterScope, PLANNING_HINT)}
+## 3. 제외 범위
+- 1차에서 제외(후속): ${fallback(a.laterScope, REQ_HINT)}
 
-## 4. 프로토타입 제작 계획
-- 우선 제작할 핵심 화면 / 플로우 — _(${PLANNING_HINT})_
-- 사용자 앱 / 관리자(어드민) 영역 구분 — _(${PLANNING_HINT})_
-- 정책 주석으로 기능·권한·예외를 표시
+## 4. 사용자 앱 / 관리자 / 기타 플랫폼 구분
+- 적용 환경: ${fallback(a.market, REQ_HINT)}
+- 사용자 앱 영역 / 관리자(어드민) 영역 / 기타 플랫폼을 구분해 정리하세요.
 
-## 5. 개발 전달 준비
-- 확정된 프로토타입 코드·화면·플로우를 기반으로 IA / 기능정의서를 역작성합니다.
-- 최종 전달물(예): DEVELOPMENT_HANDOFF / PRD / USER_APP_UI_SPEC / (필요 시) ADMIN_UI_SPEC
+## 5. 프로토타입 제작 목표
+- 요구사항을 화면/플로우로 검증하고 의사결정권자 리뷰를 받는다.
+- 확정 후 화면/주석/플로우를 기반으로 문서를 역작성한다.
 
-## 6. 리스크 / 제약
-- 비즈니스·운영 모델: ${fallback(a.revenue, PLANNING_HINT)}
-- 일정 / 기술 / 외부 의존 제약 — _(${PLANNING_HINT})_
+## 6. 프로토타입에 반드시 포함할 화면
+_(${REQ_HINT})_
+
+## 7. 프로토타입에 반드시 포함할 주요 기능
+- MVP 기준: ${fallback(a.mvpScope, REQ_HINT)}
+- 핵심 가치/목표: ${fallback(a.value, REQ_HINT)}
+
+## 8. 의사결정권자 확인 포인트
+- 핵심 차별 요소: ${fallback(a.differentiator, REQ_HINT)}
+- 사용자 앱·관리자 경계 / 권한 정책 / 필수 플로우 / 일정·우선순위
+
+## 9. Gemini Canvas 또는 프로토타입 생성용 입력 초안
+_(초안 — AI 없이 입력값 기반 요약입니다)_
+- 만들 것: ${fallback(a.intent, REQ_HINT)}
+- 대상 사용자: ${fallback(a.customer, REQ_HINT)}
+- 핵심 화면/기능: ${fallback(a.mvpScope, REQ_HINT)}
+- 플랫폼: ${fallback(a.market, REQ_HINT)}
+
+## 10. 확정 후 역작성할 문서
+- IA / FEATURE_SPEC (확정된 프로토타입 코드·화면·플로우 기반 역작성)
+- PRD / USER_APP_UI_SPEC / (관리자 있으면) ADMIN_UI_SPEC
+- **초기에는 IA / FEATURE_SPEC / PRD를 생성하지 않습니다.**
 `;
 
 export const generateBrief = (project: Project, a: ProjectActivation): string => {
   if (resolveProjectMode(a) === 'requirement_planning') return generateRequirementBrief(project, a);
   return `# ${project.name} — 프로젝트 브리프
 
-## 서비스 한 줄 요약 / 기획 의도
+## 1. 아이디어 요약
 ${fallback(a.intent, EMPTY_HINT)}
 
-## 해결하려는 문제
+## 2. 해결하려는 문제
 ${fallback(a.problem, EMPTY_HINT)}
 
-## 핵심 고객
+## 3. 핵심 고객
 ${fallback(a.customer, EMPTY_HINT)}
 
-## 핵심 가치
+## 4. 핵심 가치
 ${fallback(a.value, EMPTY_HINT)}
 
-## 핵심 차별점
+## 5. 차별점
 ${fallback(a.differentiator, EMPTY_HINT)}
 
-## 수익 구조
-${fallback(a.revenue, EMPTY_HINT)}
-
-## 최초 진입 시장
-${fallback(a.market, EMPTY_HINT)}
-
-## MVP 범위
+## 6. MVP 범위
 ${fallback(a.mvpScope, EMPTY_HINT)}
 
-## 나중에 추가할 기능
+## 7. 나중에 추가할 기능
 ${fallback(a.laterScope, EMPTY_HINT)}
 
-## 참고 UI / 서비스 / 레퍼런스
-${fallback(a.references, EMPTY_HINT)}
+## 8. 현재 부족한 정보
+${missingFields(a, [
+    { key: 'problem', label: '해결하려는 문제' },
+    { key: 'customer', label: '핵심 고객' },
+    { key: 'value', label: '핵심 가치' },
+    { key: 'differentiator', label: '차별점' },
+    { key: 'revenue', label: '수익 구조' },
+    { key: 'market', label: '최초 진입 시장' },
+    { key: 'mvpScope', label: 'MVP 범위' },
+    { key: 'laterScope', label: '나중에 추가할 기능' },
+  ])}
+
+## 9. 다음 액션
+- 위 부족한 정보를 보완하고, 시장조사·제품화전략 문서를 검토하세요.
+- 프로토타입을 등록·확정하면 IA·기능정의서를 역작성할 수 있습니다.
 `;
 };
 
@@ -277,7 +319,7 @@ _(${RESEARCH_HINT})_
 ## 6. 콘텐츠 검증 템플릿
 - 고통점 콘텐츠 / 사례 콘텐츠 / 단계 콘텐츠 / 대비 콘텐츠 / 분석 지표 — _(${RESEARCH_HINT})_
 
-## 7. 고객 수락 체인
+## 7. 고객 수락 체인 구축
 - 자동 답장 / 문의 양식 / 연락 채널 / 예약 링크 / 견적 템플릿 / 상담 흐름 / 고객 관리 방식 — _(${RESEARCH_HINT})_
 
 ## 8. 첫 3명의 고객 확보
