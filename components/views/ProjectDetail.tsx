@@ -363,6 +363,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               isOwner={isOwner}
               initialDocId={initialDocId}
               onCurrentDocChange={setCurrentDocId}
+              navigate={navigate}
             />
           )}
         </>

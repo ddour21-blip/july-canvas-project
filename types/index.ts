@@ -163,6 +163,8 @@ export interface ProjectSource {
   /** url 계열 */
   url?: string;
   urlType?: ProjectSourceUrlType;
+  /** 프로토타입 URL 등록 시 도구 유형 (Gemini Canvas / Claude Artifact / Vercel Preview 등). 표시용. */
+  prototypeKind?: string;
 
   /** 분석 결과 (후속 단계에서 사용) */
   extractedText?: string;

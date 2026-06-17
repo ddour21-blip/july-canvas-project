@@ -6,9 +6,12 @@ import { col, docRef } from '@/lib/firestore';
 import { copyToClipboard, getTime, nowMs, showToast } from '@/lib/utils';
 import { DOCUMENT_META, DOCUMENT_ORDER, generatePRD, injectPrototypeUrl } from '@/lib/documents';
 import { buildPrototypePackage } from '@/lib/prototypePrompt';
+import { PROTOTYPE_KINDS, deletePrototypeUrl, registerPrototypeScreen, registerPrototypeUrl, subscribePrototypeUrls } from '@/lib/prototypes';
+import { shareHash, toShareUrl } from '@/lib/shareLinks';
+import { useAuth } from '@/lib/auth';
 import { downloadTextFile } from '@/lib/export/exportMarkdown';
 import { Button } from '@/components/common/Button';
-import { Copy, CheckCircle2, Circle, Clock, Download, Eye, FileText, Lock, Plus, RefreshCw, Save, Sparkles, Wand2, X } from 'lucide-react';
+import { Code2, Copy, CheckCircle2, Circle, Clock, Download, ExternalLink, Eye, FileText, Link2, Lock, MonitorPlay, Plus, RefreshCw, Save, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { EMPTY_ACTIVATION } from '@/types';
 import type {
   DocumentStatus,
@@ -16,6 +19,7 @@ import type {
   FirestoreTime,
   Project,
   ProjectDocument,
+  ProjectSource,
   Screen,
 } from '@/types';
 
@@ -62,9 +66,12 @@ interface Props {
   initialDocId?: string | null;
   /** 현재 선택된 문서 id를 상위로 보고 (공유 '현재 문서 링크'용) */
   onCurrentDocChange?: (docId: string | null) => void;
+  /** 프로토타입 화면 딥링크 이동용 */
+  navigate?: (hash: string) => void;
 }
 
-export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, initialDocId, onCurrentDocChange }: Props) {
+export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, initialDocId, onCurrentDocChange, navigate }: Props) {
+  const { user } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [selectedType, setSelectedType] = useState<DocumentType>(DOCUMENT_ORDER[0]);
@@ -76,6 +83,83 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     setPkgProjectId(project.id);
     setPrototypePkg(null);
   }
+
+  // 프로토타입 등록 (B3): URL은 projectSources(prototype_url), 코드는 screens 재사용.
+  const [prototypeUrls, setPrototypeUrls] = useState<ProjectSource[]>([]);
+  const [protoForm, setProtoForm] = useState<'none' | 'url' | 'code'>('none');
+  const [pName, setPName] = useState('');
+  const [pUrl, setPUrl] = useState('');
+  const [pDesc, setPDesc] = useState('');
+  const [pKind, setPKind] = useState<string>(PROTOTYPE_KINDS[0]);
+  const [pCode, setPCode] = useState('');
+
+  useEffect(() => {
+    const unsub = subscribePrototypeUrls(project.id, setPrototypeUrls);
+    return () => unsub();
+  }, [project.id]);
+
+  const projectScreens = screens.filter((s) => s.projectId === project.id);
+
+  const resetProtoForm = () => {
+    setProtoForm('none');
+    setPName('');
+    setPUrl('');
+    setPDesc('');
+    setPKind(PROTOTYPE_KINDS[0]);
+    setPCode('');
+  };
+
+  const handleRegisterUrl = async () => {
+    if (!pUrl.trim()) return;
+    try {
+      await registerPrototypeUrl({
+        projectId: project.id,
+        name: pName,
+        url: pUrl,
+        description: pDesc,
+        kind: pKind,
+        createdBy: user?.uid ?? 'anonymous',
+      });
+      resetProtoForm();
+      showToast('프로토타입 URL이 등록되었습니다.');
+    } catch (err) {
+      console.error(err);
+      showToast('등록 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
+  const handleRegisterCode = async () => {
+    if (!pCode.trim()) return;
+    try {
+      const id = await registerPrototypeScreen({
+        projectId: project.id,
+        name: pName,
+        code: pCode,
+        ownerId: user?.uid ?? null,
+      });
+      resetProtoForm();
+      showToast('프로토타입 화면이 등록되었습니다.');
+      navigate?.(`#screen_${id}`);
+    } catch (err) {
+      console.error(err);
+      showToast('등록 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
+  const handleDeleteUrl = async (id: string) => {
+    try {
+      await deletePrototypeUrl(id);
+      showToast('프로토타입 URL이 삭제되었습니다.');
+    } catch (err) {
+      console.error(err);
+      showToast('삭제 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
+  const copyLink = (link: string) => {
+    if (copyToClipboard(link)) showToast('링크를 복사했습니다.');
+    else showToast('복사 실패', 'error');
+  };
 
   const byType = (t: DocumentType) => documents.find((d) => d.type === t);
 
@@ -271,6 +355,104 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             />
           </div>
         )}
+      </div>
+
+      {/* 프로토타입 등록 (B3): URL → projectSources(prototype_url) / 코드 → screens 재사용 */}
+      <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="shrink-0 w-10 h-10 rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] text-[var(--color-primary-text)] flex items-center justify-center">
+              <MonitorPlay size={20} />
+            </span>
+            <div className="min-w-0">
+              <h3 className="font-bold text-[var(--text-strong)] text-lg">프로토타입 등록</h3>
+              <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
+                Gemini Canvas 등에서 생성한 프로토타입 URL이나 코드를 등록합니다. 확정된 프로토타입은 이후 IA와 기능정의서 역작성의 기준이 됩니다.
+              </p>
+            </div>
+          </div>
+          {isEditor && protoForm === 'none' && (
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <Button variant="secondary" icon={Link2} onClick={() => setProtoForm('url')}>프로토타입 URL 등록</Button>
+              <Button variant="secondary" icon={Code2} onClick={() => setProtoForm('code')}>프로토타입 코드 등록</Button>
+            </div>
+          )}
+        </div>
+
+        {/* URL 등록 폼 */}
+        {protoForm === 'url' && (
+          <div className="mt-5 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="프로토타입 이름" className="flex-1 min-w-0 px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none" />
+              <select value={pKind} onChange={(e) => setPKind(e.target.value)} className="shrink-0 px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none">
+                {PROTOTYPE_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+              </select>
+            </div>
+            <input type="url" value={pUrl} onChange={(e) => setPUrl(e.target.value)} placeholder="https://... (Gemini Canvas / Artifact / Vercel preview 등)" className="w-full px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none" />
+            <input value={pDesc} onChange={(e) => setPDesc(e.target.value)} placeholder="설명 (선택)" className="w-full px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none" />
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={resetProtoForm}>취소</Button>
+              <Button icon={Plus} onClick={handleRegisterUrl} disabled={!pUrl.trim()}>등록</Button>
+            </div>
+          </div>
+        )}
+
+        {/* 코드 등록 폼 */}
+        {protoForm === 'code' && (
+          <div className="mt-5 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] p-4 space-y-3">
+            <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="화면명" className="w-full px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none" />
+            <textarea value={pCode} onChange={(e) => setPCode(e.target.value)} placeholder="Gemini Canvas 등에서 생성한 HTML 또는 React 코드를 붙여넣으세요." rows={8} className="w-full px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-xs font-mono resize-y bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none" />
+            <p className="text-[11px] text-[var(--text-tertiary)]">HTML/React 코드는 기존 프로토타입 캔버스(ScreenEditor)에서 미리보기됩니다. 등록 후 해당 화면으로 이동합니다.</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={resetProtoForm}>취소</Button>
+              <Button icon={Plus} onClick={handleRegisterCode} disabled={!pCode.trim()}>등록</Button>
+            </div>
+          </div>
+        )}
+
+        {/* 등록된 프로토타입 목록: 화면(screens) + URL(projectSources) */}
+        {(projectScreens.length > 0 || prototypeUrls.length > 0) && (
+          <ul className="mt-5 space-y-2">
+            {projectScreens.map((s) => {
+              const link = toShareUrl(shareHash.screen(s.id));
+              return (
+                <li key={`screen-${s.id}`} className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)]">
+                  <span className="shrink-0 w-8 h-8 rounded-[var(--radius-md)] bg-[var(--surface-card)] text-[var(--color-primary-text)] flex items-center justify-center border border-[var(--border-default)]"><MonitorPlay size={15} /></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-1.5 py-0.5 rounded">화면(코드)</span>
+                      <span className="text-sm font-medium text-[var(--text-body)] truncate">{s.name}</span>
+                    </div>
+                    <div className="text-[11px] text-[var(--text-tertiary)] mt-0.5">{formatRelative(s.createdAt)}</div>
+                  </div>
+                  <button type="button" onClick={() => navigate?.(`#screen_${s.id}`)} className="shrink-0 inline-flex items-center gap-1 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><ExternalLink size={13} /> 열기</button>
+                  <button type="button" onClick={() => copyLink(link)} aria-label="링크 복사" className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={15} /></button>
+                </li>
+              );
+            })}
+            {prototypeUrls.map((p) => (
+              <li key={`url-${p.id}`} className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)]">
+                <span className="shrink-0 w-8 h-8 rounded-[var(--radius-md)] bg-[var(--surface-card)] text-[var(--color-primary-text)] flex items-center justify-center border border-[var(--border-default)]"><Link2 size={15} /></span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-1.5 py-0.5 rounded">{p.prototypeKind || '프로토타입 URL'}</span>
+                    <span className="text-sm font-medium text-[var(--text-body)] truncate" title={p.url}>{p.title || p.url}</span>
+                  </div>
+                  <div className="text-[11px] text-[var(--text-tertiary)] mt-0.5 truncate">{p.description ? `${p.description} · ` : ''}{formatRelative(p.createdAt)}</div>
+                </div>
+                <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex items-center gap-1 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><ExternalLink size={13} /> 열기</a>
+                <button type="button" onClick={() => copyLink(p.url || '')} aria-label="URL 복사" className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={15} /></button>
+                {isEditor && (
+                  <button type="button" onClick={() => handleDeleteUrl(p.id)} aria-label="삭제" className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--red-600)] transition-colors"><Trash2 size={15} /></button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <p className="mt-4 text-xs text-[var(--text-tertiary)]">
+          프로토타입이 확정되면 이후 이 화면 구조를 기준으로 IA와 기능정의서를 역작성합니다.
+        </p>
       </div>
 
       {/* 문서 워크스페이스: 좌측 목록 + 중앙 에디터 */}
