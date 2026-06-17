@@ -339,7 +339,8 @@ export interface ShareDoc {
 |---|---|---|
 | **S1** | **입력 소스/공유 구조 설계 문서 (본 문서)** | 없음 |
 | **S2 ✅** | **요구사항/RFP 모드 UI에 파일/URL 등록 영역 추가(메타만 저장, 목록/삭제, 분석 X)** | `projectSources` 신설 + `ProjectSource` 타입 + `lib/projectSources.ts` + 캐스케이드 + 위저드 UI. **`firestore.rules`에 단계 A `projectSources` 규칙 추가(콘솔 게시 필요)** |
-| **S3 ✅(코드)** | **파일 Firebase Storage 업로드(검증→업로드→`storagePath` 저장, 삭제/캐스케이드 Storage 연동, 10MB·MIME 제한)** | `lib/firebase.ts` storage 초기화 + 업로드/검증 헬퍼 + `storage.rules` 신규. **⚠️ 콘솔에서 Firebase Storage 활성화 + `storage.rules` 게시 필요**(미활성 시 업로드 net::ERR_FAILED) |
+| **S3 ✅(코드)·⏸ 보류** | **파일 Firebase Storage 업로드(검증→업로드→`storagePath` 저장, 삭제/캐스케이드 Storage 연동, 10MB·MIME 제한)** | `lib/firebase.ts` storage 초기화 + 업로드/검증 헬퍼 + `storage.rules` 신규. **⏸ Firebase Storage가 Blaze 업그레이드 필요 → 라이브 보류**(코드/규칙 유지, 업그레이드 후 재개). 미활성 시 업로드 net::ERR_FAILED → 20s 후 graceful 실패 |
+| **S4-Drive** | **Google Drive 보조 입력 소스 연결**(Storage 대체 아님, 외부 참조). 링크 등록(안 A, 스키마 무변경)→분석→Picker(`drive.file`)→Storage 재개. 설계: [`GOOGLE_DRIVE_SOURCE_INPUT_PLAN.md`](GOOGLE_DRIVE_SOURCE_INPUT_PLAN.md) | OAuth scope(Picker 시) |
 | S4 | URL 등록·메타 저장(urlType 구분, status:'pending') | `projectSources` |
 | S5 | 파일/URL 분석 API 설계·구현(텍스트 추출·서버 fetch·SSRF 차단·실패 처리·`analysisResult`) | API route/worker, 키 서버전용 |
 | S6 | 요구사항 보강 필드 자동 분해(분석 → activation fields, 수정 가능) | M2 AI 분해 재사용 |
