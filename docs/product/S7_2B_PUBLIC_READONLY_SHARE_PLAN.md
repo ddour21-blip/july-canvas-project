@@ -1,0 +1,62 @@
+# S7-2B — public_readonly 공유 전략
+
+> 비로그인 사용자가 `public_readonly` share 링크로 프로젝트/문서/프로토타입/개발 전달 패키지를
+> **읽기 전용**으로 볼 수 있게 한다. 단, **Firestore의 public read를 직접 열지 않고**
+> 서버가 Admin 권한으로 매개 읽기(server-mediated read)하는 구조로 구현한다.
+>
+> `public_review`/comment(비로그인 코멘트)는 본 단계 범위가 아니며 **S7-2C로 분리**한다.
+
+## 1. 배경 / 현재 구조 (조사 결과)
+
+- 라우팅: App Router (next 16.2.6). 서버 라우트 동작 확인됨 (`app/api/generate/activation-draft/route.ts`, `runtime='nodejs'`).
+- Firebase: 지금까지 **클라이언트 SDK(`firebase`)만** 사용. 모든 read 규칙이 `signedIn()`을 요구.
+- `shares` 컬렉션(S7-2A): `shareId`(추측 불가 토큰), `accessType`(`internal`/`public_readonly`/`public_review`),
+  `isEnabled`, `expiresAt`, `targetType`(`project`/`document`/`screen`/`handoff_package`), `targetId`, `projectId`, `createdBy`.
+- `handoff_package`는 **Firestore에 저장되지 않는다.** `lib/handoffPackage.ts`의 `buildHandoffPackage(project, documents, opts)`가
+  project + documents를 즉석 조립하는 순수 함수 → 서버에서 그대로 재사용 가능.
+- 데이터 경로: `artifacts/{appId}/public/data/{collection}/{docId}`.
+
+## 2. 핵심 설계 결정
+
+**서버 매개 읽기 = `firebase-admin`(서비스 계정) Admin 권한 읽기.**
+
+- Admin SDK는 Rules를 우회 → `firestore.rules`는 `signedIn()` 그대로 유지(**public read 미개방**).
+- 클라이언트 SDK를 서버에서 인증 없이 쓰면 Rules가 거부 → 불가. 따라서 Admin SDK가 유일하게 깨끗한 경로.
+- 자격증명: 서버 전용 env **개별 3종**(`FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY`).
+  `FIREBASE_PRIVATE_KEY`는 `\n` escape를 코드에서 실제 줄바꿈으로 복원. `.env.local`만 사용(커밋 금지).
+
+## 3. 단계 분할
+
+| 단계 | 범위 | 상태 |
+|------|------|------|
+| **S7-2B-1 인프라** | `firebase-admin` 의존성, `lib/firebaseAdmin.ts`(서버 전용 lazy init, env 누락 시 명확한 에러), `.env.local.example` 변수명, 본 문서 | ✅ 본 커밋 |
+| S7-2B-2 API | `app/api/share/[shareId]/route.ts` (GET): shareId 검증 → `isEnabled`/`expiresAt`/`accessType==='public_readonly'` 확인 → targetType별 sanitize 후 최소 데이터 반환. `lib/sharePublic.ts`(화이트리스트 sanitizer) | 예정 |
+| S7-2B-3 공개 뷰 | `app/share/[shareId]/page.tsx` 비로그인 read-only 렌더(문서 MD / 화면 / handoff 4종) | 예정 |
+| S7-2B-4 생성 UI | `ShareModal`에 `public_readonly` 옵션 + 공개 URL(`/share/{shareId}`) 표시 | 예정 |
+| **S7-2C** | `public_review` + 비로그인 코멘트 | 별도 |
+
+## 4. 반환 데이터 화이트리스트 (S7-2B-2에서 적용 예정)
+
+서버는 아래 필드만 sanitize 후 반환. **비노출 필드**: `ownerId`, `roleByUid`, `memberUids`,
+`createdBy`, share 내부 메타, document/screen 내 uid 계열.
+
+- `project`: `name`, `description`, `status`, `activation` 안전 필드(intent/problem/customer/value/mvpScope/laterScope/differentiator)
+- `document`: `title`, `type`, `content`, `version`, `status`, `updatedAt`
+- `screen`: `name`, `code` (annotations 제외 — 내부 코멘트 포함)
+- `handoff_package`: 서버에서 project+documents 로드 → `buildHandoffPackage` 호출 결과 `files[]` + `readiness`
+
+## 5. 가드레일 (절대 금지)
+
+- Firestore의 public read를 직접 열지 않는다(Rules 변경은 별도 보고 후).
+- `shares` 컬렉션 구조 변경 금지.
+- 기존 B 라인 흐름 / PRD 조립 로직 / CanvasApp / ShareModal 회귀 금지.
+- 서비스 계정 키 값·`.env.local` 커밋 금지. 자격증명 env에 `NEXT_PUBLIC_` 접두사 금지.
+- 비로그인 직접 Firestore 접근 금지(반드시 서버 매개).
+
+## 6. S7-2B-1 완료 기준
+
+- `lib/firebaseAdmin.ts` lazy init + env 누락 시 명확한 에러.
+- `.env.local.example`에 변수명만 추가(값 없음).
+- Rules 변경 없음 / public share API 미구현.
+- `npx tsc --noEmit`, `npx eslint .`, `npm run build` 통과(키 없이도).
+- 라이브 검증은 `.env.local`에 서비스 계정 키 설정 후 진행(후속 단계).
