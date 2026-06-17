@@ -9,6 +9,7 @@ import { buildPrototypePackage } from '@/lib/prototypePrompt';
 import { buildInformationArchitecture, type IaTarget } from '@/lib/informationArchitecture';
 import { buildFeatureSpec } from '@/lib/featureSpec';
 import { buildHandoffPackage, type HandoffPackage, type HandoffPrototype } from '@/lib/handoffPackage';
+import { downloadHandoffFile, downloadHandoffZip } from '@/lib/exportHandoffPackage';
 import { PROTOTYPE_KINDS, deletePrototypeUrl, lockPrototype, registerPrototypeScreen, registerPrototypeUrl, subscribePrototypeUrls, unlockPrototype } from '@/lib/prototypes';
 import { shareHash, toShareUrl } from '@/lib/shareLinks';
 import { useAuth } from '@/lib/auth';
@@ -306,6 +307,22 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     const all = handoffPkg.files.map((file) => `===== ${file.name} =====\n\n${file.content}`).join('\n\n\n');
     if (copyToClipboard(all)) showToast('개발 전달 패키지 전체를 복사했습니다.');
     else showToast('복사 실패', 'error');
+  };
+
+  const handleDownloadHandoffFile = () => {
+    const file = handoffPkg?.files[handoffTab];
+    if (file) downloadHandoffFile(file);
+  };
+
+  const handleDownloadHandoffZip = async () => {
+    if (!handoffPkg) return;
+    try {
+      await downloadHandoffZip(project.name, handoffPkg.files);
+      showToast('개발 전달 패키지 ZIP을 다운로드했습니다.');
+    } catch (err) {
+      console.error(err);
+      showToast('ZIP 다운로드 중 오류가 발생했습니다.', 'error');
+    }
   };
 
   const copyLink = (link: string) => {
@@ -703,9 +720,11 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button type="button" onClick={handleCopyHandoffFile} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={13} /> 이 문서 복사</button>
-                <button type="button" onClick={handleCopyHandoffAll} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:bg-[var(--color-primary-hover)] transition-colors"><Copy size={13} /> 전체 복사</button>
+                <button type="button" onClick={handleDownloadHandoffFile} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><Download size={13} /> 이 문서 .md</button>
+                <button type="button" onClick={handleCopyHandoffAll} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={13} /> 전체 복사</button>
+                <button type="button" onClick={handleDownloadHandoffZip} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:bg-[var(--color-primary-hover)] transition-colors"><Download size={13} /> ZIP 다운로드</button>
                 <button type="button" onClick={() => setHandoffPkg(null)} aria-label="닫기" className="p-1.5 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] transition-colors"><X size={15} /></button>
               </div>
             </div>
