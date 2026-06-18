@@ -18,6 +18,7 @@ import { col, docRef } from '@/lib/firestore';
 import { formatDateTime, getTime, showToast } from '@/lib/utils';
 import { isShareActive, resolveShareHash } from '@/lib/shares';
 import { Button } from '@/components/common/Button';
+import { GoogleSignInButton } from '@/components/common/GoogleSignInButton';
 import { WorkspaceSidebar } from '@/components/common/WorkspaceSidebar';
 import { ShareModal, type ShareState } from '@/components/modals/ShareModal';
 import { ExportZipModal } from '@/components/modals/ExportZipModal';
@@ -305,12 +306,11 @@ function CanvasAppInner() {
               </button>
             </div>
           ) : (
-            <button
+            <GoogleSignInButton
+              size="sm"
+              label="로그인"
               onClick={() => signInWithGoogle().catch((e) => console.error('Google 로그인 실패:', e))}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 transition-colors px-4 py-1.5 rounded-full text-white font-bold"
-            >
-              Google 로그인
-            </button>
+            />
           )}
         </div>
       </header>

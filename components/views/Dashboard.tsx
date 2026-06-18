@@ -8,8 +8,9 @@ import { getPermissions, useAuth } from '@/lib/auth';
 import { deleteProjectCascade } from '@/lib/projects';
 import { getTime, nowMs, showToast } from '@/lib/utils';
 import { Button } from '@/components/common/Button';
+import { GoogleSignInButton } from '@/components/common/GoogleSignInButton';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
-import { Activity, CheckCircle2, ChevronRight, Clock, Database, FileText, Folder, FolderPlus, Globe, Layers, Layout, LogIn, Plus, Trash2, User as UserIcon, Users, X } from 'lucide-react';
+import { Activity, CheckCircle2, ChevronRight, Clock, Database, FileText, Folder, FolderPlus, Globe, Layers, Layout, Plus, Sparkles, Share2, Trash2, User as UserIcon, Users, X } from 'lucide-react';
 import type { Member, Project, ProjectDocument, ProjectStatus, Screen } from '@/types';
 
 // 상태 배지: green-first 토큰(fg/bg)을 직접 소비. draft=neutral, active=green,
@@ -286,6 +287,73 @@ export default function Dashboard({
     });
   };
 
+  // 비로그인(익명) 사용자: 대시보드 전체 기능 대신 제품 설명/핵심 가치 + 단일 로그인 CTA를 먼저 노출.
+  // (익명 폴백 전제는 유지 — 접속 코드가 있는 팀원은 하단 보조 폼으로 계속 입장 가능)
+  if (!canCreateProject) {
+    const VALUES: { icon: ComponentType<{ size?: number }>; title: string; desc: string }[] = [
+      { icon: Folder, title: '조직·프로젝트 단위 관리', desc: '기획 문서와 프로토타입을 하나의 워크스페이스에서 정리합니다.' },
+      { icon: Sparkles, title: '단계별 문서 자동화', desc: '브리프부터 PRD까지 기획 산출물을 단계별로 만들어 나갑니다.' },
+      { icon: Share2, title: '역할 기반 협업', desc: '권한과 공유 링크로 팀원과 안전하게 함께 검토합니다.' },
+    ];
+    return (
+      <div className="p-6 sm:p-10 max-w-5xl mx-auto">
+        <section className="text-center pt-10 sm:pt-16 pb-10">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[var(--radius-pill)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] text-xs font-bold mb-6">
+            <Sparkles size={13} /> 제품화 기획 워크스페이스
+          </span>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-[var(--text-strong)] tracking-tight leading-tight">
+            기획 문서와 프로토타입을
+            <br className="hidden sm:block" /> 한 곳에서 제품으로
+          </h1>
+          <p className="text-[var(--text-secondary)] mt-4 max-w-xl mx-auto leading-relaxed">
+            조직과 프로젝트 단위로 기획 문서와 프로토타입을 관리하는 워크스페이스입니다. Google 계정으로 로그인하면 바로 프로젝트를 만들 수 있습니다.
+          </p>
+          <div className="mt-8 flex flex-col items-center gap-3">
+            <GoogleSignInButton onClick={promptGoogleSignIn} />
+            <p className="text-xs text-[var(--text-tertiary)]">익명 상태로 둘러볼 수 있지만, 프로젝트 생성·저장은 로그인 후 가능합니다.</p>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-5 mt-4">
+          {VALUES.map((v) => {
+            const Icon = v.icon;
+            return (
+              <div key={v.title} className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
+                <div className="w-11 h-11 rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center mb-4">
+                  <Icon size={20} />
+                </div>
+                <h3 className="text-base font-bold text-[var(--text-strong)] mb-1.5">{v.title}</h3>
+                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{v.desc}</p>
+              </div>
+            );
+          })}
+        </section>
+
+        <section className="mt-10 flex flex-col items-center gap-3 border-t border-[var(--border-subtle)] pt-8">
+          <p className="text-sm font-medium text-[var(--text-secondary)]">이미 접속 코드를 받으셨나요?</p>
+          <form
+            onSubmit={handleJoinByCode}
+            className="flex bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] overflow-hidden focus-within:ring-2 focus-within:ring-[var(--color-focus-ring)] shadow-[var(--shadow-sm)] h-[44px] transition-shadow"
+          >
+            <input
+              type="text"
+              value={accessCode}
+              onChange={(e) => setAccessCode(e.target.value)}
+              placeholder="접속 코드 (예: project_123)"
+              className="px-4 py-2 outline-none w-56 text-sm font-medium text-[var(--text-body)] bg-transparent"
+            />
+            <button
+              type="submit"
+              className="bg-[var(--surface-sunken)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] px-5 py-2 text-sm font-bold text-[var(--text-secondary)] border-l border-[var(--border-default)] transition-colors whitespace-nowrap"
+            >
+              바로 입장
+            </button>
+          </form>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="p-10">
       <ConfirmModal
@@ -332,15 +400,9 @@ export default function Dashboard({
               </Button>
             </>
           )}
-          {canCreateProject ? (
-            <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="h-[44px] px-6">
-              새 프로젝트
-            </Button>
-          ) : (
-            <Button icon={LogIn} onClick={promptGoogleSignIn} className="h-[44px] px-6">
-              Google 로그인하고 시작
-            </Button>
-          )}
+          <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="h-[44px] px-6">
+            새 프로젝트
+          </Button>
         </div>
       </div>
 
@@ -422,19 +484,11 @@ export default function Dashboard({
             </div>
             <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">등록된 프로젝트가 없습니다</h3>
             <p className="text-[var(--text-secondary)] mb-6 max-w-md">
-              {canCreateProject
-                ? '위 입력창에 접속 코드를 입력하거나, 새 프로젝트를 생성해 기획 문서와 프로토타입 관리를 시작하세요.'
-                : 'Google 로그인 후 새 프로젝트를 만들 수 있습니다. 익명 상태에서는 프로젝트가 계정에 안정적으로 저장되지 않습니다.'}
+              위 입력창에 접속 코드를 입력하거나, 새 프로젝트를 생성해 기획 문서와 프로토타입 관리를 시작하세요.
             </p>
-            {canCreateProject ? (
-              <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="px-6 h-[44px]">
-                새 프로젝트
-              </Button>
-            ) : (
-              <Button icon={LogIn} onClick={promptGoogleSignIn} className="px-6 h-[44px]">
-                Google 로그인하고 시작
-              </Button>
-            )}
+            <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="px-6 h-[44px]">
+              새 프로젝트
+            </Button>
           </div>
         )}
           </div>
