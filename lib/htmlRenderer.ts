@@ -36,6 +36,9 @@ export const generateHtmlBoilerplate = (rawCode: string): string => {
           {
             "imports": {
               "react": "https://esm.sh/react@18.2.0",
+              "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+              "react/jsx-dev-runtime": "https://esm.sh/react@18.2.0/jsx-dev-runtime",
+              "react-dom": "https://esm.sh/react-dom@18.2.0",
               "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
               "lucide-react": "https://esm.sh/lucide-react@0.292.0?deps=react@18.2.0",
               "recharts": "https://esm.sh/recharts@2.10.3?deps=react@18.2.0,react-dom@18.2.0"
