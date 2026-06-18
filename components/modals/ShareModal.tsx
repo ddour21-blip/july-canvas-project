@@ -175,10 +175,12 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
         <div className="space-y-6">
           {/* 바로가기 딥링크 옵션 (로그인/멤버 전용 내부 링크) */}
           {links.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 text-sm font-bold text-[var(--text-strong)] mb-1">
+            <details className="rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-card)]">
+              <summary className="cursor-pointer select-none flex items-center gap-1.5 px-4 py-3 text-sm font-bold text-[var(--text-strong)]">
                 <Link2 size={16} className="text-[var(--color-primary-text)]" /> 바로가기 링크
-              </div>
+                <span className="ml-auto text-[11px] font-medium text-[var(--text-tertiary)]">고급</span>
+              </summary>
+              <div className="px-4 pb-4">
               <p className="text-xs text-[var(--text-tertiary)] mb-3">로그인한 프로젝트 멤버가 해당 위치로 바로 이동합니다.</p>
               <ul className="space-y-2">
                 {links.map((l) => {
@@ -203,7 +205,8 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
                   );
                 })}
               </ul>
-            </div>
+              </div>
+            </details>
           )}
 
           {/* 공유 링크 (S7-2A): shareId 기반 링크 생성/관리. 현 단계 internal(로그인 멤버). owner/editor만. */}
@@ -317,45 +320,30 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
             </div>
           )}
 
-          {/* 레거시: 고유 접속 링크 + 접속 코드 (기존 방식 유지) */}
-          <div className="bg-[var(--color-primary-softer)] border border-[var(--brand-100)] rounded-[var(--radius-2xl)] p-5 text-center">
-            <label className="block text-sm font-bold text-[var(--color-primary-text)] mb-3">고유 접속 링크 및 코드</label>
-            <div
-              className="bg-[var(--surface-card)] border border-[var(--brand-200)] rounded-[var(--radius-lg)] px-4 py-3 font-mono font-bold text-[var(--text-body)] text-[13px] shadow-[var(--shadow-inset)] select-all overflow-hidden text-ellipsis whitespace-nowrap mb-4"
-              title={fullUrl}
-            >
-              {fullUrl}
-            </div>
-            <Button onClick={handleCopyMessage} className="w-full py-3.5 text-base font-bold shadow-[var(--shadow-brand)]">
-              링크 + 접속 코드 함께 복사
-            </Button>
-            <div className="bg-[var(--green-50)] px-4 py-3 border border-[var(--green-100)] rounded-[var(--radius-lg)] text-xs font-bold text-[var(--green-700)] flex flex-col gap-1 mt-4">
-              <span>💡 이 링크는 안심하고 한 번만 공유하세요.</span>
-              <span className="text-[var(--green-600)] font-medium">
-                코드가 업데이트되어도 팀원 접속 시 자동으로 최신 버전 화면으로 즉시 연결됩니다.
-              </span>
-            </div>
-          </div>
-          <div className="border border-[var(--border-default)] rounded-[var(--radius-lg)] overflow-hidden bg-[var(--surface-card)]">
-            <div className="bg-[var(--surface-sunken)] px-4 py-3 border-b border-[var(--border-default)] text-xs font-bold text-[var(--text-secondary)] text-center">
-              💡 팀원 직접 입장 가이드
-            </div>
-            <div className="p-6 flex flex-col items-center text-center">
-              <div className="flex bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] overflow-hidden shadow-[var(--shadow-sm)] h-[40px] w-full max-w-[300px] mb-4 pointer-events-none">
-                <div className="px-4 py-2 text-sm font-medium text-[var(--text-body)] flex-1 text-left bg-[var(--surface-active)] font-mono select-none truncate">
-                  {displayHash}
-                </div>
-                <div className="bg-[var(--surface-sunken)] px-4 py-2 text-sm font-bold text-[var(--text-secondary)] border-l border-[var(--border-strong)] select-none whitespace-nowrap">
-                  바로 입장
-                </div>
+          {/* 레거시(접기): 팀원 입장 코드 — shareId 공유 링크로 수렴 중이나, 접속 코드 입장 흐름 유지를 위해 보존. */}
+          <details className="bg-[var(--color-primary-softer)] border border-[var(--brand-100)] rounded-[var(--radius-2xl)] overflow-hidden">
+            <summary className="cursor-pointer select-none flex items-center gap-1.5 px-5 py-3.5 text-sm font-bold text-[var(--color-primary-text)]">
+              <Link2 size={16} /> 팀원 입장 코드
+              <span className="ml-auto text-[11px] font-medium text-[var(--text-tertiary)]">접속 코드로 초대</span>
+            </summary>
+            <div className="px-5 pb-5 text-center">
+              <div
+                className="bg-[var(--surface-card)] border border-[var(--brand-200)] rounded-[var(--radius-lg)] px-4 py-3 font-mono font-bold text-[var(--text-body)] text-[13px] shadow-[var(--shadow-inset)] select-all overflow-hidden text-ellipsis whitespace-nowrap mb-4"
+                title={fullUrl}
+              >
+                {fullUrl}
               </div>
-              <p className="text-[13px] font-bold text-[var(--text-body)] leading-relaxed">
-                공유 받은 다이렉트 링크를 클릭하거나
-                <br />
-                <span className="text-[var(--color-primary-text)]">접속 코드</span>를 입력 후 접속하세요
-              </p>
+              <Button onClick={handleCopyMessage} className="w-full py-3.5 text-base font-bold shadow-[var(--shadow-brand)]">
+                링크 + 접속 코드 함께 복사
+              </Button>
+              <div className="bg-[var(--green-50)] px-4 py-3 border border-[var(--green-100)] rounded-[var(--radius-lg)] text-xs font-bold text-[var(--green-700)] flex flex-col gap-1 mt-4 text-left">
+                <span>💡 이 링크는 안심하고 한 번만 공유하세요.</span>
+                <span className="text-[var(--green-600)] font-medium">
+                  코드가 업데이트되어도 팀원 접속 시 자동으로 최신 버전 화면으로 즉시 연결됩니다.
+                </span>
+              </div>
             </div>
-          </div>
+          </details>
         </div>
       </div>
     </div>

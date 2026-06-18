@@ -46,6 +46,8 @@ function FirebaseNotice() {
 function CanvasAppInner() {
   // 인증은 AuthProvider(useAuth)에서 관리. firebaseUser를 기존 user 변수로 사용.
   const { user: authUser, firebaseUser: user, loading, signInWithGoogle, signOutUser } = useAuth();
+  // Google 로그인 사용자만 협업 UI(알림/동기화 상태/워크스페이스 사이드바)를 노출. 익명은 랜딩에 집중.
+  const isGoogleUser = !!authUser && !authUser.isAnonymous;
   const [projects, setProjects] = useState<Project[]>([]);
   const [screens, setScreens] = useState<Screen[]>([]);
   const [globalMembers, setGlobalMembers] = useState<Member[]>([]);
@@ -271,20 +273,24 @@ function CanvasAppInner() {
           <img src="/brand/logo/header.svg" alt="July Canvas" className="h-7 w-auto" />
         </div>
         <div className="text-sm text-gray-500 flex items-center gap-4 font-medium">
-          <button
-            onClick={() => setIsInboxOpen(true)}
-            className="relative flex items-center gap-1.5 hover:bg-gray-200 transition-colors bg-gray-100 px-3 py-1.5 rounded-full text-gray-700"
-          >
-            <BellRing size={16} className="text-blue-600" /> 알림
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" /> 실시간 동기화 중
-          </div>
+          {isGoogleUser && (
+            <>
+              <button
+                onClick={() => setIsInboxOpen(true)}
+                className="relative flex items-center gap-1.5 hover:bg-gray-200 transition-colors bg-gray-100 px-3 py-1.5 rounded-full text-gray-700"
+              >
+                <BellRing size={16} className="text-blue-600" /> 알림
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" /> 실시간 동기화 중
+              </div>
+            </>
+          )}
           {/* Google 로그인/로그아웃 */}
           {authUser && !authUser.isAnonymous ? (
             <div className="flex items-center gap-2">
@@ -317,7 +323,7 @@ function CanvasAppInner() {
 
       {/* 대시보드 뷰에서만 드라이브형 좌측 워크스페이스 내비를 노출(프로젝트/화면 뷰 레이아웃은 UI-5/UI-6). */}
       <div className="flex">
-        {viewType === 'dashboard' && (
+        {viewType === 'dashboard' && isGoogleUser && (
           <WorkspaceSidebar projects={projects} user={user} navigate={navigate} currentRoute={currentRoute} />
         )}
         <main className="flex-1 min-w-0 mx-auto max-w-[1600px]">

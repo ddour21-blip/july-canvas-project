@@ -10,7 +10,7 @@ import { getTime, nowMs, showToast } from '@/lib/utils';
 import { Button } from '@/components/common/Button';
 import { GoogleSignInButton } from '@/components/common/GoogleSignInButton';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
-import { Activity, CheckCircle2, ChevronRight, Clock, Database, FileText, Folder, FolderPlus, Globe, Layers, Layout, Plus, Sparkles, Share2, Trash2, User as UserIcon, Users, X } from 'lucide-react';
+import { Activity, CheckCircle2, ChevronRight, Clock, Database, FileText, Folder, FolderPlus, Globe, Layers, Layout, MoreHorizontal, Plus, Sparkles, Share2, Trash2, User as UserIcon, Users, X } from 'lucide-react';
 import type { Member, Project, ProjectDocument, ProjectStatus, Screen } from '@/types';
 
 // 상태 배지: green-first 토큰(fg/bg)을 직접 소비. draft=neutral, active=green,
@@ -176,6 +176,7 @@ export default function Dashboard({
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [confirmState, setConfirmState] = useState<ConfirmState>({ isOpen: false, title: '', msg: '', action: null });
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
 
   const { signInWithGoogle } = useAuth();
   const isGlobalEditor = projects.length === 0 || projects.some((p) => !p.ownerId || p.ownerId === user?.uid);
@@ -388,17 +389,42 @@ export default function Dashboard({
             </button>
           </form>
           {isGlobalEditor && (
-            <>
-              <Button variant="outline" icon={Globe} onClick={() => setExportModalOpen(true)} className="h-[44px] px-5 shadow-[var(--shadow-xs)]">
-                배포 안내
+            <div className="relative">
+              <Button variant="secondary" icon={MoreHorizontal} onClick={() => setIsMoreOpen((v) => !v)} className="h-[44px] px-5">
+                더보기
               </Button>
-              <Button variant="secondary" icon={Database} onClick={() => setBackupOpen(true)} className="h-[44px] px-5">
-                데이터 백업/복원
-              </Button>
-              <Button variant="secondary" icon={Users} onClick={() => setIsMemberModalOpen(true)} className="h-[44px] px-5">
-                팀원 관리 ({globalMembers.length})
-              </Button>
-            </>
+              {isMoreOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsMoreOpen(false)} aria-hidden="true" />
+                  <div
+                    role="menu"
+                    className="absolute right-0 mt-2 w-56 z-50 bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-lg)] shadow-[var(--shadow-md)] py-1.5"
+                  >
+                    {[
+                      { icon: Globe, label: '배포 안내', onClick: () => setExportModalOpen(true) },
+                      { icon: Database, label: '데이터 백업/복원', onClick: () => setBackupOpen(true) },
+                      { icon: Users, label: `팀원 관리 (${globalMembers.length})`, onClick: () => setIsMemberModalOpen(true) },
+                    ].map((m) => {
+                      const Icon = m.icon;
+                      return (
+                        <button
+                          key={m.label}
+                          role="menuitem"
+                          onClick={() => {
+                            setIsMoreOpen(false);
+                            m.onClick();
+                          }}
+                          className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm font-medium text-[var(--text-body)] hover:bg-[var(--surface-hover)] hover:text-[var(--color-primary-text)] transition-colors text-left"
+                        >
+                          <Icon size={16} className="shrink-0 text-[var(--text-tertiary)]" />
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
           )}
           <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="h-[44px] px-6">
             새 프로젝트
