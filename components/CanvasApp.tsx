@@ -273,7 +273,6 @@ function CanvasAppInner() {
         isGoogleUser={isGoogleUser}
         authUser={authUser}
         unreadCount={unreadCount}
-        orgName="July Production"
         onToggleSidebar={() => setCollapsed((v) => !v)}
         onOpenInbox={() => setIsInboxOpen(true)}
         onSignIn={() => signInWithGoogle().catch((e) => console.error('Google 로그인 실패:', e))}
