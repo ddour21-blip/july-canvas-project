@@ -40,9 +40,9 @@ export function AdminTopbar({
             <Menu size={22} />
           </button>
         )}
-        <button className="jca-topbar__brand" onClick={onHome} type="button" style={{ gap: '8px', fontSize: '16px' }}>
+        <button className="jca-topbar__brand" onClick={onHome} type="button" style={{ gap: '9px', fontSize: '18px', fontWeight: 800 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/logo/symbol.svg" alt="" style={{ height: '20px', width: 'auto' }} />
+          <img src="/brand/logo/symbol.svg" alt="" style={{ height: '30px', width: 'auto' }} />
           <span>July Canvas</span>
         </button>
       </div>

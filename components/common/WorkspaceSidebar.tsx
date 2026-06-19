@@ -10,6 +10,8 @@ import { ChevronDown, FolderKanban, LayoutDashboard, Settings, Users } from 'luc
 interface WorkspaceSidebarProps {
   navigate: (hash: string) => void;
   currentRoute: string;
+  /** 접힘 상태 — true면 그룹 아이콘 클릭 시 펼침 대신 대표 페이지로 이동 */
+  collapsed?: boolean;
   /** NEXT_PUBLIC_ADMIN_TOOLS 가 켜졌을 때만 백업/복원 노출 */
   adminTools?: boolean;
   onOpenBackup?: () => void;
@@ -22,26 +24,38 @@ function viewOf(currentRoute: string): string {
   return rest[0] || 'dashboard';
 }
 
-export function WorkspaceSidebar({ navigate, currentRoute, adminTools, onOpenBackup }: WorkspaceSidebarProps) {
+export function WorkspaceSidebar({ navigate, currentRoute, collapsed, adminTools, onOpenBackup }: WorkspaceSidebarProps) {
   const view = viewOf(currentRoute);
 
   const [openProjects, setOpenProjects] = useState(true);
   const [openMembers, setOpenMembers] = useState(true);
   const [openSettings, setOpenSettings] = useState(view === 'settings');
 
-  // 1depth 그룹 헤더: 펼침 토글만 담당(active 강조 없음 — 실제 선택은 2depth child).
+  // 1depth 그룹 헤더: 펼친 상태에선 토글, 접힌 상태에선 대표 페이지로 이동(접힘 시 하위 메뉴가 숨겨져 클릭 불가하던 문제 해결).
+  // 접힘 상태에선 현재 도메인에 해당하는 그룹 아이콘을 active로 강조.
   const NavGroup = ({
     icon: Icon,
     label,
+    primary,
+    domainActive,
     expanded,
     onToggle,
   }: {
     icon: ComponentType<{ size?: number }>;
     label: string;
+    primary: string;
+    domainActive: boolean;
     expanded: boolean;
     onToggle: () => void;
   }) => (
-    <button type="button" className="jca-nav-item" aria-expanded={expanded} onClick={onToggle}>
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      className={`jca-nav-item${collapsed && domainActive ? ' jca-nav-item--active' : ''}`}
+      aria-expanded={collapsed ? undefined : expanded}
+      onClick={collapsed ? () => navigate(primary) : onToggle}
+    >
       <Icon size={19} />
       <span className="jca-nav-item__label">{label}</span>
       <ChevronDown size={16} className="jca-nav-item__chev" />
@@ -60,7 +74,7 @@ export function WorkspaceSidebar({ navigate, currentRoute, adminTools, onOpenBac
     active?: boolean;
     onClick: () => void;
   }) => (
-    <button type="button" className={`jca-nav-item${active ? ' jca-nav-item--active' : ''}`} onClick={onClick}>
+    <button type="button" title={label} aria-label={label} className={`jca-nav-item${active ? ' jca-nav-item--active' : ''}`} onClick={onClick}>
       <Icon size={19} />
       <span className="jca-nav-item__label">{label}</span>
     </button>
@@ -80,14 +94,14 @@ export function WorkspaceSidebar({ navigate, currentRoute, adminTools, onOpenBac
 
       <NavLeaf icon={LayoutDashboard} label="대시보드" active={view === 'dashboard'} onClick={() => navigate('#')} />
 
-      <NavGroup icon={FolderKanban} label="프로젝트" expanded={openProjects} onToggle={() => setOpenProjects((v) => !v)} />
+      <NavGroup icon={FolderKanban} label="프로젝트" primary="#projects" domainActive={view === 'projects' || view === 'project'} expanded={openProjects} onToggle={() => setOpenProjects((v) => !v)} />
       {openProjects && (
         <div className="jca-nav-sub">
           <SubItem label="프로젝트 목록" active={view === 'projects'} onClick={() => navigate('#projects')} />
         </div>
       )}
 
-      <NavGroup icon={Users} label="멤버 · 권한" expanded={openMembers} onToggle={() => setOpenMembers((v) => !v)} />
+      <NavGroup icon={Users} label="멤버 · 권한" primary="#members" domainActive={view === 'members'} expanded={openMembers} onToggle={() => setOpenMembers((v) => !v)} />
       {openMembers && (
         <div className="jca-nav-sub">
           <SubItem label="구성원" active={view === 'members'} onClick={() => navigate('#members')} />
@@ -95,7 +109,7 @@ export function WorkspaceSidebar({ navigate, currentRoute, adminTools, onOpenBac
         </div>
       )}
 
-      <NavGroup icon={Settings} label="설정" expanded={openSettings} onToggle={() => setOpenSettings((v) => !v)} />
+      <NavGroup icon={Settings} label="설정" primary="#settings" domainActive={view === 'settings'} expanded={openSettings} onToggle={() => setOpenSettings((v) => !v)} />
       {openSettings && (
         <div className="jca-nav-sub">
           <SubItem label="워크스페이스 정보" active={view === 'settings'} onClick={() => navigate('#settings')} />

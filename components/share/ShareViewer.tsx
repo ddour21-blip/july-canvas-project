@@ -8,6 +8,7 @@
 //    문자 그대로 보인다. ScreenEditor의 iframe/HTML 렌더 구조를 복사하지 않는다.
 //  - 편집/로그인/승인/삭제/공유관리 UI 없음(읽기 전용).
 import { useEffect, useRef, useState } from 'react';
+import ShareFallback from '@/components/views/ShareFallback';
 import { REVIEW_LIMITS } from '@/lib/publicShareSanitizer';
 
 // Cloudflare Turnstile (env-gated 위젯). 스크립트는 site key 설정 시에만 로드된다.
@@ -429,25 +430,7 @@ export default function ShareViewer({ shareId }: { shareId: string }) {
           </div>
         )}
 
-        {state.kind === 'error' && (
-          <div
-            className="mx-auto max-w-md rounded-2xl border bg-white p-8 text-center"
-            style={{ borderColor: 'var(--border-default)', boxShadow: 'var(--shadow-md)' }}
-          >
-            <div
-              className="mx-auto flex h-12 w-12 items-center justify-center rounded-full text-xl"
-              style={{ background: 'var(--surface-hover)', color: 'var(--text-secondary)' }}
-            >
-              🔒
-            </div>
-            <h1 className="mt-4 text-lg font-bold" style={{ color: 'var(--text-strong)' }}>
-              {state.title}
-            </h1>
-            <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {state.detail}
-            </p>
-          </div>
-        )}
+        {state.kind === 'error' && <ShareFallback onHome={() => { window.location.href = '/'; }} />}
 
         {state.kind === 'ok' && (
           <>

@@ -25,6 +25,7 @@ import ProjectList from '@/components/views/ProjectList';
 import MembersAdmin from '@/components/views/MembersAdmin';
 import SettingsAdmin from '@/components/views/SettingsAdmin';
 import AnonymousLanding from '@/components/views/AnonymousLanding';
+import ShareFallback from '@/components/views/ShareFallback';
 import ProjectDetail from '@/components/views/ProjectDetail';
 import ScreenEditor from '@/components/views/ScreenEditor';
 
@@ -157,23 +158,17 @@ function CanvasAppInner() {
   };
 
   // 공유 링크 resolve (S7-2A): #share_{shareId} → 활성/만료 확인 후 내부 딥링크로 이동.
+  // 유효하지 않으면 홈으로 보내지 않고 그 자리에 fallback 안내(ShareFallback)를 렌더한다(빈 화면 방지).
   useEffect(() => {
     const parts = currentRoute.replace('#', '').split('_');
     const rest = parts[0] === 'ws' ? parts.slice(2) : parts;
     if (rest[0] !== 'share' || !rest[1]) return;
     if (!sharesLoaded) return; // 구독 도착 전엔 대기
     const share = shares.find((s) => s.shareId === rest[1]);
-    if (!share) {
-      showToast('유효하지 않은 공유 링크입니다.', 'error');
-      navigate('#');
-      return;
+    if (share && isShareActive(share)) {
+      navigate(resolveShareHash(share));
     }
-    if (!isShareActive(share)) {
-      showToast('비활성화되었거나 만료된 공유 링크입니다.', 'error');
-      navigate('#');
-      return;
-    }
-    navigate(resolveShareHash(share));
+    // 없거나 비활성/만료 → navigate 하지 않고 render 분기에서 ShareFallback 표시
   }, [currentRoute, shares, sharesLoaded]);
 
   const unreadCount = mockEmails.filter((e) => !e.isRead).length;
@@ -291,6 +286,7 @@ function CanvasAppInner() {
           <WorkspaceSidebar
             navigate={navigate}
             currentRoute={currentRoute}
+            collapsed={collapsed}
             adminTools={ADMIN_TOOLS}
             onOpenBackup={() => setBackupOpen(true)}
           />
@@ -309,10 +305,17 @@ function CanvasAppInner() {
               workspaceId={activeWorkspaceId}
             />
           ) : viewType === 'share' ? (
-            <div className="jca-loading">
-              <div className="jca-spinner" />
-              <p>공유 링크를 확인하는 중...</p>
-            </div>
+            sharesLoaded && !shares.some((s) => s.shareId === viewId && isShareActive(s)) ? (
+              <ShareFallback
+                onHome={() => navigate('#')}
+                onSignIn={!isGoogleUser ? () => signInWithGoogle().catch((e) => console.error('Google 로그인 실패:', e)) : undefined}
+              />
+            ) : (
+              <div className="jca-loading">
+                <div className="jca-spinner" />
+                <p>공유 링크를 확인하는 중...</p>
+              </div>
+            )
           ) : !isGoogleUser ? (
             <AnonymousLanding onSignIn={() => signInWithGoogle().catch((e) => console.error('Google 로그인 실패:', e))} />
           ) : viewType === 'project' ? (
