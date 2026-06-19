@@ -1,22 +1,26 @@
 'use client';
 
-// 공유 링크가 없거나 만료/권한 없음일 때 보여주는 fallback 안내 화면.
+// 공유 링크가 없거나 만료/권한 없음/로드 실패일 때 보여주는 fallback 안내 화면.
 // 실제 공유 기능을 새로 만들지 않음 — share token/Firebase/Auth 검증 실패 시 표시되는 UI만 담당.
-// 이미지는 public/share-osaka.png (없으면 graceful 폴백 박스).
+// 이미지는 /share-osaka.png 를 우선 렌더(캐시버스트 ?v=…로 옛 404 캐시 우회). 실제 로드 실패 시에만 🗼 placeholder.
 import { useState } from 'react';
 import { GoogleSignInButton } from '@/components/common/GoogleSignInButton';
 
+// 이미지 캐시버스트 버전(추가/교체 시 갱신). 이전에 404가 캐시된 경우를 우회하기 위함.
+const OSAKA_SRC = '/share-osaka.png?v=930511f';
+
 export default function ShareFallback({ onHome, onSignIn }: { onHome: () => void; onSignIn?: () => void }) {
-  const [imgOk, setImgOk] = useState(true);
+  // 시작값 true → 항상 실제 이미지를 먼저 시도하고, onError(실제 로드 실패) 시에만 placeholder로 전환.
+  const [imgFailed, setImgFailed] = useState(false);
   return (
     <div className="min-h-[78vh] flex flex-col items-center justify-center text-center px-6 py-16 bg-[var(--surface-page)]">
       <div className="w-full max-w-2xl flex flex-col items-center">
-        {imgOk ? (
+        {!imgFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src="/share-osaka.png"
+            src={OSAKA_SRC}
             alt="오사카"
-            onError={() => setImgOk(false)}
+            onError={() => setImgFailed(true)}
             className="w-full max-w-xl rounded-[var(--radius-2xl)] shadow-[var(--shadow-lg)] mb-9"
           />
         ) : (
