@@ -37,12 +37,13 @@ export function AdminTopbar({
       <div className="jca-topbar__lead">
         {isGoogleUser && (
           <button className="jca-topbar__menu" onClick={onToggleSidebar} aria-label="메뉴 접기/펼치기">
-            <Menu size={20} />
+            <Menu size={22} />
           </button>
         )}
-        <button className="jca-topbar__brand" onClick={onHome} type="button">
+        <button className="jca-topbar__brand" onClick={onHome} type="button" style={{ gap: '8px', fontSize: '16px' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/logo/header-dark.svg" alt="July Canvas" />
+          <img src="/brand/logo/symbol.svg" alt="" style={{ height: '20px', width: 'auto' }} />
+          <span>July Canvas</span>
         </button>
       </div>
 

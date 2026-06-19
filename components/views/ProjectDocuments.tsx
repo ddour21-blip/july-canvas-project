@@ -66,6 +66,8 @@ interface Props {
   screens: Screen[];
   isEditor: boolean;
   isOwner: boolean;
+  /** 렌더할 섹션 — 프로젝트 상세 탭별로 기능을 분리(문서/프로토타입/개발 전달). 기본 'documents'. */
+  section?: 'documents' | 'prototype' | 'handoff';
   /** 딥링크로 진입한 초기 선택 문서 id (해당 문서 타입을 선택 상태로) */
   initialDocId?: string | null;
   /** 현재 선택된 문서 id를 상위로 보고 (공유 '현재 문서 링크'용) */
@@ -74,7 +76,7 @@ interface Props {
   navigate?: (hash: string) => void;
 }
 
-export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, initialDocId, onCurrentDocChange, navigate }: Props) {
+export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, section = 'documents', initialDocId, onCurrentDocChange, navigate }: Props) {
   const { user } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -448,13 +450,13 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
         </div>
       )}
 
-      {/* 진행 요약 */}
+      {section === 'documents' && (
       <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h3 className="font-bold text-[var(--text-strong)] text-lg">문서 파이프라인</h3>
             <p className="text-sm text-[var(--text-secondary)] mt-1">
-              브리프 → 시장조사 → 제품화전략 → IA → 기능정의서 → PRD 순으로 작성합니다.
+              프로젝트 브리프(시장조사·레퍼런스 포함) → 제품화 전략 → PRD(IA·기능정의서)
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -471,8 +473,9 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           </div>
         </div>
       </div>
+      )}
 
-      {/* 프로토타입 제작 패키지 (B2): 초기 문서 3종 기반 → 최소 IA/핵심 기능/Gemini Canvas 프롬프트 (로컬 생성·복사) */}
+      {section === 'prototype' && (
       <div className="bg-[var(--surface-card)] border border-[var(--brand-200)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div className="flex items-start gap-3 min-w-0">
@@ -525,8 +528,9 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           </div>
         )}
       </div>
+      )}
 
-      {/* 프로토타입 등록 (B3): URL → projectSources(prototype_url) / 코드 → screens 재사용 */}
+      {section === 'prototype' && (
       <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div className="flex items-start gap-3 min-w-0">
@@ -669,8 +673,9 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           </p>
         )}
       </div>
+      )}
 
-      {/* 개발 전달 패키지 (B7/B8): MD 4종 로컬 생성 → 복사 (Firestore 저장 없음) */}
+      {section === 'handoff' && (
       <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div className="flex items-start gap-3 min-w-0">
@@ -736,8 +741,10 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           선행 문서가 일부 없어도 생성됩니다(없는 부분은 안내 문구로 표시). 이 패키지는 저장하지 않으며 복사해서 전달합니다. (ZIP 다운로드는 후속 단계)
         </p>
       </div>
+      )}
 
       {/* 문서 워크스페이스: 좌측 목록 + 중앙 에디터 */}
+      {section === 'documents' && (
       <div className="flex flex-col lg:flex-row gap-5 items-start">
         {/* 문서 목록 */}
         <nav className="w-full lg:w-[300px] shrink-0 space-y-2">
@@ -919,6 +926,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           )}
         </section>
       </div>
+      )}
     </div>
   );
 }

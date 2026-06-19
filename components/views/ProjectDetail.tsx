@@ -27,9 +27,11 @@ import {
   Layout,
   Link2,
   MessageSquarePlus,
+  Package,
   Plus,
   Rocket,
   Trash2,
+  X,
 } from 'lucide-react';
 import type { FirestoreTime, Project, ProjectDocument, ProjectMember, ProjectStatus, Screen } from '@/types';
 
@@ -60,7 +62,7 @@ function formatRelative(ts: FirestoreTime): string {
   return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
 }
 
-type Tab = 'overview' | 'documents' | 'screens';
+type Tab = 'overview' | 'documents' | 'screens' | 'handoff';
 
 interface ProjectDetailProps {
   projectId: string | null;
@@ -185,6 +187,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
     { key: 'overview', label: '개요' },
     { key: 'documents', label: `문서 (${documents.length})` },
     { key: 'screens', label: `프로토타입 (${projectScreens.length})` },
+    { key: 'handoff', label: '개발 전달' },
   ];
 
   const openAddScreen = () => setIsModalOpen(true);
@@ -251,7 +254,13 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               <ExternalLink size={16} />공유
             </button>
           )}
-          {canEdit && (
+          {/* primary CTA는 상태/탭에 따라 1개만: 비활성→활성화, 활성+프로토타입 탭→새 화면 추가 */}
+          {canEdit && !isActivated && (
+            <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
+              <Rocket size={16} />활성화 시작하기
+            </button>
+          )}
+          {canEdit && isActivated && tab === 'screens' && (
             <button type="button" className="jca-btn jca-btn--primary" onClick={openAddScreen}>
               <Plus size={16} />새 화면 추가
             </button>
@@ -363,6 +372,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               screens={screens}
               isEditor={canEdit}
               isOwner={isOwner}
+              section="documents"
               initialDocId={initialDocId}
               onCurrentDocChange={setCurrentDocId}
               navigate={navigate}
@@ -371,16 +381,9 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         </>
       )}
 
-      {/* 프로토타입(화면) 탭 */}
+      {/* 프로토타입(화면) 탭 — 화면 리스트 + 프로토타입 제작 패키지/등록 */}
       {tab === 'screens' && (
-        <>
-          <div className="flex justify-end mb-6">
-            {canEdit && (
-              <Button icon={Plus} onClick={openAddScreen}>
-                새 화면 추가
-              </Button>
-            )}
-          </div>
+        <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
             {projectScreens.map((screen) => (
               <div
@@ -442,45 +445,88 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               </div>
             )}
           </div>
-        </>
+          {/* 프로토타입 제작 패키지 · 등록 (문서 탭에서 이동) */}
+          <ProjectDocuments
+            project={project}
+            documents={documents}
+            screens={screens}
+            isEditor={canEdit}
+            isOwner={isOwner}
+            section="prototype"
+            navigate={navigate}
+          />
+        </div>
+      )}
+
+      {/* 개발 전달 탭 */}
+      {tab === 'handoff' && (
+        isActivated ? (
+          <ProjectDocuments
+            project={project}
+            documents={documents}
+            screens={screens}
+            isEditor={canEdit}
+            isOwner={isOwner}
+            section="handoff"
+            navigate={navigate}
+          />
+        ) : (
+          <div className="py-16 px-6 text-center border-2 border-dashed border-[var(--border-strong)] rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] flex flex-col items-center">
+            <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] text-[var(--text-tertiary)] flex items-center justify-center mb-4">
+              <Package size={32} />
+            </div>
+            <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">먼저 프로젝트를 활성화하세요</h3>
+            <p className="text-[var(--text-secondary)] mb-6">활성화 후 문서·프로토타입이 준비되면 개발 전달 패키지를 생성할 수 있습니다.</p>
+            {canEdit && (
+              <Button icon={Rocket} onClick={() => setShowWizard(true)} className="mx-auto">
+                활성화 시작하기
+              </Button>
+            )}
+          </div>
+        )
       )}
 
       {isModalOpen && canEdit && (
-        <div className="fixed inset-0 z-[var(--z-modal)] bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center p-6 backdrop-blur-sm">
-          <div className="bg-[var(--surface-card)] rounded-[var(--radius-2xl)] shadow-[var(--shadow-2xl)] p-8 w-full max-w-5xl flex flex-col h-[85vh] animate-in zoom-in-95">
-            <h2 className="text-2xl font-bold text-[var(--text-strong)] mb-6">새 화면(프로토타입) 추가</h2>
-            <form onSubmit={handleAddScreen} className="flex flex-col flex-1 gap-6 overflow-hidden">
-              <div>
-                <label className="block text-sm font-bold text-[var(--text-body)] mb-2">화면 이름</label>
+        <div className="jca-overlay" onClick={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
+          <form onSubmit={handleAddScreen} className="jca-modal jca-modal--lg" style={{ maxHeight: '85vh' }}>
+            <div className="jca-modal__head">
+              <h2 className="jca-modal__title">새 화면(프로토타입) 추가</h2>
+              <button type="button" className="jca-icon-btn" onClick={() => setIsModalOpen(false)} aria-label="닫기">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="jca-modal__body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              <div className="jca-field" style={{ marginBottom: 0 }}>
+                <label className="jca-field__label">화면 이름</label>
                 <input
-                  type="text"
+                  className="jca-input"
                   value={screenName}
                   onChange={(e) => setScreenName(e.target.value)}
                   placeholder="예: 메인 랜딩 페이지, 로그인 모달"
-                  className="w-full px-4 py-3 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-lg text-[var(--text-body)]"
                   required
                   autoFocus
                 />
               </div>
-              <div className="flex flex-col flex-1 min-h-0">
-                <label className="block text-sm font-bold text-[var(--text-body)] mb-2">UI 코드</label>
+              <div className="jca-field" style={{ marginBottom: 0, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                <label className="jca-field__label">UI 코드</label>
                 <textarea
+                  className="jca-textarea"
+                  style={{ flex: 1, minHeight: 240, fontFamily: 'var(--font-mono)' }}
                   value={screenCode}
                   onChange={(e) => setScreenCode(e.target.value)}
-                  className="w-full flex-1 p-5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none font-mono text-sm resize-none bg-[var(--surface-sunken)] text-[var(--text-body)]"
                   required
                 />
               </div>
-              <div className="flex justify-end gap-3 pt-6 border-t border-[var(--border-default)] mt-auto">
-                <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-                  취소
-                </Button>
-                <Button type="submit" className="px-8">
-                  저장 및 생성
-                </Button>
-              </div>
-            </form>
-          </div>
+            </div>
+            <div className="jca-modal__foot">
+              <button type="button" className="jca-btn jca-btn--secondary" onClick={() => setIsModalOpen(false)}>
+                취소
+              </button>
+              <button type="submit" className="jca-btn jca-btn--primary">
+                저장 및 생성
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, MailOpen, X } from 'lucide-react';
+import { MailOpen, X } from 'lucide-react';
 import { renderMarkdown } from '@/lib/markdown';
 import { formatDateTime } from '@/lib/utils';
 import type { MockEmail } from '@/types';
@@ -12,59 +12,59 @@ interface VirtualInboxModalProps {
   onOpenEmail: (email: MockEmail) => void;
 }
 
+// 알림 모달 — admin jca-modal. 비어 있을 때 큰 회색 영역 대신 compact empty state, 높이는 콘텐츠에 맞춤.
 export function VirtualInboxModal({ isOpen, onClose, emails, onOpenEmail }: VirtualInboxModalProps) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[9999] bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-[var(--surface-card)] rounded-[var(--radius-2xl)] shadow-[var(--shadow-2xl)] w-full max-w-3xl flex flex-col h-[80vh] animate-in zoom-in-95">
-        <div className="p-6 border-b border-[var(--border-subtle)] flex justify-between items-center bg-[var(--surface-card)] rounded-t-[var(--radius-2xl)] shrink-0">
-          <h2 className="text-2xl font-bold text-[var(--text-strong)] flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
-              <BellRing size={20} />
-            </span>
-            알림 <span className="text-sm font-medium text-[var(--text-tertiary)] ml-1">(수신된 멘션 내역)</span>
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-[var(--surface-hover)] rounded-full text-[var(--text-secondary)] transition-colors">
-            <X size={20} />
+    <div className="jca-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="jca-modal" role="dialog" aria-modal="true" aria-label="알림">
+        <div className="jca-modal__head">
+          <div>
+            <h2 className="jca-modal__title">알림</h2>
+            <p className="text-xs text-[var(--admin-text-secondary)] mt-0.5">수신된 멘션 내역</p>
+          </div>
+          <button className="jca-icon-btn" onClick={onClose} aria-label="닫기">
+            <X size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-6 bg-[var(--surface-page)]">
+        <div className="jca-modal__body" style={{ maxHeight: '60vh' }}>
           {emails.length === 0 ? (
-            <div className="text-center py-20 flex flex-col items-center">
-              <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--surface-hover)] text-[var(--text-tertiary)] flex items-center justify-center mb-4">
-                <MailOpen size={28} />
-              </div>
-              <p className="font-bold text-[var(--text-secondary)]">수신된 알림이 없습니다.</p>
-              <p className="text-sm mt-1 text-[var(--text-tertiary)]">다른 사용자가 댓글에서 멘션하면 이곳에 알림이 표시됩니다.</p>
+            <div className="jca-empty" style={{ padding: 'var(--space-8) var(--space-6)' }}>
+              <span className="jca-empty__icon">
+                <MailOpen size={22} />
+              </span>
+              <div className="jca-empty__title">수신된 알림이 없습니다</div>
+              <p className="jca-empty__desc">다른 사용자가 댓글에서 회원님을 멘션하면 이곳에 표시됩니다.</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-2">
               {emails.map((email) => (
-                <div
+                <button
                   key={email.id}
+                  type="button"
                   onClick={() => onOpenEmail(email)}
-                  className={`p-5 bg-[var(--surface-card)] border rounded-[var(--radius-lg)] cursor-pointer transition-all group ${
+                  className={`text-left p-4 rounded-[var(--admin-radius-md)] border transition-colors ${
                     email.isRead
-                      ? 'border-[var(--border-default)] opacity-70'
-                      : 'border-[var(--brand-200)] bg-[var(--color-primary-softer)] shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-md)] hover:border-[var(--brand-300)]'
+                      ? 'border-[var(--admin-border)] bg-[var(--admin-surface)] hover:bg-[var(--admin-surface-hover)]'
+                      : 'border-[var(--admin-border-strong)] bg-[var(--admin-surface-muted)] hover:bg-[var(--admin-surface-hover)]'
                   }`}
                 >
-                  <div className="flex justify-between items-center mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${email.isRead ? 'bg-[var(--surface-hover)] text-[var(--text-secondary)]' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]'}`}>
-                        {email.author.charAt(0)}
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="jca-avatar jca-avatar--xs">{email.author.charAt(0)}</span>
+                      <span className={`text-sm font-bold truncate ${email.isRead ? 'text-[var(--admin-text-secondary)]' : 'text-[var(--admin-text-primary)]'}`}>
+                        {email.author}님이 멘션했습니다
                       </span>
-                      <span className={`font-bold ${email.isRead ? 'text-[var(--text-secondary)]' : 'text-[var(--text-strong)]'}`}>{email.author}님이 멘션했습니다.</span>
-                      {!email.isRead && <span className="w-2 h-2 rounded-full bg-[var(--red-500)] ml-1" />}
+                      {!email.isRead && <span className="w-1.5 h-1.5 rounded-full bg-[var(--admin-danger)] shrink-0" />}
                     </div>
-                    <span className="text-xs font-medium text-[var(--text-tertiary)]">{formatDateTime(email.createdAt)}</span>
+                    <span className="text-[11px] text-[var(--admin-text-muted)] shrink-0">{formatDateTime(email.createdAt)}</span>
                   </div>
-                  <div className="pl-10 flex flex-col gap-1.5">
-                    <div className="text-[11px] font-bold text-[var(--text-secondary)] bg-[var(--surface-sunken)] border border-[var(--border-subtle)] px-2 py-1 rounded w-max">프로젝트명: {email.projectName || '알 수 없음'}</div>
-                    <div className="text-[11px] font-bold text-[var(--text-secondary)] bg-[var(--surface-sunken)] border border-[var(--border-subtle)] px-2 py-1 rounded w-max">UI: {email.uiTitle || '알 수 없음'}</div>
-                    <div className="text-sm text-[var(--text-body)] line-clamp-2 mt-1" dangerouslySetInnerHTML={{ __html: renderMarkdown(email.text) }} />
+                  <div className="flex flex-wrap gap-1.5 mb-1.5">
+                    <span className="jca-badge jca-badge--neutral">{email.projectName || '알 수 없음'}</span>
+                    <span className="jca-badge jca-badge--neutral">{email.uiTitle || '알 수 없음'}</span>
                   </div>
-                </div>
+                  <div className="text-sm text-[var(--admin-text-secondary)] line-clamp-2" dangerouslySetInnerHTML={{ __html: renderMarkdown(email.text) }} />
+                </button>
               ))}
             </div>
           )}
@@ -81,6 +81,7 @@ interface EmailSimulationModalProps {
   navigate: (hash: string) => void;
 }
 
+// 멘션 상세 — admin jca-modal.
 export function EmailSimulationModal({ isOpen, onClose, data, navigate }: EmailSimulationModalProps) {
   if (!isOpen || !data) return null;
   const handleOpenLink = () => {
@@ -89,45 +90,37 @@ export function EmailSimulationModal({ isOpen, onClose, data, navigate }: EmailS
     onClose();
   };
   return (
-    <div className="fixed inset-0 z-[10000] bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-[var(--surface-card)] rounded-[var(--radius-xl)] shadow-[var(--shadow-2xl)] w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 border border-[var(--border-default)]">
-        <div className="bg-[var(--surface-sunken)] px-4 py-2 border-b border-[var(--border-subtle)] flex justify-between items-center text-xs font-bold text-[var(--text-secondary)]">
-          <span>새 멘션 알림</span>
-          <button onClick={onClose} className="hover:text-[var(--text-strong)] transition-colors">
-            <X size={16} />
+    <div className="jca-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ zIndex: 10000 }}>
+      <div className="jca-modal" role="dialog" aria-modal="true">
+        <div className="jca-modal__head">
+          <h2 className="jca-modal__title">새 멘션 알림</h2>
+          <button className="jca-icon-btn" onClick={onClose} aria-label="닫기">
+            <X size={18} />
           </button>
         </div>
-        <div className="p-8">
-          <div className="flex justify-between items-start mb-6">
-            <h2 className="text-[22px] text-[var(--text-strong)] tracking-tight leading-snug">
-              <b>{data.author}</b>님이 다음 문서의 댓글에 {data.isReply ? '답글을' : '댓글을'} 남김
-            </h2>
+        <div className="jca-modal__body" style={{ maxHeight: '70vh' }}>
+          <h3 className="text-base font-bold text-[var(--admin-text-primary)] leading-snug mb-4">
+            <b>{data.author}</b>님이 다음 문서의 댓글에 {data.isReply ? '답글을' : '댓글을'} 남겼습니다
+          </h3>
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            <span className="jca-badge jca-badge--neutral">프로젝트: {data.projectName || '알 수 없음'}</span>
+            <span className="jca-badge jca-badge--neutral">UI: {data.uiTitle || '알 수 없음'}</span>
           </div>
-          <div className="flex flex-col gap-2 mb-6">
-            <div className="inline-flex items-center px-4 py-1.5 border border-[var(--border-default)] bg-[var(--surface-sunken)] rounded-full text-sm font-bold text-[var(--text-body)] shadow-[var(--shadow-xs)] w-max">
-              프로젝트명: {data.projectName || '알 수 없음'}
-            </div>
-            <div className="inline-flex items-center px-4 py-1.5 border border-[var(--border-default)] bg-[var(--surface-sunken)] rounded-full text-sm font-bold text-[var(--text-body)] shadow-[var(--shadow-xs)] w-max">
-              UI: {data.uiTitle || '알 수 없음'}
-            </div>
-          </div>
-          <div className="border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-card)] shadow-[var(--shadow-xs)] overflow-hidden mb-6">
-            <div className="p-6">
-              <div className="text-[13px] font-bold text-[var(--text-strong)] mb-3 flex items-center gap-2">
-                {data.author} <span className="text-[var(--text-tertiary)] font-normal">• {formatDateTime(data.createdAt)}</span>
-                <span className="bg-[var(--color-primary)] text-[var(--color-on-primary)] text-[10px] px-2 py-0.5 rounded-full font-bold">신규</span>
+          <div className="jca-card jca-card--flat" style={{ borderColor: 'var(--admin-border)' }}>
+            <div className="jca-card__body">
+              <div className="flex items-center gap-2 text-[13px] font-bold text-[var(--admin-text-primary)] mb-2">
+                {data.author}
+                <span className="text-[var(--admin-text-muted)] font-normal">· {formatDateTime(data.createdAt)}</span>
+                <span className="jca-badge jca-badge--primary">신규</span>
               </div>
-              <div className="text-[15px] text-[var(--text-body)] leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMarkdown(data.text) }} />
-            </div>
-            <div className="bg-[var(--surface-sunken)] border-t border-[var(--border-subtle)] px-6 py-4 flex justify-end items-center">
-              <div className="flex gap-6 text-sm font-bold text-[var(--color-primary-text)]">
-                <button onClick={handleOpenLink} className="hover:underline">
-                  열기
-                </button>
-              </div>
+              <div className="text-sm text-[var(--admin-text-secondary)] leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMarkdown(data.text) }} />
             </div>
           </div>
-          <div className="text-xs text-[var(--text-tertiary)] font-medium pt-4 border-t border-[var(--border-subtle)]">수신자: {data.receivers.join(', ')}</div>
+          <p className="text-xs text-[var(--admin-text-muted)] mt-4">수신자: {data.receivers.join(', ')}</p>
+        </div>
+        <div className="jca-modal__foot">
+          <button type="button" className="jca-btn jca-btn--secondary" onClick={onClose}>닫기</button>
+          <button type="button" className="jca-btn jca-btn--primary" onClick={handleOpenLink}>해당 위치 열기</button>
         </div>
       </div>
     </div>
