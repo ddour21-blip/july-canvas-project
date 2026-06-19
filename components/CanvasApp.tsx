@@ -21,7 +21,6 @@ import { Button } from '@/components/common/Button';
 import { GoogleSignInButton } from '@/components/common/GoogleSignInButton';
 import { WorkspaceSidebar } from '@/components/common/WorkspaceSidebar';
 import { ShareModal, type ShareState } from '@/components/modals/ShareModal';
-import { ExportZipModal } from '@/components/modals/ExportZipModal';
 import { VirtualInboxModal, EmailSimulationModal } from '@/components/modals/InboxModals';
 import Dashboard from '@/components/views/Dashboard';
 import ProjectDetail from '@/components/views/ProjectDetail';
@@ -59,7 +58,6 @@ function CanvasAppInner() {
   const [toast, setToast] = useState<ToastDetail | null>(null);
   const [shareState, setShareState] = useState<ShareState>({ isOpen: false, type: '', id: '' });
   const [backupOpen, setBackupOpen] = useState(false);
-  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [currentRoute, setCurrentRoute] = useState('#');
 
   const [isInboxOpen, setIsInboxOpen] = useState(false);
@@ -233,9 +231,7 @@ function CanvasAppInner() {
         screenId={shareState.screenId}
         project={shareState.projectId ? projects.find((p) => p.id === shareState.projectId) ?? null : null}
         onClose={() => setShareState({ ...shareState, isOpen: false })}
-        workspaceId={activeWorkspaceId}
       />
-      <ExportZipModal isOpen={exportModalOpen} onClose={() => setExportModalOpen(false)} />
 
       <VirtualInboxModal
         isOpen={isInboxOpen}
@@ -342,7 +338,6 @@ function CanvasAppInner() {
             user={user}
             globalMembers={globalMembers}
             setBackupOpen={setBackupOpen}
-            setExportModalOpen={setExportModalOpen}
           />
         )}
         {viewType === 'project' && (

@@ -751,7 +751,7 @@ export default function ScreenEditor({
               icon={ExternalLink}
               onClick={() => setShareState({ isOpen: true, type: 'screen', id: screen.id, projectId: project.id, screenId: screen.id })}
             >
-              공유 및 초대
+              공유
             </Button>
           </div>
           {mode === 'annotate' && (

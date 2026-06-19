@@ -10,8 +10,11 @@ import { getTime, nowMs, showToast } from '@/lib/utils';
 import { Button } from '@/components/common/Button';
 import { GoogleSignInButton } from '@/components/common/GoogleSignInButton';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
-import { Activity, CheckCircle2, ChevronRight, Clock, Database, FileText, Folder, FolderPlus, Globe, Layers, Layout, MoreHorizontal, Plus, Sparkles, Share2, Trash2, User as UserIcon, Users, X } from 'lucide-react';
+import { Activity, CheckCircle2, ChevronRight, Clock, Database, FileText, Folder, FolderPlus, Layers, Layout, MoreHorizontal, Plus, Sparkles, Share2, Trash2, User as UserIcon, Users, X } from 'lucide-react';
 import type { Member, Project, ProjectDocument, ProjectStatus, Screen } from '@/types';
+
+// 관리자 전용 도구(데이터 백업/복원)는 기본 숨김. 운영자가 NEXT_PUBLIC_ADMIN_TOOLS=1로 켤 때만 더보기 메뉴에 노출.
+const ADMIN_TOOLS = process.env.NEXT_PUBLIC_ADMIN_TOOLS === '1';
 
 // 상태 배지: green-first 토큰(fg/bg)을 직접 소비. draft=neutral, active=green,
 // review=amber, approved=soft green, archived=muted gray, handoff=neutral.
@@ -156,7 +159,6 @@ interface DashboardProps {
   user: User | null;
   globalMembers: Member[];
   setBackupOpen: (v: boolean) => void;
-  setExportModalOpen: (v: boolean) => void;
 }
 
 export default function Dashboard({
@@ -167,12 +169,10 @@ export default function Dashboard({
   user,
   globalMembers,
   setBackupOpen,
-  setExportModalOpen,
 }: DashboardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
-  const [accessCode, setAccessCode] = useState('');
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [confirmState, setConfirmState] = useState<ConfirmState>({ isOpen: false, title: '', msg: '', action: null });
@@ -238,12 +238,6 @@ export default function Dashboard({
     }
   };
 
-  const handleJoinByCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!accessCode.trim()) return;
-    navigate(`#${accessCode.trim().replace(/^#/, '')}`);
-  };
-
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMemberName.trim()) return;
@@ -288,8 +282,8 @@ export default function Dashboard({
     });
   };
 
-  // 비로그인(익명) 사용자: 대시보드 전체 기능 대신 제품 설명/핵심 가치 + 단일 로그인 CTA를 먼저 노출.
-  // (익명 폴백 전제는 유지 — 접속 코드가 있는 팀원은 하단 보조 폼으로 계속 입장 가능)
+  // 비로그인(익명) 사용자: 대시보드 전체 기능 대신 제품 설명/핵심 가치 + 단일 로그인 CTA를 노출.
+  // (익명 폴백 전제는 유지. 공유는 URL 기반이므로 공유 링크를 받은 사용자는 그 URL로 바로 진입.)
   if (!canCreateProject) {
     const VALUES: { icon: ComponentType<{ size?: number }>; title: string; desc: string }[] = [
       { icon: Folder, title: '조직·프로젝트 단위 관리', desc: '기획 문서와 프로토타입을 하나의 워크스페이스에서 정리합니다.' },
@@ -315,7 +309,7 @@ export default function Dashboard({
           </div>
         </section>
 
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-5 mt-4">
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-5 mt-4 mb-4">
           {VALUES.map((v) => {
             const Icon = v.icon;
             return (
@@ -328,28 +322,6 @@ export default function Dashboard({
               </div>
             );
           })}
-        </section>
-
-        <section className="mt-10 flex flex-col items-center gap-3 border-t border-[var(--border-subtle)] pt-8">
-          <p className="text-sm font-medium text-[var(--text-secondary)]">이미 접속 코드를 받으셨나요?</p>
-          <form
-            onSubmit={handleJoinByCode}
-            className="flex bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] overflow-hidden focus-within:ring-2 focus-within:ring-[var(--color-focus-ring)] shadow-[var(--shadow-sm)] h-[44px] transition-shadow"
-          >
-            <input
-              type="text"
-              value={accessCode}
-              onChange={(e) => setAccessCode(e.target.value)}
-              placeholder="접속 코드 (예: project_123)"
-              className="px-4 py-2 outline-none w-56 text-sm font-medium text-[var(--text-body)] bg-transparent"
-            />
-            <button
-              type="submit"
-              className="bg-[var(--surface-sunken)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] px-5 py-2 text-sm font-bold text-[var(--text-secondary)] border-l border-[var(--border-default)] transition-colors whitespace-nowrap"
-            >
-              바로 입장
-            </button>
-          </form>
         </section>
       </div>
     );
@@ -367,27 +339,9 @@ export default function Dashboard({
       <div className="flex flex-col gap-5 mb-10 xl:flex-row xl:flex-wrap xl:justify-between xl:items-end xl:gap-x-6">
         <div className="shrink-0">
           <h1 className="text-3xl font-extrabold text-[var(--text-strong)] tracking-tight">내 프로젝트</h1>
-          <p className="text-[var(--text-secondary)] mt-2">기획 문서와 프로토타입을 관리할 프로젝트를 선택하거나 접속 코드로 입장하세요.</p>
+          <p className="text-[var(--text-secondary)] mt-2">기획 문서와 프로토타입을 관리할 프로젝트를 선택하세요.</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
-          <form
-            onSubmit={handleJoinByCode}
-            className="flex bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] overflow-hidden focus-within:ring-2 focus-within:ring-[var(--color-focus-ring)] shadow-[var(--shadow-sm)] h-[44px] transition-shadow"
-          >
-            <input
-              type="text"
-              value={accessCode}
-              onChange={(e) => setAccessCode(e.target.value)}
-              placeholder="접속 코드 (예: project_123)"
-              className="px-4 py-2 outline-none w-56 text-sm font-medium text-[var(--text-body)] bg-transparent"
-            />
-            <button
-              type="submit"
-              className="bg-[var(--surface-sunken)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] px-5 py-2 text-sm font-bold text-[var(--text-secondary)] border-l border-[var(--border-default)] transition-colors whitespace-nowrap"
-            >
-              바로 입장
-            </button>
-          </form>
           {isGlobalEditor && (
             <div className="relative">
               <Button variant="secondary" icon={MoreHorizontal} onClick={() => setIsMoreOpen((v) => !v)} className="h-[44px] px-5">
@@ -401,8 +355,7 @@ export default function Dashboard({
                     className="absolute right-0 mt-2 w-56 z-50 bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-lg)] shadow-[var(--shadow-md)] py-1.5"
                   >
                     {[
-                      { icon: Globe, label: '배포 안내', onClick: () => setExportModalOpen(true) },
-                      { icon: Database, label: '데이터 백업/복원', onClick: () => setBackupOpen(true) },
+                      ...(ADMIN_TOOLS ? [{ icon: Database, label: '데이터 백업/복원', onClick: () => setBackupOpen(true) }] : []),
                       { icon: Users, label: `팀원 관리 (${globalMembers.length})`, onClick: () => setIsMemberModalOpen(true) },
                     ].map((m) => {
                       const Icon = m.icon;
@@ -510,7 +463,7 @@ export default function Dashboard({
             </div>
             <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">등록된 프로젝트가 없습니다</h3>
             <p className="text-[var(--text-secondary)] mb-6 max-w-md">
-              위 입력창에 접속 코드를 입력하거나, 새 프로젝트를 생성해 기획 문서와 프로토타입 관리를 시작하세요.
+              새 프로젝트를 생성해 기획 문서와 프로토타입 관리를 시작하세요.
             </p>
             <Button icon={Plus} onClick={() => setIsModalOpen(true)} className="px-6 h-[44px]">
               새 프로젝트

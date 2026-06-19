@@ -246,7 +246,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 })
               }
             >
-              공유 및 초대
+              공유
             </Button>
           )}
           {canEdit && (
