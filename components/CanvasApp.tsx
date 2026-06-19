@@ -216,6 +216,12 @@ function CanvasAppInner() {
   // 사이드바: 로그인 사용자의 admin 뷰에서만 노출. 화면 편집(전체화면)/공유 로딩에선 숨김.
   const showSidebar = isGoogleUser && viewType !== 'screen' && viewType !== 'share';
 
+  // 비로그인(익명): 마케팅 랜딩을 자체 header/footer로 전체화면 노출 (admin topbar/shell 없이).
+  // 단, 공개 share 로딩(#share_)·화면 딥링크(screen)는 기존 처리를 유지.
+  if (!isGoogleUser && viewType !== 'screen' && viewType !== 'share') {
+    return <AnonymousLanding onSignIn={() => signInWithGoogle().catch((e) => console.error('Google 로그인 실패:', e))} />;
+  }
+
   return (
     // min-w-[1024px]: 본문 최소 너비 확보. 더 좁은 뷰포트에서는 페이지 가로 스크롤로 전환되어
     // 레이아웃이 글자 단위로 무너지지 않도록 안정화한다.
