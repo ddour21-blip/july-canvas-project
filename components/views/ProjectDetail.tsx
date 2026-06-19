@@ -297,15 +297,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
       {/* 개요 탭 — 비활성: 시작 안내 / 활성: 상태 대시보드 */}
       {tab === 'overview' && (!isActivated ? (
         <div className="space-y-5">
-          <ProjectInfoCard
-            project={project}
-            status={status}
-            roleText={roleLabel(role)}
-            members={members}
-            documents={documents}
-            screenCount={projectScreens.length}
-          />
-          {/* 시작 패널 (dashed empty box 대신 solid 카드) */}
+          {/* 1) 활성화 유도 카드 (가장 중요한 행동) */}
           <div className="jca-card jca-card--pad flex flex-col sm:flex-row sm:items-center gap-5">
             <span className="shrink-0 w-12 h-12 rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
               <Rocket size={24} />
@@ -322,6 +314,15 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               </button>
             )}
           </div>
+          {/* 2) 프로젝트 정보 (참고, 2순위) */}
+          <ProjectInfoCard
+            project={project}
+            status={status}
+            roleText={roleLabel(role)}
+            members={members}
+            documents={documents}
+            screenCount={projectScreens.length}
+          />
         </div>
       ) : (
         <div className="space-y-5">
@@ -397,9 +398,20 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         </>
       )}
 
-      {/* 프로토타입(화면) 탭 — 화면 리스트 + 프로토타입 제작 패키지/등록 */}
+      {/* 프로토타입 탭 — 1) 제작 패키지  2) 화면 관리 */}
       {tab === 'screens' && (
         <div className="space-y-6">
+          {/* 1) 프로토타입 제작 패키지 (먼저) */}
+          <ProjectDocuments
+            project={project}
+            documents={documents}
+            screens={screens}
+            isEditor={canEdit}
+            isOwner={isOwner}
+            section="prototype"
+            navigate={navigate}
+          />
+          {/* 2) 화면 관리 (새 화면 추가는 헤더 primary, empty state는 안내만) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
             {projectScreens.map((screen) => (
               <div
@@ -452,27 +464,12 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                   </span>
                   <div className="jca-empty__title">등록된 화면이 없습니다</div>
                   <p className="jca-empty__desc">
-                    {canEdit ? '새 화면을 추가해 첫 번째 프로토타입 화면을 등록해보세요.' : '이 프로젝트에는 아직 등록된 화면이 없습니다.'}
+                    {canEdit ? "오른쪽 위 '새 화면 추가' 버튼으로 첫 번째 프로토타입 화면을 등록해보세요." : '이 프로젝트에는 아직 등록된 화면이 없습니다.'}
                   </p>
-                  {canEdit && (
-                    <button type="button" className="jca-btn jca-btn--primary" onClick={openAddScreen}>
-                      <Plus size={16} />새 화면 추가
-                    </button>
-                  )}
                 </div>
               </div>
             )}
           </div>
-          {/* 프로토타입 제작 패키지 · 등록 (문서 탭에서 이동) */}
-          <ProjectDocuments
-            project={project}
-            documents={documents}
-            screens={screens}
-            isEditor={canEdit}
-            isOwner={isOwner}
-            section="prototype"
-            navigate={navigate}
-          />
         </div>
       )}
 

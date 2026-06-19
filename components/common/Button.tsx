@@ -14,7 +14,7 @@ interface ButtonProps {
   type?: 'button' | 'submit' | 'reset';
 }
 
-// modern-emerald 리파인 (UI-6): primary = solid emerald(#008F68) flat 필 + 흰 텍스트, 그림자 없음.
+// primary = solid LINE green(#06C755) flat 필 + 흰 텍스트, 그림자 없음.
 // secondary = white + neutral border, outline = white + border, danger = soft red. 모두 flat.
 const VARIANTS: Record<Variant, string> = {
   primary:

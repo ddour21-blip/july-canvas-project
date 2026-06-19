@@ -513,11 +513,11 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                     </div>
                   </div>
                   {isEditor && (isLockTarget('screen', s.id) ? (
-                    <button type="button" onClick={handleUnlock} className="shrink-0 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] transition-colors">확정 해제</button>
+                    <button type="button" onClick={handleUnlock} className="shrink-0 text-xs font-semibold px-2.5 py-1.5 rounded-[var(--radius-md)] text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] transition-colors">확정 해제</button>
                   ) : (
                     <button type="button" onClick={() => handleLock({ targetType: 'screen', targetId: s.id, title: s.name })} className="shrink-0 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors">기준으로 확정</button>
                   ))}
-                  <button type="button" onClick={() => navigate?.(`#screen_${s.id}`)} className="shrink-0 inline-flex items-center gap-1 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><ExternalLink size={13} /> 열기</button>
+                  <button type="button" onClick={() => navigate?.(`#screen_${s.id}`)} aria-label="화면 열기" className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--color-primary-text)] transition-colors"><ExternalLink size={15} /></button>
                   <button type="button" onClick={() => copyLink(link)} aria-label="링크 복사" className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={15} /></button>
                 </li>
               );
@@ -538,7 +538,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                   </div>
                 </div>
                 {isEditor && (isLockTarget('source', p.id) ? (
-                  <button type="button" onClick={handleUnlock} className="shrink-0 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] transition-colors">확정 해제</button>
+                  <button type="button" onClick={handleUnlock} className="shrink-0 text-xs font-semibold px-2.5 py-1.5 rounded-[var(--radius-md)] text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] transition-colors">확정 해제</button>
                 ) : (
                   <button type="button" onClick={() => handleLock({ targetType: 'source', targetId: p.id, title: p.title, url: p.url })} className="shrink-0 text-xs font-bold px-3 py-2 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors">기준으로 확정</button>
                 ))}
@@ -561,7 +561,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                 확정된 프로토타입을 기준으로 IA 초안을 생성합니다. 생성 후 문서 화면에서 수정할 수 있습니다.
               </p>
               {isEditor && (
-                <Button icon={Sparkles} onClick={handleGenerateIA} className="shrink-0">확정 프로토타입 기반 IA 생성</Button>
+                <Button icon={Sparkles} onClick={handleGenerateIA} className="shrink-0">IA 생성</Button>
               )}
             </div>
             {/* 기능정의서 생성 (B6): IA가 있어야 활성 */}
@@ -572,7 +572,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                   : '먼저 확정 프로토타입 기반 IA를 생성해야 기능정의서를 작성할 수 있습니다.'}
               </p>
               {isEditor && (
-                <Button icon={Sparkles} onClick={handleGenerateFeatureSpec} disabled={!byType('ia')} className="shrink-0">확정 프로토타입 기반 기능정의서 생성</Button>
+                <Button variant="outline" icon={Sparkles} onClick={handleGenerateFeatureSpec} disabled={!byType('ia')} className="shrink-0">기능정의서 생성</Button>
               )}
             </div>
           </div>
