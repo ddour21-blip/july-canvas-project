@@ -100,8 +100,8 @@ export default function ProjectList({ projects, screens, documents, user, naviga
     e.stopPropagation();
     setConfirmState({
       isOpen: true,
-      title: '프로젝트 삭제',
-      msg: `'${project.name}' 프로젝트와 하위 화면·문서·멤버가 모두 삭제됩니다. 복구할 수 없습니다. 진행하시겠습니까?`,
+      title: '프로젝트를 삭제하시겠습니까?',
+      msg: `'${project.name}' 프로젝트와 하위 화면·문서·멤버 정보가 삭제됩니다. 삭제 후 복구할 수 없습니다.`,
       action: async () => {
         await deleteProjectCascade(project.id);
         setConfirmState((prev) => ({ ...prev, isOpen: false }));

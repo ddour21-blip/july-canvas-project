@@ -273,8 +273,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               onClick={() =>
                 setConfirmState({
                   isOpen: true,
-                  title: '프로젝트 삭제',
-                  msg: `'${project.name}' 프로젝트와 하위 화면·문서·멤버가 모두 삭제됩니다. 복구할 수 없습니다. 진행하시겠습니까?`,
+                  title: '프로젝트를 삭제하시겠습니까?',
+                  msg: `'${project.name}' 프로젝트와 하위 화면·문서·멤버 정보가 삭제됩니다. 삭제 후 복구할 수 없습니다.`,
                   action: executeDeleteProject,
                 })
               }
@@ -294,8 +294,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         ))}
       </div>
 
-      {/* 개요 탭 */}
-      {tab === 'overview' && (
+      {/* 개요 탭 — 비활성: 시작 안내 / 활성: 상태 대시보드 */}
+      {tab === 'overview' && (!isActivated ? (
         <div className="space-y-5">
           <ProjectInfoCard
             project={project}
@@ -305,65 +305,81 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
             documents={documents}
             screenCount={projectScreens.length}
           />
-          {!isActivated ? (
-            <div className="py-16 px-6 text-center border border-dashed border-[var(--border-strong)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] flex flex-col items-center">
-              <div className="w-14 h-14 bg-[var(--gray-100)] text-[var(--text-secondary)] rounded-[var(--radius-lg)] flex items-center justify-center mb-5">
-                <Rocket size={26} />
-              </div>
-              <h3 className="text-2xl font-extrabold text-[var(--text-strong)] mb-2">프로젝트를 활성화하세요</h3>
-              <p className="text-[var(--text-secondary)] mb-6 max-w-md mx-auto leading-relaxed">
-                기획 의도·문제·고객·가치·MVP 범위 등을 입력하면 브리프/시장조사/제품화전략 문서가 자동 생성됩니다.
+          {/* 시작 패널 (dashed empty box 대신 solid 카드) */}
+          <div className="jca-card jca-card--pad flex flex-col sm:flex-row sm:items-center gap-5">
+            <span className="shrink-0 w-12 h-12 rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
+              <Rocket size={24} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-bold text-[var(--text-strong)]">프로젝트를 활성화하고 기획 문서를 생성하세요</h3>
+              <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
+                기획 의도·문제·고객·가치·MVP 범위를 입력하면 프로젝트 브리프(시장조사·레퍼런스 포함)와 제품화 전략 문서가 생성됩니다.
               </p>
+            </div>
+            {canEdit && (
+              <button type="button" className="jca-btn jca-btn--primary shrink-0" onClick={() => setShowWizard(true)}>
+                <Rocket size={16} />활성화 시작하기
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <ProjectInfoCard
+            project={project}
+            status={status}
+            roleText={roleLabel(role)}
+            members={members}
+            documents={documents}
+            screenCount={projectScreens.length}
+          />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <ActivationSummary project={project} />
+            <div className="space-y-5">
+              <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
+                <h3 className="font-bold text-[var(--text-strong)] text-lg mb-1">최종 산출물</h3>
+                <p className="text-sm text-[var(--text-secondary)] mb-5">개발 전달에 사용할 PRD·프로토타입 URL과 개발 전달 패키지입니다.</p>
+                <div className="flex flex-col gap-3">
+                  <Button variant="outline" icon={FileText} onClick={() => setTab('documents')} className="justify-start">
+                    PRD 문서 관리로 이동
+                  </Button>
+                  <Button variant="outline" icon={Link2} onClick={copyPrototypeUrl} className="justify-start">
+                    프로토타입 URL 복사
+                  </Button>
+                  <Button variant="outline" icon={Package} onClick={() => setTab('handoff')} className="justify-start">
+                    개발 전달 패키지로 이동
+                  </Button>
+                </div>
+              </div>
               {canEdit && (
-                <Button icon={Rocket} onClick={() => setShowWizard(true)} className="mx-auto px-7 py-3">
-                  활성화 시작하기
+                <Button variant="secondary" icon={Rocket} onClick={() => setShowWizard(true)} className="w-full">
+                  활성화 정보 수정
                 </Button>
               )}
             </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <ActivationSummary project={project} />
-              <div className="space-y-5">
-                <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
-                  <h3 className="font-bold text-[var(--text-strong)] text-lg mb-1">최종 산출물</h3>
-                  <p className="text-sm text-[var(--text-secondary)] mb-5">코워크 담당자에게 전달할 PRD와 프로토타입 URL입니다.</p>
-                  <div className="flex flex-col gap-3">
-                    <Button variant="outline" icon={FileText} onClick={() => setTab('documents')} className="justify-start">
-                      PRD 문서 관리로 이동
-                    </Button>
-                    <Button variant="outline" icon={Link2} onClick={copyPrototypeUrl} className="justify-start">
-                      프로토타입 URL 복사
-                    </Button>
-                  </div>
-                </div>
-                {canEdit && (
-                  <Button variant="secondary" icon={Rocket} onClick={() => setShowWizard(true)} className="w-full">
-                    활성화 정보 수정
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
+          </div>
           {/* 외부 피드백(public_review) — owner/editor만 (S7-2D) */}
           {canEdit && <ProjectReviews projectId={project.id} user={user} />}
         </div>
-      )}
+      ))}
 
       {/* 문서 탭 */}
       {tab === 'documents' && (
         <>
           {!isActivated ? (
-            <div className="py-16 px-6 text-center border-2 border-dashed border-[var(--border-strong)] rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] flex flex-col items-center">
-              <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] text-[var(--text-tertiary)] flex items-center justify-center mb-4">
-                <FileText size={32} />
+            <div className="jca-card">
+              <div className="jca-empty">
+                <span className="jca-empty__icon">
+                  <FileText size={22} />
+                </span>
+                <div className="jca-empty__title">먼저 프로젝트를 활성화하세요</div>
+                <p className="jca-empty__desc">활성화하면 기본 기획 문서(브리프·시장조사·제품화 전략)가 생성됩니다.</p>
+                {canEdit && (
+                  <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
+                    <Rocket size={16} />활성화 시작하기
+                  </button>
+                )}
               </div>
-              <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">먼저 프로젝트를 활성화하세요</h3>
-              <p className="text-[var(--text-secondary)] mb-6">활성화하면 기본 기획 문서가 생성됩니다.</p>
-              {canEdit && (
-                <Button icon={Rocket} onClick={() => setShowWizard(true)} className="mx-auto">
-                  활성화 시작하기
-                </Button>
-              )}
             </div>
           ) : (
             <ProjectDocuments
@@ -397,8 +413,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                       e.stopPropagation();
                       setConfirmState({
                         isOpen: true,
-                        title: '화면 삭제',
-                        msg: `'${screen.name}' 화면과 등록된 데이터가 삭제됩니다. 진행하시겠습니까?`,
+                        title: '화면을 삭제하시겠습니까?',
+                        msg: `'${screen.name}' 화면과 등록된 주석·데이터가 삭제됩니다. 삭제 후 복구할 수 없습니다.`,
                         action: () => executeDeleteScreen(screen.id),
                       });
                     }}
@@ -429,19 +445,21 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               </div>
             ))}
             {projectScreens.length === 0 && (
-              <div className="col-span-full py-16 px-6 text-center border-2 border-dashed border-[var(--border-strong)] rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] flex flex-col items-center">
-                <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] text-[var(--text-tertiary)] flex items-center justify-center mb-5">
-                  <Layout size={32} />
+              <div className="col-span-full jca-card">
+                <div className="jca-empty">
+                  <span className="jca-empty__icon">
+                    <Layout size={22} />
+                  </span>
+                  <div className="jca-empty__title">등록된 화면이 없습니다</div>
+                  <p className="jca-empty__desc">
+                    {canEdit ? '새 화면을 추가해 첫 번째 프로토타입 화면을 등록해보세요.' : '이 프로젝트에는 아직 등록된 화면이 없습니다.'}
+                  </p>
+                  {canEdit && (
+                    <button type="button" className="jca-btn jca-btn--primary" onClick={openAddScreen}>
+                      <Plus size={16} />새 화면 추가
+                    </button>
+                  )}
                 </div>
-                <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">등록된 화면이 없습니다</h3>
-                <p className="text-[var(--text-secondary)] mb-6 max-w-md">
-                  {canEdit ? "'새 화면 추가' 버튼을 눌러 첫 번째 프로토타입을 등록해보세요." : '이 프로젝트에는 아직 등록된 화면이 없습니다.'}
-                </p>
-                {canEdit && (
-                  <Button icon={Plus} onClick={openAddScreen} className="px-6 h-[44px]">
-                    새 화면 추가
-                  </Button>
-                )}
               </div>
             )}
           </div>
@@ -471,17 +489,19 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
             navigate={navigate}
           />
         ) : (
-          <div className="py-16 px-6 text-center border-2 border-dashed border-[var(--border-strong)] rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] flex flex-col items-center">
-            <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] text-[var(--text-tertiary)] flex items-center justify-center mb-4">
-              <Package size={32} />
+          <div className="jca-card">
+            <div className="jca-empty">
+              <span className="jca-empty__icon">
+                <Package size={22} />
+              </span>
+              <div className="jca-empty__title">먼저 프로젝트를 활성화하세요</div>
+              <p className="jca-empty__desc">활성화 후 문서·프로토타입이 준비되면 개발 전달 패키지를 생성할 수 있습니다.</p>
+              {canEdit && (
+                <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
+                  <Rocket size={16} />활성화 시작하기
+                </button>
+              )}
             </div>
-            <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">먼저 프로젝트를 활성화하세요</h3>
-            <p className="text-[var(--text-secondary)] mb-6">활성화 후 문서·프로토타입이 준비되면 개발 전달 패키지를 생성할 수 있습니다.</p>
-            {canEdit && (
-              <Button icon={Rocket} onClick={() => setShowWizard(true)} className="mx-auto">
-                활성화 시작하기
-              </Button>
-            )}
           </div>
         )
       )}

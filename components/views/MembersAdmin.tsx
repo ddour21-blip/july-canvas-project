@@ -31,8 +31,8 @@ export default function MembersAdmin({ globalMembers, navigate }: { globalMember
   const removeMember = (id: string) => {
     setConfirmState({
       isOpen: true,
-      title: '구성원 삭제',
-      msg: '이 구성원을 삭제하시겠습니까?',
+      title: '구성원을 삭제하시겠습니까?',
+      msg: '삭제된 구성원은 더 이상 멘션 대상으로 표시되지 않습니다.',
       action: async () => {
         await deleteDoc(docRef('members', id));
         setConfirmState((prev) => ({ ...prev, isOpen: false }));

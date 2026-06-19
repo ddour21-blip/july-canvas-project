@@ -10,12 +10,12 @@ import { buildInformationArchitecture, type IaTarget } from '@/lib/informationAr
 import { buildFeatureSpec } from '@/lib/featureSpec';
 import { buildHandoffPackage, type HandoffPackage, type HandoffPrototype } from '@/lib/handoffPackage';
 import { downloadHandoffFile, downloadHandoffZip } from '@/lib/exportHandoffPackage';
-import { PROTOTYPE_KINDS, deletePrototypeUrl, lockPrototype, registerPrototypeScreen, registerPrototypeUrl, subscribePrototypeUrls, unlockPrototype } from '@/lib/prototypes';
+import { deletePrototypeUrl, lockPrototype, subscribePrototypeUrls, unlockPrototype } from '@/lib/prototypes';
 import { shareHash, toShareUrl } from '@/lib/shareLinks';
 import { useAuth } from '@/lib/auth';
 import { downloadTextFile } from '@/lib/export/exportMarkdown';
 import { Button } from '@/components/common/Button';
-import { Code2, Copy, CheckCircle2, Circle, Clock, Download, ExternalLink, Eye, FileText, Link2, Lock, MonitorPlay, Package, Plus, RefreshCw, Save, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { Copy, CheckCircle2, Circle, Clock, Download, ExternalLink, Eye, FileText, Link2, Lock, MonitorPlay, Package, Plus, RefreshCw, Save, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { EMPTY_ACTIVATION } from '@/types';
 import type {
   DocumentStatus,
@@ -95,14 +95,8 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     setHandoffTab(0);
   }
 
-  // 프로토타입 등록 (B3): URL은 projectSources(prototype_url), 코드는 screens 재사용.
+  // 확정 프로토타입(lock) 관리용 — 화면(screens)/URL(projectSources) 목록 구독.
   const [prototypeUrls, setPrototypeUrls] = useState<ProjectSource[]>([]);
-  const [protoForm, setProtoForm] = useState<'none' | 'url' | 'code'>('none');
-  const [pName, setPName] = useState('');
-  const [pUrl, setPUrl] = useState('');
-  const [pDesc, setPDesc] = useState('');
-  const [pKind, setPKind] = useState<string>(PROTOTYPE_KINDS[0]);
-  const [pCode, setPCode] = useState('');
 
   useEffect(() => {
     const unsub = subscribePrototypeUrls(project.id, setPrototypeUrls);
@@ -110,52 +104,6 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   }, [project.id]);
 
   const projectScreens = screens.filter((s) => s.projectId === project.id);
-
-  const resetProtoForm = () => {
-    setProtoForm('none');
-    setPName('');
-    setPUrl('');
-    setPDesc('');
-    setPKind(PROTOTYPE_KINDS[0]);
-    setPCode('');
-  };
-
-  const handleRegisterUrl = async () => {
-    if (!pUrl.trim()) return;
-    try {
-      await registerPrototypeUrl({
-        projectId: project.id,
-        name: pName,
-        url: pUrl,
-        description: pDesc,
-        kind: pKind,
-        createdBy: user?.uid ?? 'anonymous',
-      });
-      resetProtoForm();
-      showToast('프로토타입 URL이 등록되었습니다.');
-    } catch (err) {
-      console.error(err);
-      showToast('등록 중 오류가 발생했습니다.', 'error');
-    }
-  };
-
-  const handleRegisterCode = async () => {
-    if (!pCode.trim()) return;
-    try {
-      const id = await registerPrototypeScreen({
-        projectId: project.id,
-        name: pName,
-        code: pCode,
-        ownerId: user?.uid ?? null,
-      });
-      resetProtoForm();
-      showToast('프로토타입 화면이 등록되었습니다.');
-      navigate?.(`#screen_${id}`);
-    } catch (err) {
-      console.error(err);
-      showToast('등록 중 오류가 발생했습니다.', 'error');
-    }
-  };
 
   // 확정 프로토타입 (Project.prototypeLock)
   const lock = project.prototypeLock ?? null;
@@ -530,60 +478,21 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       </div>
       )}
 
-      {section === 'prototype' && (
+      {section === 'documents' && (
       <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
-        <div className="flex items-start justify-between flex-wrap gap-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <span className="shrink-0 w-10 h-10 rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] text-[var(--color-primary-text)] flex items-center justify-center">
-              <MonitorPlay size={20} />
-            </span>
-            <div className="min-w-0">
-              <h3 className="font-bold text-[var(--text-strong)] text-lg">프로토타입 등록</h3>
-              <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
-                Gemini Canvas 등에서 생성한 프로토타입 URL이나 코드를 등록합니다. 확정된 프로토타입은 이후 IA와 기능정의서 역작성의 기준이 됩니다.
-              </p>
-            </div>
+        <div className="flex items-start gap-3 min-w-0">
+          <span className="shrink-0 w-10 h-10 rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] text-[var(--color-primary-text)] flex items-center justify-center">
+            <Wand2 size={20} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="font-bold text-[var(--text-strong)] text-lg">확정 프로토타입 · 문서 역작성</h3>
+            <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
+              프로토타입 탭에서 추가한 화면 중 하나를 기준으로 확정하면, 그 화면 구조를 바탕으로 IA·기능정의서 초안을 생성할 수 있습니다.
+            </p>
           </div>
-          {isEditor && protoForm === 'none' && (
-            <div className="flex flex-wrap gap-2 shrink-0">
-              <Button variant="secondary" icon={Link2} onClick={() => setProtoForm('url')}>프로토타입 URL 등록</Button>
-              <Button variant="secondary" icon={Code2} onClick={() => setProtoForm('code')}>프로토타입 코드 등록</Button>
-            </div>
-          )}
         </div>
 
-        {/* URL 등록 폼 */}
-        {protoForm === 'url' && (
-          <div className="mt-5 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] p-4 space-y-3">
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="프로토타입 이름" className="flex-1 min-w-0 px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none" />
-              <select value={pKind} onChange={(e) => setPKind(e.target.value)} className="shrink-0 px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none">
-                {PROTOTYPE_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-              </select>
-            </div>
-            <input type="url" value={pUrl} onChange={(e) => setPUrl(e.target.value)} placeholder="https://... (Gemini Canvas / Artifact / Vercel preview 등)" className="w-full px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none" />
-            <input value={pDesc} onChange={(e) => setPDesc(e.target.value)} placeholder="설명 (선택)" className="w-full px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none" />
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={resetProtoForm}>취소</Button>
-              <Button icon={Plus} onClick={handleRegisterUrl} disabled={!pUrl.trim()}>등록</Button>
-            </div>
-          </div>
-        )}
-
-        {/* 코드 등록 폼 */}
-        {protoForm === 'code' && (
-          <div className="mt-5 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] p-4 space-y-3">
-            <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="화면명" className="w-full px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none" />
-            <textarea value={pCode} onChange={(e) => setPCode(e.target.value)} placeholder="Gemini Canvas 등에서 생성한 HTML 또는 React 코드를 붙여넣으세요." rows={8} className="w-full px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-xs font-mono resize-y bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none" />
-            <p className="text-[11px] text-[var(--text-tertiary)]">HTML/React 코드는 기존 프로토타입 캔버스(ScreenEditor)에서 미리보기됩니다. 등록 후 해당 화면으로 이동합니다.</p>
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={resetProtoForm}>취소</Button>
-              <Button icon={Plus} onClick={handleRegisterCode} disabled={!pCode.trim()}>등록</Button>
-            </div>
-          </div>
-        )}
-
-        {/* 등록된 프로토타입 목록: 화면(screens) + URL(projectSources) */}
+        {/* 확정 대상 목록: 화면(screens) + 기존 URL(projectSources) */}
         {(projectScreens.length > 0 || prototypeUrls.length > 0) && (
           <ul className="mt-5 space-y-2">
             {projectScreens.map((s) => {

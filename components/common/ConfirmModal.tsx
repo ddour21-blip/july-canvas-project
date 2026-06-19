@@ -1,8 +1,8 @@
 'use client';
 
-// Admin 공통 Confirm 다이얼로그 (admin-kit .jca-confirm). 위험 액션 = subtle danger 아이콘 + danger 버튼.
-// 버튼 우측 정렬, 순서: 취소 → 확인/삭제. 현재 사용처가 모두 삭제 확인이라 기본 라벨은 '삭제'.
-import { AlertCircle } from 'lucide-react';
+// Admin 공통 삭제 Confirm — 다른 admin 모달과 동일한 jca-modal(sm) 구조로 통일.
+// 작은 danger 아이콘(28px) + 우측 정렬 footer(취소 → 삭제, danger solid). 현재 사용처가 모두 삭제 확인이라 기본 라벨 '삭제'.
+import { AlertCircle, X } from 'lucide-react';
 
 export interface ConfirmState {
   isOpen: boolean;
@@ -26,13 +26,34 @@ export function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, conf
   if (!isOpen) return null;
   return (
     <div className="jca-overlay" onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
-      <div className="jca-confirm" role="alertdialog" aria-modal="true">
-        <span className="jca-confirm__icon jca-confirm__icon--danger">
-          <AlertCircle size={22} />
-        </span>
-        <div className="jca-confirm__title">{title}</div>
-        <p className="jca-confirm__desc">{message}</p>
-        <div className="jca-confirm__foot">
+      <div className="jca-modal jca-modal--sm" role="alertdialog" aria-modal="true">
+        <div className="jca-modal__head">
+          <h2 className="jca-modal__title" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                background: 'var(--admin-danger-soft)',
+                color: 'var(--admin-danger)',
+                flex: 'none',
+              }}
+            >
+              <AlertCircle size={16} />
+            </span>
+            {title}
+          </h2>
+          <button type="button" className="jca-icon-btn" onClick={onCancel} aria-label="닫기">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="jca-modal__body">
+          <p>{message}</p>
+        </div>
+        <div className="jca-modal__foot">
           <button type="button" className="jca-btn jca-btn--secondary" onClick={onCancel}>
             취소
           </button>
