@@ -4,11 +4,9 @@ import { useEffect, useState } from 'react';
 import { onSnapshot, updateDoc, writeBatch } from 'firebase/firestore';
 import {
   AlertCircle,
-  BellRing,
   CheckCircle2,
   Database,
   Download,
-  LogOut,
   Upload,
   X,
 } from 'lucide-react';
@@ -18,13 +16,20 @@ import { col, docRef } from '@/lib/firestore';
 import { formatDateTime, getTime, showToast } from '@/lib/utils';
 import { isShareActive, resolveShareHash } from '@/lib/shares';
 import { Button } from '@/components/common/Button';
-import { GoogleSignInButton } from '@/components/common/GoogleSignInButton';
+import { AdminTopbar } from '@/components/common/AdminTopbar';
 import { WorkspaceSidebar } from '@/components/common/WorkspaceSidebar';
 import { ShareModal, type ShareState } from '@/components/modals/ShareModal';
 import { VirtualInboxModal, EmailSimulationModal } from '@/components/modals/InboxModals';
-import Dashboard from '@/components/views/Dashboard';
+import DashboardHome from '@/components/views/DashboardHome';
+import ProjectList from '@/components/views/ProjectList';
+import MembersAdmin from '@/components/views/MembersAdmin';
+import SettingsAdmin from '@/components/views/SettingsAdmin';
+import AnonymousLanding from '@/components/views/AnonymousLanding';
 import ProjectDetail from '@/components/views/ProjectDetail';
 import ScreenEditor from '@/components/views/ScreenEditor';
+
+// 관리자 전용 도구(데이터 백업/복원)는 기본 숨김. NEXT_PUBLIC_ADMIN_TOOLS=1일 때만 사이드바에 노출.
+const ADMIN_TOOLS = process.env.NEXT_PUBLIC_ADMIN_TOOLS === '1';
 import type { Member, MockEmail, Project, ProjectDocument, Screen, ShareRecord, ToastDetail } from '@/types';
 
 function FirebaseNotice() {
@@ -59,6 +64,7 @@ function CanvasAppInner() {
   const [shareState, setShareState] = useState<ShareState>({ isOpen: false, type: '', id: '' });
   const [backupOpen, setBackupOpen] = useState(false);
   const [currentRoute, setCurrentRoute] = useState('#');
+  const [collapsed, setCollapsed] = useState(false);
 
   const [isInboxOpen, setIsInboxOpen] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<MockEmail | null>(null);
@@ -207,18 +213,19 @@ function CanvasAppInner() {
     }
   }
 
+  // 사이드바: 로그인 사용자의 admin 뷰에서만 노출. 화면 편집(전체화면)/공유 로딩에선 숨김.
+  const showSidebar = isGoogleUser && viewType !== 'screen' && viewType !== 'share';
+
   return (
     // min-w-[1024px]: 본문 최소 너비 확보. 더 좁은 뷰포트에서는 페이지 가로 스크롤로 전환되어
     // 레이아웃이 글자 단위로 무너지지 않도록 안정화한다.
-    <div className="min-h-screen min-w-[1024px] bg-gray-50 text-gray-900 font-sans">
+    <div className="jca-shell min-w-[1024px]" data-collapsed={collapsed ? 'true' : 'false'}>
       {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-6 py-3 rounded-full shadow-lg bg-gray-800 text-white animate-in slide-in-from-top-4 fade-in font-medium whitespace-nowrap">
-          {toast.type === 'success' ? (
-            <CheckCircle2 size={18} className="text-green-400" />
-          ) : (
-            <AlertCircle size={18} className="text-red-400" />
-          )}
-          {toast.message}
+        <div className="jca-toast-region">
+          <div className={`jca-toast${toast.type === 'success' ? ' jca-toast--success' : toast.type === 'error' ? ' jca-toast--danger' : ''}`}>
+            {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+            {toast.message}
+          </div>
         </div>
       )}
 
@@ -262,109 +269,78 @@ function CanvasAppInner() {
         />
       )}
 
-      <header className="bg-white border-b border-gray-200 h-[var(--header-height)] px-6 flex items-center justify-between sticky top-0 z-50 shadow-sm">
-        <div className="flex items-center cursor-pointer" onClick={() => navigate('#')}>
-          {/* July Canvas 브랜드 락업 (심볼+워드마크 포함, 라이트 헤더용) */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/logo/header.svg" alt="July Canvas" className="h-7 w-auto" />
-        </div>
-        <div className="text-sm text-gray-500 flex items-center gap-4 font-medium">
-          {isGoogleUser && (
-            <>
-              <button
-                onClick={() => setIsInboxOpen(true)}
-                className="relative flex items-center gap-1.5 hover:bg-gray-200 transition-colors bg-gray-100 px-3 py-1.5 rounded-full text-gray-700"
-              >
-                <BellRing size={16} className="text-blue-600" /> 알림
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" /> 실시간 동기화 중
-              </div>
-            </>
-          )}
-          {/* Google 로그인/로그아웃 */}
-          {authUser && !authUser.isAnonymous ? (
-            <div className="flex items-center gap-2">
-              {authUser.photoURL ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={authUser.photoURL} alt="" className="w-7 h-7 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
-              ) : (
-                <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
-                  {(authUser.displayName || authUser.email || '?').charAt(0)}
-                </span>
-              )}
-              <span className="text-gray-700 font-bold max-w-[140px] truncate">{authUser.displayName || authUser.email}</span>
-              <button
-                onClick={() => signOutUser()}
-                className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 transition-colors px-3 py-1.5 rounded-full text-gray-700"
-                title="로그아웃"
-              >
-                <LogOut size={15} /> 로그아웃
-              </button>
-            </div>
-          ) : (
-            <GoogleSignInButton
-              size="sm"
-              label="로그인"
-              onClick={() => signInWithGoogle().catch((e) => console.error('Google 로그인 실패:', e))}
-            />
-          )}
-        </div>
-      </header>
+      <AdminTopbar
+        isGoogleUser={isGoogleUser}
+        authUser={authUser}
+        unreadCount={unreadCount}
+        orgName="July Production"
+        onToggleSidebar={() => setCollapsed((v) => !v)}
+        onOpenInbox={() => setIsInboxOpen(true)}
+        onSignIn={() => signInWithGoogle().catch((e) => console.error('Google 로그인 실패:', e))}
+        onSignOut={() => signOutUser()}
+        onHome={() => navigate('#')}
+      />
 
-      {/* 대시보드 뷰에서만 드라이브형 좌측 워크스페이스 내비를 노출(프로젝트/화면 뷰 레이아웃은 UI-5/UI-6). */}
-      <div className="flex">
-        {viewType === 'dashboard' && isGoogleUser && (
-          <WorkspaceSidebar projects={projects} user={user} navigate={navigate} currentRoute={currentRoute} />
-        )}
-        <main className="flex-1 min-w-0 mx-auto max-w-[1600px]">
-        {viewType === 'share' && (
-          <div className="p-16 flex flex-col items-center justify-center text-center text-[var(--text-secondary)]">
-            <div className="w-8 h-8 border-4 border-[var(--brand-200)] border-t-[var(--color-primary)] rounded-full animate-spin mb-4" />
-            <p className="font-medium">공유 링크를 확인하는 중...</p>
-          </div>
-        )}
-        {viewType === 'dashboard' && (
-          <Dashboard
-            projects={projects}
-            screens={screens}
-            documents={documents}
+      <div className="jca-shell__row">
+        {showSidebar && (
+          <WorkspaceSidebar
             navigate={navigate}
-            user={user}
-            globalMembers={globalMembers}
-            setBackupOpen={setBackupOpen}
+            currentRoute={currentRoute}
+            adminTools={ADMIN_TOOLS}
+            onOpenBackup={() => setBackupOpen(true)}
           />
         )}
-        {viewType === 'project' && (
-          <ProjectDetail
-            projectId={viewId}
-            projects={projects}
-            screens={screens}
-            navigate={navigate}
-            setShareState={setShareState}
-            user={user}
-            initialTab={projectInitialTab}
-            initialDocId={projectInitialDocId}
-          />
-        )}
-        {viewType === 'screen' && (
-          <ScreenEditor
-            screenId={viewId}
-            extraParam={extraParam}
-            projects={projects}
-            screens={screens}
-            navigate={navigate}
-            setShareState={setShareState}
-            user={user}
-            globalMembers={globalMembers}
-            workspaceId={activeWorkspaceId}
-          />
-        )}
+        <main className="jca-shell__main">
+          {viewType === 'screen' ? (
+            <ScreenEditor
+              screenId={viewId}
+              extraParam={extraParam}
+              projects={projects}
+              screens={screens}
+              navigate={navigate}
+              setShareState={setShareState}
+              user={user}
+              globalMembers={globalMembers}
+              workspaceId={activeWorkspaceId}
+            />
+          ) : viewType === 'share' ? (
+            <div className="jca-loading">
+              <div className="jca-spinner" />
+              <p>공유 링크를 확인하는 중...</p>
+            </div>
+          ) : !isGoogleUser ? (
+            <AnonymousLanding onSignIn={() => signInWithGoogle().catch((e) => console.error('Google 로그인 실패:', e))} />
+          ) : viewType === 'project' ? (
+            <ProjectDetail
+              projectId={viewId}
+              projects={projects}
+              screens={screens}
+              navigate={navigate}
+              setShareState={setShareState}
+              user={user}
+              initialTab={projectInitialTab}
+              initialDocId={projectInitialDocId}
+            />
+          ) : (
+            <div className="jca-content">
+              {viewType === 'projects' ? (
+                <ProjectList projects={projects} screens={screens} documents={documents} user={user} navigate={navigate} />
+              ) : viewType === 'members' ? (
+                <MembersAdmin globalMembers={globalMembers} navigate={navigate} />
+              ) : viewType === 'settings' ? (
+                <SettingsAdmin navigate={navigate} />
+              ) : (
+                <DashboardHome
+                  projects={projects}
+                  documents={documents}
+                  globalMembers={globalMembers}
+                  user={user}
+                  navigate={navigate}
+                  onOpenMembers={() => navigate('#members')}
+                />
+              )}
+            </div>
+          )}
         </main>
       </div>
     </div>

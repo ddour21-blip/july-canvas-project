@@ -1,78 +1,145 @@
 'use client';
 
-import type { User } from 'firebase/auth';
-import { Home, Folder } from 'lucide-react';
-import type { Project } from '@/types';
+// Admin 셸 좌측 사이드바 (admin index 기준 IA).
+// 섹션: 공통 관리(대시보드/프로젝트/멤버·권한/설정) · 워크스페이스 관리.
+// active = neutral well + emerald left rail (admin-kit .jca-nav-item--active).
+// navigate(해시)만 사용 — Auth/Firestore/권한 로직 없음.
+import { useState, type ComponentType } from 'react';
+import {
+  BarChart3,
+  ChevronDown,
+  Database,
+  FolderKanban,
+  LayoutDashboard,
+  ScrollText,
+  Settings,
+  Trash2,
+  Users,
+} from 'lucide-react';
+import { showToast } from '@/lib/utils';
 
 interface WorkspaceSidebarProps {
-  projects: Project[];
-  user: User | null;
   navigate: (hash: string) => void;
   currentRoute: string;
+  /** NEXT_PUBLIC_ADMIN_TOOLS 가 켜졌을 때만 백업/복원 노출 */
+  adminTools?: boolean;
+  onOpenBackup?: () => void;
 }
 
-/**
- * 드라이브형 좌측 워크스페이스 내비게이션 (UI-4).
- * - green-first 디자인 토큰 직접 소비, sidebar.svg 브랜드 심볼 배치.
- * - 현재 단계에서는 대시보드 뷰에서만 렌더(프로젝트/화면 뷰 레이아웃은 UI-5/UI-6).
- * - navigate/해시 라우팅만 사용. Firestore/Auth/권한 로직은 건드리지 않음.
- */
-export function WorkspaceSidebar({ projects, user, navigate, currentRoute }: WorkspaceSidebarProps) {
-  // Dashboard와 동일한 필터(내가 볼 수 있는 프로젝트)
-  const myProjects = projects.filter((p) => !p.ownerId || p.ownerId === user?.uid);
-  const route = currentRoute.replace('#', '');
-  const isHome = route === '' || route === 'dashboard';
+/** 현재 해시에서 최상위 view 키를 도출 ('ws_x_' 프리픽스 제거). */
+function viewOf(currentRoute: string): string {
+  const parts = currentRoute.replace('#', '').split('_');
+  const rest = parts[0] === 'ws' ? parts.slice(2) : parts;
+  return rest[0] || 'dashboard';
+}
 
-  const itemBase =
-    'flex items-center gap-2.5 w-full px-3 py-2 rounded-[var(--radius-md)] text-sm font-medium transition-colors text-left';
-  const itemIdle = 'text-[var(--text-body)] hover:bg-[var(--surface-hover)]';
-  const itemActive = 'bg-[var(--surface-active)] text-[var(--color-primary-text)] font-semibold';
+export function WorkspaceSidebar({ navigate, currentRoute, adminTools, onOpenBackup }: WorkspaceSidebarProps) {
+  const view = viewOf(currentRoute);
+  const inProjects = view === 'projects' || view === 'project';
+  const inMembers = view === 'members';
+  const inSettings = view === 'settings';
+
+  const [openProjects, setOpenProjects] = useState(true);
+  const [openMembers, setOpenMembers] = useState(true);
+  const [openSettings, setOpenSettings] = useState(inSettings);
+
+  const soon = () => showToast('준비 중인 기능입니다.');
+
+  const NavItem = ({
+    icon: Icon,
+    label,
+    active,
+    expandable,
+    expanded,
+    disabled,
+    onClick,
+  }: {
+    icon: ComponentType<{ size?: number }>;
+    label: string;
+    active?: boolean;
+    expandable?: boolean;
+    expanded?: boolean;
+    disabled?: boolean;
+    onClick?: () => void;
+  }) => (
+    <button
+      type="button"
+      className={`jca-nav-item${active ? ' jca-nav-item--active' : ''}`}
+      aria-expanded={expandable ? expanded : undefined}
+      aria-disabled={disabled || undefined}
+      onClick={disabled ? soon : onClick}
+    >
+      <Icon size={19} />
+      <span className="jca-nav-item__label">{label}</span>
+      {expandable && <ChevronDown size={16} className="jca-nav-item__chev" />}
+    </button>
+  );
+
+  const SubItem = ({ label, active, onClick }: { label: string; active?: boolean; onClick: () => void }) => (
+    <button type="button" className={`jca-nav-subitem${active ? ' jca-nav-subitem--active' : ''}`} onClick={onClick}>
+      {label}
+    </button>
+  );
 
   return (
-    <aside
-      className="sticky top-[var(--header-height)] self-start h-[calc(100vh-var(--header-height))] w-[var(--sidebar-width)] shrink-0 border-r border-[var(--border-default)] bg-[var(--surface-card)] overflow-y-auto flex flex-col"
-    >
-      {/* 워크스페이스 식별 영역 */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-[var(--border-subtle)]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/logo/sidebar.svg" alt="" className="h-8 w-8 shrink-0" />
-        <div className="min-w-0">
-          <div className="text-sm font-bold text-[var(--text-strong)] truncate">내 워크스페이스</div>
-          <div className="text-xs text-[var(--text-secondary)] truncate">main</div>
+    <aside className="jca-sidebar jca-shell__sidebar">
+      <div className="jca-nav-section">
+        <span className="jca-nav-section__label">공통 관리</span>
+      </div>
+
+      <NavItem icon={LayoutDashboard} label="대시보드" active={view === 'dashboard'} onClick={() => navigate('#')} />
+
+      <NavItem
+        icon={FolderKanban}
+        label="프로젝트"
+        active={inProjects}
+        expandable
+        expanded={openProjects}
+        onClick={() => setOpenProjects((v) => !v)}
+      />
+      {openProjects && (
+        <div className="jca-nav-sub">
+          <SubItem label="프로젝트 목록" active={view === 'projects'} onClick={() => navigate('#projects')} />
         </div>
-      </div>
+      )}
 
-      {/* 기본 내비 */}
-      <nav className="px-2 py-3">
-        <button onClick={() => navigate('#')} className={`${itemBase} ${isHome ? itemActive : itemIdle}`}>
-          <Home size={17} className="shrink-0" />홈
-        </button>
-      </nav>
+      <NavItem
+        icon={Users}
+        label="멤버 · 권한"
+        active={inMembers}
+        expandable
+        expanded={openMembers}
+        onClick={() => setOpenMembers((v) => !v)}
+      />
+      {openMembers && (
+        <div className="jca-nav-sub">
+          <SubItem label="구성원" active={inMembers} onClick={() => navigate('#members')} />
+          <SubItem label="권한 관리" onClick={() => navigate('#members')} />
+        </div>
+      )}
 
-      {/* 프로젝트(드라이브 폴더) */}
-      <div className="px-2 flex-1">
-        <div className="px-3 pb-1.5 text-[11px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">프로젝트</div>
-        {myProjects.length === 0 ? (
-          <p className="px-3 py-2 text-xs text-[var(--text-tertiary)]">프로젝트가 없습니다.</p>
-        ) : (
-          <div className="space-y-0.5 pb-3">
-            {myProjects.map((p) => {
-              const active = route === `project_${p.id}`;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => navigate(`#project_${p.id}`)}
-                  className={`${itemBase} ${active ? itemActive : itemIdle}`}
-                  title={p.name}
-                >
-                  <Folder size={17} className="shrink-0" />
-                  <span className="truncate">{p.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+      <NavItem
+        icon={Settings}
+        label="설정"
+        active={inSettings}
+        expandable
+        expanded={openSettings}
+        onClick={() => setOpenSettings((v) => !v)}
+      />
+      {openSettings && (
+        <div className="jca-nav-sub">
+          <SubItem label="워크스페이스 정보" active={inSettings} onClick={() => navigate('#settings')} />
+        </div>
+      )}
+
+      <div className="jca-nav-divider" />
+      <div className="jca-nav-section">
+        <span className="jca-nav-section__label">워크스페이스 관리</span>
       </div>
+      <NavItem icon={BarChart3} label="통계" onClick={soon} />
+      <NavItem icon={ScrollText} label="감사 로그" onClick={soon} />
+      {adminTools && onOpenBackup && <NavItem icon={Database} label="데이터 백업/복원" onClick={onOpenBackup} />}
+      <NavItem icon={Trash2} label="휴지통" disabled />
     </aside>
   );
 }

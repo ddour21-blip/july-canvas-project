@@ -189,8 +189,17 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
 
   const openAddScreen = () => setIsModalOpen(true);
 
+  const STATUS_DOT: Record<ProjectStatus, string> = {
+    draft: 'jca-status--muted',
+    active: 'jca-status--active',
+    review: 'jca-status--warning',
+    approved: 'jca-status--success',
+    archived: 'jca-status--muted',
+    handoff: '',
+  };
+
   return (
-    <div className="p-10">
+    <div className="p-8 max-w-[1280px]">
       <ConfirmModal
         isOpen={confirmState.isOpen}
         title={confirmState.title}
@@ -202,63 +211,56 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         <ProjectActivationWizard project={project} onClose={() => setShowWizard(false)} onActivated={() => setTab('documents')} />
       )}
 
-      {/* 브레드크럼 + 상태/권한 배지 */}
-      <div className="mb-6 flex items-center flex-wrap gap-y-2 text-sm font-medium text-[var(--text-secondary)]">
-        <button onClick={() => navigate('#')} className="hover:text-[var(--color-primary-text)] flex items-center gap-1 transition-colors">
-          <Folder size={16} /> 프로젝트 목록
-        </button>
-        <ChevronRight size={16} className="mx-2.5 text-[var(--text-tertiary)]" />
-        <span className="text-[var(--text-strong)] bg-[var(--surface-hover)] px-3 py-1 rounded-[var(--radius-pill)]">{project.name}</span>
-        <span className="ml-3 text-xs px-2.5 py-1 rounded-[var(--radius-pill)] font-bold" style={{ color: status.fg, backgroundColor: status.bg }}>
-          {status.label}
-        </span>
-        <span className="ml-2 bg-[var(--surface-hover)] text-[var(--text-body)] text-xs px-2.5 py-1 rounded-[var(--radius-md)] font-bold">
-          내 권한: {roleLabel(role)}
-        </span>
-        {!canEdit && (
-          <span className="ml-2 inline-flex items-center gap-1 bg-[var(--surface-hover)] text-[var(--text-secondary)] text-xs px-2.5 py-1 rounded-[var(--radius-md)]">
-            <Eye size={12} /> 보기 전용
-          </span>
-        )}
-      </div>
+      {/* 브레드크럼 (admin) */}
+      <nav className="jca-breadcrumb">
+        <a href="#" onClick={(e) => { e.preventDefault(); navigate('#projects'); }}>프로젝트</a>
+        <ChevronRight size={14} />
+        <span className="jca-breadcrumb__current">{project.name}</span>
+      </nav>
 
-      {/* 헤더: 프로젝트명/설명 + 액션 */}
-      <div className="flex flex-col gap-5 mb-8 lg:flex-row lg:flex-wrap lg:justify-between lg:items-end lg:gap-x-6">
-        <div className="shrink-0">
-          <h1 className="text-4xl font-extrabold text-[var(--text-strong)] tracking-tight">{project.name}</h1>
-          <p className="text-[var(--text-secondary)] mt-3 text-lg">
+      {/* 페이지 헤더 (admin page-head) */}
+      <div className="jca-page-head">
+        <div>
+          <div className="jca-page-head__title">
+            {project.name}
+            <span className={`jca-status ${STATUS_DOT[project.status ?? 'draft']}`} style={{ marginLeft: 'var(--space-2)' }}>
+              <span className="jca-status__dot" />
+              {status.label}
+            </span>
+          </div>
+          <p className="jca-page-head__desc">
             {project.description?.trim() || '기획 문서와 프로토타입을 한 곳에서 관리합니다.'}
+            <span className="text-[var(--admin-text-muted)]"> · 내 권한 {roleLabel(role)}{!canEdit && ' · 보기 전용'}</span>
           </p>
         </div>
-        <div className="flex flex-wrap gap-3 items-center">
+        <div className="jca-page-head__actions">
           {canInvite && (
-            <Button
-              variant="outline"
-              icon={ExternalLink}
+            <button
+              type="button"
+              className="jca-btn jca-btn--secondary"
               onClick={() =>
                 setShareState({
                   isOpen: true,
                   type: 'project',
                   id: project.id,
                   projectId: project.id,
-                  // 문서 탭에서 문서가 선택돼 있으면 '현재 문서 링크'도 제공
                   documentId: tab === 'documents' && currentDocId ? currentDocId : undefined,
                 })
               }
             >
-              공유
-            </Button>
+              <ExternalLink size={16} />공유
+            </button>
           )}
           {canEdit && (
-            <Button icon={Plus} onClick={openAddScreen}>
-              새 화면 추가
-            </Button>
+            <button type="button" className="jca-btn jca-btn--primary" onClick={openAddScreen}>
+              <Plus size={16} />새 화면 추가
+            </button>
           )}
           {canDelete && (
-            <Button
-              variant="outline"
-              className="text-[var(--red-600)] border-[var(--red-200)] hover:bg-[var(--red-50)]"
-              icon={Trash2}
+            <button
+              type="button"
+              className="jca-btn jca-btn--ghost"
+              style={{ color: 'var(--admin-danger)' }}
               onClick={() =>
                 setConfirmState({
                   isOpen: true,
@@ -268,24 +270,16 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 })
               }
             >
-              삭제
-            </Button>
+              <Trash2 size={16} />삭제
+            </button>
           )}
         </div>
       </div>
 
-      {/* 탭 */}
-      <div className="flex gap-1 border-b border-[var(--border-default)] mb-8">
+      {/* 탭 (admin) */}
+      <div className="jca-tabs" style={{ marginBottom: 'var(--space-6)' }}>
         {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-5 py-3 text-sm font-bold border-b-2 transition-colors -mb-px ${
-              tab === t.key
-                ? 'border-[var(--color-primary)] text-[var(--color-primary-text)]'
-                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-body)]'
-            }`}
-          >
+          <button key={t.key} type="button" className={`jca-tab${tab === t.key ? ' jca-tab--active' : ''}`} onClick={() => setTab(t.key)}>
             {t.label}
           </button>
         ))}
@@ -303,9 +297,9 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
             screenCount={projectScreens.length}
           />
           {!isActivated ? (
-            <div className="py-16 px-6 text-center border-2 border-dashed border-[var(--brand-200)] rounded-[var(--radius-2xl)] bg-[var(--color-primary-softer)] flex flex-col items-center">
-              <div className="w-16 h-16 bg-[var(--color-primary)] rounded-[var(--radius-2xl)] flex items-center justify-center text-[var(--color-on-primary)] mb-5">
-                <Rocket size={30} />
+            <div className="py-16 px-6 text-center border border-dashed border-[var(--border-strong)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] flex flex-col items-center">
+              <div className="w-14 h-14 bg-[var(--gray-100)] text-[var(--text-secondary)] rounded-[var(--radius-lg)] flex items-center justify-center mb-5">
+                <Rocket size={26} />
               </div>
               <h3 className="text-2xl font-extrabold text-[var(--text-strong)] mb-2">프로젝트를 활성화하세요</h3>
               <p className="text-[var(--text-secondary)] mb-6 max-w-md mx-auto leading-relaxed">
@@ -351,7 +345,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         <>
           {!isActivated ? (
             <div className="py-16 px-6 text-center border-2 border-dashed border-[var(--border-strong)] rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] flex flex-col items-center">
-              <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center mb-4">
+              <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] text-[var(--text-tertiary)] flex items-center justify-center mb-4">
                 <FileText size={32} />
               </div>
               <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">먼저 프로젝트를 활성화하세요</h3>
@@ -392,7 +386,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               <div
                 key={screen.id}
                 onClick={() => navigate(`#screen_${screen.id}`)}
-                className="bg-[var(--surface-card)] rounded-[var(--radius-2xl)] border border-[var(--border-default)] overflow-hidden shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5 hover:border-[var(--brand-300)] transition-all cursor-pointer flex flex-col group relative"
+                className="bg-[var(--surface-card)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden hover:border-[var(--border-strong)] transition-colors cursor-pointer flex flex-col group relative"
               >
                 {canEdit && (
                   <button
@@ -410,7 +404,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                     <Trash2 size={16} />
                   </button>
                 )}
-                <div className="h-36 bg-[var(--surface-sunken)] border-b border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-tertiary)] group-hover:bg-[var(--surface-active)] group-hover:text-[var(--color-primary-text)] transition-colors">
+                <div className="h-36 bg-[var(--surface-sunken)] border-b border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-tertiary)] group-hover:bg-[var(--surface-hover)] transition-colors">
                   <FileCode2 size={44} />
                 </div>
                 <div className="p-5 flex-1 flex flex-col justify-between">
@@ -433,7 +427,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
             ))}
             {projectScreens.length === 0 && (
               <div className="col-span-full py-16 px-6 text-center border-2 border-dashed border-[var(--border-strong)] rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] flex flex-col items-center">
-                <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center mb-5">
+                <div className="w-16 h-16 rounded-[var(--radius-2xl)] bg-[var(--surface-sunken)] text-[var(--text-tertiary)] flex items-center justify-center mb-5">
                   <Layout size={32} />
                 </div>
                 <h3 className="text-xl font-bold text-[var(--text-strong)] mb-2">등록된 화면이 없습니다</h3>

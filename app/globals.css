@@ -12,16 +12,16 @@
    blue → 브랜드 그린 / purple → slate / gray·green·amber·red → 디자인 쿨뉴트럴·상태색.
    blue-600/700은 흰 텍스트 가독성 위해 읽기 좋은 진한 그린으로 매핑(밝은 #50FA6E 필 버튼은 UI-3에서). */
 @theme {
-  --color-blue-50: #e2fde8;
-  --color-blue-100: #bff8cd;
-  --color-blue-200: #8af1a4;
-  --color-blue-300: #62ea84;
-  --color-blue-400: #50fa6e;
-  --color-blue-500: #22e349;
-  --color-blue-600: #11a132;
-  --color-blue-700: #0c7d28;
-  --color-blue-800: #095f1f;
-  --color-blue-900: #064214;
+  --color-blue-50: #eaf8f1;
+  --color-blue-100: #d3f0e1;
+  --color-blue-200: #bfe8d5;
+  --color-blue-300: #84d3ab;
+  --color-blue-400: #10b981;
+  --color-blue-500: #00a074;
+  --color-blue-600: #008f68;
+  --color-blue-700: #007a59;
+  --color-blue-800: #00684b;
+  --color-blue-900: #044c39;
 
   --color-purple-50: #eef1ef;
   --color-purple-100: #dde2de;
@@ -85,19 +85,19 @@
 }
 
 :root {
-  /* ===== Brand: vivid spring green (anchor #50FA6E) ===== */
-  --brand-25: #f0fef3;
-  --brand-50: #e2fde8;
-  --brand-100: #bff8cd;
-  --brand-200: #8af1a4;
-  --brand-300: #62ea84;
-  --brand-400: #50fa6e;
-  --brand-500: #22e349;
-  --brand-600: #11a132;
-  --brand-700: #0c7d28;
-  --brand-800: #095f1f;
-  --brand-900: #064214;
-  --on-brand-ink: #06371a;
+  /* ===== Brand: modern EMERALD (anchor #008F68) ===== */
+  --brand-25: #f6fbf8;
+  --brand-50: #eaf8f1;
+  --brand-100: #d3f0e1;
+  --brand-200: #bfe8d5;
+  --brand-300: #84d3ab;
+  --brand-400: #10b981;
+  --brand-500: #00a074;
+  --brand-600: #008f68;
+  --brand-700: #007a59;
+  --brand-800: #00684b;
+  --brand-900: #044c39;
+  --on-brand-ink: #043b2c;
 
   /* ===== Neutrals: clean cool-mist gray ===== */
   --gray-25: #fcfcfd;
@@ -135,15 +135,22 @@
   --slate-500: #788078;
   --slate-600: #5e665e;
 
-  /* ===== Semantic aliases (UI-3+에서 소비) ===== */
-  --color-primary: var(--brand-400);
-  --color-primary-hover: var(--brand-500);
-  --color-primary-text: var(--brand-700);
+  /* ===== Semantic aliases (UI-6 modern-emerald refine) =====
+     하나의 emerald palette로 통일. primary=면(solid fill), accent=강조(rail/underline).
+     - primary = 차분한 딥 emerald(#008F68) 필 + 흰 텍스트 (네온/탁한 그린 제거)
+     - accent  = 밝은 emerald(#10B981) — rail/underline 강조에만
+     - primary-text = #047857 (링크/active 라벨 등 '글자' 강조)
+     - focus-ring = brand-400 22% (얇고 차분) */
+  --color-primary: var(--brand-600);
+  --color-primary-hover: var(--brand-700);
+  --color-primary-active: var(--brand-800);
+  --color-primary-text: #047857;
   --color-primary-soft: var(--brand-50);
   --color-primary-softer: var(--brand-25);
-  --color-on-primary: var(--on-brand-ink);
-  --color-focus-ring: color-mix(in srgb, var(--brand-400) 55%, transparent);
-  --color-link: var(--brand-700);
+  --color-accent: var(--brand-400);
+  --color-on-primary: #ffffff;
+  --color-focus-ring: color-mix(in srgb, var(--brand-400) 22%, transparent);
+  --color-link: var(--color-primary-text);
 
   --text-strong: var(--gray-900);
   --text-body: var(--gray-700);
@@ -157,7 +164,7 @@
   --surface-raised: #ffffff;
   --surface-sunken: var(--gray-50);
   --surface-hover: var(--gray-100);
-  --surface-active: var(--brand-50);
+  --surface-active: var(--brand-50);   /* selected/active = subtle emerald (rail가 강조) */
   --surface-ink: var(--ink);
 
   /* Glass — 은은하게, 절제해서 사용 (과한 glassmorphism 금지) */
@@ -170,19 +177,19 @@
   --border-strong: var(--gray-300);
   --border-subtle: var(--gray-100);
 
-  /* status fg/bg pairs */
+  /* status fg/bg pairs — active=emerald, approved=calm green(역할 분리), 나머지 채도 낮춤 */
   --status-draft-fg: var(--gray-600);    --status-draft-bg: var(--gray-100);
   --status-active-fg: var(--brand-800);  --status-active-bg: var(--brand-100);
   --status-review-fg: var(--amber-700);  --status-review-bg: var(--amber-50);
   --status-approved-fg: var(--green-700);--status-approved-bg: var(--green-50);
-  --status-archived-fg: var(--slate-600);--status-archived-bg: var(--slate-50);
-  --status-handoff-fg: var(--slate-600); --status-handoff-bg: var(--slate-50);
+  --status-archived-fg: var(--gray-600); --status-archived-bg: var(--gray-100);
+  --status-handoff-fg: var(--gray-600);  --status-handoff-bg: var(--gray-100);
 
   --color-success: var(--green-600);
   --color-warning: var(--amber-600);
   --color-danger: var(--red-600);
-  --color-info: var(--brand-700);
-  --color-live: var(--brand-500);
+  --color-info: var(--color-primary-text);   /* info = emerald text (중립 그레이 아님) */
+  --color-live: var(--brand-400);            /* 동기화 점: 밝은 emerald accent */
 
   /* ===== Spacing (4px base) ===== */
   --space-0: 0;
@@ -224,8 +231,9 @@
   --shadow-lg: 0 4px 12px rgba(18, 26, 38, 0.05), 0 10px 24px rgba(18, 26, 38, 0.06);
   --shadow-xl: 0 8px 24px rgba(18, 26, 38, 0.07), 0 18px 44px rgba(18, 26, 38, 0.08);
   --shadow-2xl: 0 16px 40px rgba(18, 26, 38, 0.1), 0 32px 64px rgba(18, 26, 38, 0.1);
-  --shadow-brand: 0 2px 8px rgba(34, 227, 73, 0.24);
-  --shadow-brand-lg: 0 6px 16px rgba(34, 227, 73, 0.26);
+  /* 그린 글로우 제거 → 중립적 미세 그림자(버튼은 사실상 flat) */
+  --shadow-brand: 0 1px 2px rgba(18, 26, 38, 0.06);
+  --shadow-brand-lg: 0 2px 6px rgba(18, 26, 38, 0.08);
   --shadow-inset: inset 0 1px 2px rgba(18, 26, 38, 0.04);
 
   /* ===== Signature backgrounds ===== */
@@ -233,7 +241,7 @@
     radial-gradient(900px 520px at 0% -12%, rgba(80, 250, 110, 0.05), transparent 55%),
     radial-gradient(760px 520px at 100% -6%, rgba(80, 250, 110, 0.03), transparent 52%),
     var(--gray-50);
-  --gradient-brand: linear-gradient(135deg, #6dfd86 0%, #50fa6e 48%, #22e349 100%);
+  --gradient-brand: linear-gradient(135deg, #00a074 0%, #008f68 100%);
   --gradient-brand-soft: linear-gradient(135deg, var(--brand-50), var(--brand-100));
 
   /* ===== Motion ===== */
@@ -298,6 +306,21 @@ body {
 }
 
 ::selection {
-  background: var(--brand-200);
+  background: var(--brand-100);
   color: var(--brand-900);
 }
+
+/* ===============================================================
+   UI-5 — blue→green 유틸 remap 중화 (chrome 한정)
+   @theme의 blue 매핑은 유지하되, 제품 크롬에서 직접 쓰인 blue 유틸을
+   중립 그레이로 덮어써 헤더/스피너/백업 모달의 그린을 제거한다.
+   (컴포넌트 클래스는 그대로 두고 색만 중립화 — 로직/구조 변경 없음)
+   =============================================================== */
+.text-blue-600 { color: var(--gray-500) !important; }
+.bg-blue-100 { background-color: var(--gray-100) !important; }
+.text-blue-200 { color: var(--gray-200) !important; }
+.border-blue-200 { border-color: var(--gray-200) !important; }
+.border-t-blue-600 { border-top-color: var(--gray-500) !important; }
+.border-blue-100 { border-color: var(--gray-200) !important; }
+.border-blue-300 { border-color: var(--gray-300) !important; }
+.hover\:bg-blue-50:hover { background-color: var(--gray-100) !important; }
