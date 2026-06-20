@@ -27,11 +27,52 @@ interface ServiceAccountCredential {
   privateKey: string;
 }
 
+/** Admin 초기화 단계(자격증명 파싱/cert)에서 발생한 실패. 라우트에서 ADMIN_INIT_FAILED로 분류한다. */
+export class AdminInitError extends Error {
+  readonly code = 'ADMIN_INIT_FAILED' as const;
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'AdminInitError';
+  }
+}
+
+/**
+ * FIREBASE_PRIVATE_KEY 값을 실제 PEM 문자열로 정규화한다.
+ * 다양한 배포 환경(.env 파서 / Vercel UI / base64 주입)에서 들어오는 형태를 방어적으로 처리한다:
+ *  - 양끝을 감싼 따옴표(" 또는 ') 제거
+ *  - escape된 개행 \\n / \\r\\n → 실제 개행, 실제 \r\n → \n 정규화
+ *  - PEM 헤더가 없으면 통째로 base64 인코딩됐을 가능성 → 디코드 시도(성공 시에만 채택)
+ */
+function normalizePrivateKey(raw: string): string {
+  let key = raw.trim();
+
+  // 양끝 따옴표 제거(전체를 감싼 경우만; 키 내부 문자는 보존).
+  if (key.length >= 2 && ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'")))) {
+    key = key.slice(1, -1);
+  }
+
+  // escape된 개행 복원 후 CRLF 정규화. (\\r\\n 을 먼저 처리해야 \\n 치환과 충돌하지 않음)
+  key = key.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
+
+  // PEM 헤더가 없다면 base64 전체 인코딩으로 주입됐을 수 있음 → 디코드 시도(검증 통과 시에만 채택).
+  if (!key.includes('BEGIN')) {
+    try {
+      const decoded = Buffer.from(key, 'base64').toString('utf8');
+      if (decoded.includes('BEGIN') && decoded.includes('PRIVATE KEY')) {
+        key = decoded.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
+      }
+    } catch {
+      /* base64 가 아니면 원본 유지 */
+    }
+  }
+
+  return key.trim();
+}
+
 /**
  * env에서 서비스 계정 자격증명을 읽어 검증한다.
  * - 누락된 변수는 한 번에 모아 명확한 에러 메시지로 던진다.
- * - FIREBASE_PRIVATE_KEY는 .env에 한 줄로 저장되며 줄바꿈이 "\\n" 으로 escape되므로
- *   실제 줄바꿈으로 복원한다(따옴표로 감싼 경우의 바깥 따옴표도 제거).
+ * - FIREBASE_PRIVATE_KEY는 normalizePrivateKey로 실제 PEM 으로 복원한다.
  */
 function readServiceAccount(): ServiceAccountCredential {
   const projectId = process.env[ENV_PROJECT_ID];
@@ -49,10 +90,13 @@ function readServiceAccount(): ServiceAccountCredential {
     );
   }
 
-  // "\\n" → 실제 줄바꿈 복원. 일부 환경(.env 파서)에서 키를 따옴표로 감싸 들어오는 경우도 정리.
-  const privateKey = rawPrivateKey!
-    .replace(/^["']|["']$/g, '')
-    .replace(/\\n/g, '\n');
+  const privateKey = normalizePrivateKey(rawPrivateKey!);
+  // 정규화 후에도 PEM 형식이 아니면 cert() 전에 명확히 실패시킨다(원인 분류 정확도↑).
+  if (!privateKey.includes('BEGIN') || !privateKey.includes('PRIVATE KEY')) {
+    throw new AdminInitError(
+      '[firebaseAdmin] FIREBASE_PRIVATE_KEY 형식이 올바르지 않습니다(PEM 헤더 없음). 따옴표/개행(\\n) escape를 확인하세요.',
+    );
+  }
 
   return { projectId: projectId!, clientEmail: clientEmail!, privateKey };
 }
@@ -61,7 +105,7 @@ function readServiceAccount(): ServiceAccountCredential {
 let adminApp: App | null = null;
 let adminDb: Firestore | null = null;
 
-/** Admin App 반환(없으면 lazy 초기화). 서버에서만 호출. */
+/** Admin App 반환(없으면 lazy 초기화). 서버에서만 호출. 초기화 실패는 AdminInitError로 던진다. */
 export function getAdminApp(): App {
   if (adminApp) return adminApp;
   // 같은 프로세스에서 이미 초기화된 default app이 있으면 재사용(중복 init 예외 방지).
@@ -70,11 +114,17 @@ export function getAdminApp(): App {
     adminApp = existing[0];
     return adminApp;
   }
-  const { projectId, clientEmail, privateKey } = readServiceAccount();
-  adminApp = initializeApp({
-    credential: cert({ projectId, clientEmail, privateKey }),
-  });
-  return adminApp;
+  try {
+    const { projectId, clientEmail, privateKey } = readServiceAccount();
+    adminApp = initializeApp({
+      credential: cert({ projectId, clientEmail, privateKey }),
+    });
+    return adminApp;
+  } catch (err) {
+    // 자격증명 파싱/cert 실패 → 호출부(라우트)에서 ADMIN_INIT_FAILED 로 분류 가능하도록 래핑.
+    if (err instanceof AdminInitError) throw err;
+    throw new AdminInitError('[firebaseAdmin] Admin 초기화에 실패했습니다(자격증명 확인 필요).', { cause: err });
+  }
 }
 
 /** Admin Firestore 반환(없으면 lazy 초기화). 서버에서만 호출. */
@@ -97,6 +147,18 @@ export function isAdminConfigured(): boolean {
   return Boolean(
     process.env[ENV_PROJECT_ID] && process.env[ENV_CLIENT_EMAIL] && process.env[ENV_PRIVATE_KEY],
   );
+}
+
+/** Admin 초기화 가능 여부를 분류한다(설정 누락 vs 자격증명 파싱 실패 vs 정상). 라우트의 에러코드 매핑용. */
+export function getAdminInitError(): 'ADMIN_NOT_CONFIGURED' | 'ADMIN_INIT_FAILED' | null {
+  if (!isAdminConfigured()) return 'ADMIN_NOT_CONFIGURED';
+  try {
+    getAdminApp();
+    return null;
+  } catch (err) {
+    console.error('[firebaseAdmin] init error', err);
+    return 'ADMIN_INIT_FAILED';
+  }
 }
 
 // ---- Firestore 경로 (클라이언트 lib/firestore.ts 와 동일 구조: artifacts/{appId}/public/data/{collection}) ----

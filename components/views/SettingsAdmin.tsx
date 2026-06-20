@@ -25,11 +25,6 @@ export default function SettingsAdmin({ navigate }: { navigate: (hash: string) =
           <div className="jca-page-head__title">워크스페이스 정보</div>
           <p className="jca-page-head__desc">조직 기본 정보와 표시 설정입니다.</p>
         </div>
-        <div className="jca-page-head__actions">
-          <button type="button" className="jca-btn jca-btn--primary" onClick={() => showToast('설정 저장은 준비 중입니다.')}>
-            저장
-          </button>
-        </div>
       </div>
 
       <div className="jca-card jca-card--pad" style={{ maxWidth: 760 }}>
@@ -74,6 +69,13 @@ export default function SettingsAdmin({ navigate }: { navigate: (hash: string) =
 
         <div className="jca-alert jca-alert--info mt-6">
           <div className="jca-alert__body">이 화면은 표시용 양식입니다. 조직/저장 연동은 권한 구조 단계에서 별도로 진행됩니다.</div>
+        </div>
+
+        {/* 저장 버튼을 폼 카드 하단 우측으로 이동(입력 직후 인지하기 쉬운 위치). */}
+        <div className="flex justify-end mt-6 pt-4 border-t border-[var(--border-subtle)]">
+          <button type="button" className="jca-btn jca-btn--primary" onClick={() => showToast('설정 저장은 준비 중입니다.')}>
+            저장
+          </button>
         </div>
       </div>
     </section>

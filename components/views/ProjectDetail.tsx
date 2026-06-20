@@ -75,24 +75,28 @@ interface ProjectDetailProps {
   initialTab?: Tab;
   /** 딥링크로 진입한 초기 선택 문서 id (예: project_{id}_document_{docId}) */
   initialDocId?: string | null;
+  /** project_{id}_screens_new 진입 시 새 화면 추가 모달 자동 오픈 (문서 탭 '프로토타입 추가하기' CTA 연결) */
+  initialScreenNew?: boolean;
 }
 
-export default function ProjectDetail({ projectId, projects, screens, navigate, setShareState, user, initialTab, initialDocId }: ProjectDetailProps) {
-  const [tab, setTab] = useState<Tab>(initialTab ?? 'overview');
+export default function ProjectDetail({ projectId, projects, screens, navigate, setShareState, user, initialTab, initialDocId, initialScreenNew }: ProjectDetailProps) {
+  const [tab, setTab] = useState<Tab>(initialDocId ? 'documents' : (initialTab ?? 'overview'));
   // 현재 문서 탭에서 선택된 문서 id (공유 '현재 문서 링크'용). ProjectDocuments가 보고.
   const [currentDocId, setCurrentDocId] = useState<string | null>(initialDocId ?? null);
-  // 딥링크(해시) 변경 시에만 탭/문서를 동기화. 렌더 중 조정 패턴(effect 미사용 → 사용자 수동 탭 전환 보존).
-  const routeKey = `${initialTab ?? ''}|${initialDocId ?? ''}`;
+  // 해시(딥링크/뒤로가기/새로고침)로 들어온 탭을 단일 소스로 동기화. 렌더 중 조정 패턴(effect 미사용).
+  const tabFromRoute: Tab = initialDocId ? 'documents' : (initialTab ?? 'overview');
+  const routeKey = `${tabFromRoute}|${initialDocId ?? ''}`;
   const [appliedRouteKey, setAppliedRouteKey] = useState(routeKey);
   if (routeKey !== appliedRouteKey) {
     setAppliedRouteKey(routeKey);
-    if (initialDocId) {
-      setTab('documents');
-      setCurrentDocId(initialDocId);
-    } else if (initialTab) {
-      setTab(initialTab);
-    }
+    setTab(tabFromRoute);
+    if (initialDocId) setCurrentDocId(initialDocId);
   }
+  // 탭 전환: UI는 즉시 갱신(낙관적) + 해시를 통해 history에 기록 → 브라우저 뒤로가기/새로고침 복원.
+  const goTab = (t: Tab) => {
+    setTab(t);
+    if (projectId) navigate(`#project_${projectId}_${t}`);
+  };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [screenName, setScreenName] = useState('');
@@ -126,6 +130,15 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
 
   // 권한 계산 (훅이므로 early-return 이전에 호출)
   const perms = useRole(project);
+
+  // project_{id}_screens_new 진입 시 새 화면 추가 모달 자동 오픈(편집 권한 한정). 1회 처리 후 URL의 _new 플래그 정리.
+  useEffect(() => {
+    if (initialScreenNew && perms.canEdit && projectId) {
+      setIsModalOpen(true);
+      if (typeof window !== 'undefined') window.history.replaceState(null, '', `#project_${projectId}_screens`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialScreenNew, perms.canEdit, projectId]);
 
   if (!project) return null;
   const { isOwner, canEdit, canDelete, canInvite, role } = perms;
@@ -211,7 +224,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         onCancel={() => setConfirmState({ ...confirmState, isOpen: false })}
       />
       {showWizard && (
-        <ProjectActivationWizard project={project} onClose={() => setShowWizard(false)} onActivated={() => setTab('documents')} />
+        <ProjectActivationWizard project={project} onClose={() => setShowWizard(false)} onActivated={() => goTab('documents')} />
       )}
 
       {/* 브레드크럼 (admin) */}
@@ -288,7 +301,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
       {/* 탭 (admin) */}
       <div className="jca-tabs" style={{ marginBottom: 'var(--space-6)' }}>
         {TABS.map((t) => (
-          <button key={t.key} type="button" className={`jca-tab${tab === t.key ? ' jca-tab--active' : ''}`} onClick={() => setTab(t.key)}>
+          <button key={t.key} type="button" className={`jca-tab${tab === t.key ? ' jca-tab--active' : ''}`} onClick={() => goTab(t.key)}>
             {t.label}
           </button>
         ))}
@@ -341,13 +354,13 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 <h3 className="font-bold text-[var(--text-strong)] text-lg mb-1">최종 산출물</h3>
                 <p className="text-sm text-[var(--text-secondary)] mb-5">개발 전달에 사용할 PRD·프로토타입 URL과 개발 전달 패키지입니다.</p>
                 <div className="flex flex-col gap-3">
-                  <Button variant="outline" icon={FileText} onClick={() => setTab('documents')} className="justify-start">
+                  <Button variant="outline" icon={FileText} onClick={() => goTab('documents')} className="justify-start">
                     PRD 문서 관리로 이동
                   </Button>
                   <Button variant="outline" icon={Link2} onClick={copyPrototypeUrl} className="justify-start">
                     프로토타입 URL 복사
                   </Button>
-                  <Button variant="outline" icon={Package} onClick={() => setTab('handoff')} className="justify-start">
+                  <Button variant="outline" icon={Package} onClick={() => goTab('handoff')} className="justify-start">
                     개발 전달 패키지로 이동
                   </Button>
                 </div>
@@ -412,7 +425,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
             navigate={navigate}
           />
           {/* 2) 화면 관리 (새 화면 추가는 헤더 primary, empty state는 안내만) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+          {/* 카드가 과하게 넓어지지 않도록 auto-fill + 최소폭 기준(데스크톱 2~3열, 모바일 1열). */}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
             {projectScreens.map((screen) => (
               <div
                 key={screen.id}
@@ -435,8 +449,30 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                     <Trash2 size={16} />
                   </button>
                 )}
-                <div className="h-36 bg-[var(--surface-sunken)] border-b border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-tertiary)] group-hover:bg-[var(--surface-hover)] transition-colors">
-                  <FileCode2 size={44} />
+                {/* 미니 레이아웃 미리보기 placeholder: 코드 기반 화면이 '정상 등록됨'으로 보이도록 와이어프레임으로 표현. */}
+                <div className="h-36 relative bg-[var(--surface-sunken)] border-b border-[var(--border-subtle)] p-3 group-hover:bg-[var(--surface-hover)] transition-colors">
+                  <div className="h-full w-full rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-subtle)] shadow-[var(--shadow-xs)] p-2 flex flex-col gap-1.5 overflow-hidden">
+                    {/* header bar */}
+                    <div className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-strong)]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-strong)]" />
+                      <span className="ml-auto h-1.5 w-10 rounded-full bg-[var(--surface-hover)]" />
+                    </div>
+                    {/* body: sidebar + content blocks */}
+                    <div className="flex-1 flex gap-1.5 min-h-0">
+                      <div className="w-1/4 rounded bg-[var(--surface-hover)]" />
+                      <div className="flex-1 flex flex-col gap-1">
+                        <div className="h-2 w-2/3 rounded bg-[var(--surface-hover)]" />
+                        <div className="h-1.5 w-full rounded bg-[var(--surface-sunken)] border border-[var(--border-subtle)]" />
+                        <div className="h-1.5 w-5/6 rounded bg-[var(--surface-sunken)] border border-[var(--border-subtle)]" />
+                        {/* CTA block */}
+                        <div className="mt-auto h-2.5 w-12 rounded-[var(--radius-sm)] bg-[var(--color-primary-soft)]" />
+                      </div>
+                    </div>
+                  </div>
+                  <span className="absolute top-2 left-2 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--surface-card)] border border-[var(--border-subtle)] text-[var(--text-tertiary)]">
+                    <FileCode2 size={10} /> 코드 기반 화면
+                  </span>
                 </div>
                 <div className="p-5 flex-1 flex flex-col justify-between">
                   <div>
@@ -464,8 +500,13 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                   </span>
                   <div className="jca-empty__title">등록된 화면이 없습니다</div>
                   <p className="jca-empty__desc">
-                    {canEdit ? "오른쪽 위 '새 화면 추가' 버튼으로 첫 번째 프로토타입 화면을 등록해보세요." : '이 프로젝트에는 아직 등록된 화면이 없습니다.'}
+                    {canEdit ? '첫 번째 프로토타입 화면을 등록해 캔버스에서 기획·정책을 정리해보세요.' : '이 프로젝트에는 아직 등록된 화면이 없습니다.'}
                   </p>
+                  {canEdit && (
+                    <button type="button" className="jca-btn jca-btn--secondary" onClick={openAddScreen} style={{ marginTop: 'var(--space-3)' }}>
+                      <Plus size={16} />추가
+                    </button>
+                  )}
                 </div>
               </div>
             )}

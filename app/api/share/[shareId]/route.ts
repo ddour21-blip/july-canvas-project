@@ -7,7 +7,7 @@
 // ⚠️ Firestore Rules 의 public read 는 열지 않는다(클라이언트 비로그인 직접 조회 금지).
 //    이 라우트만 Admin 권한으로 읽는다.
 // ⚠️ 이번 단계는 API + sanitizer 까지만. public viewer UI / public_review·comment 는 후속(S7-2B-3 / S7-2C).
-import { adminCol, isAdminConfigured } from '@/lib/firebaseAdmin';
+import { adminCol, getAdminInitError } from '@/lib/firebaseAdmin';
 import { buildHandoffPackage, type HandoffPrototype } from '@/lib/handoffPackage';
 import { DOCUMENT_META } from '@/lib/documents';
 import { shareHash } from '@/lib/shareLinks';
@@ -35,6 +35,7 @@ type ErrorCode =
   | 'NOT_PUBLIC_READONLY'
   | 'TARGET_NOT_FOUND'
   | 'ADMIN_NOT_CONFIGURED'
+  | 'ADMIN_INIT_FAILED'
   | 'INTERNAL_ERROR';
 
 const fail = (status: number, error: ErrorCode): Response =>
@@ -70,7 +71,9 @@ export async function GET(
   { params }: { params: Promise<{ shareId: string }> },
 ): Promise<Response> {
   // 0. 서버 설정 확인 (private key/env 상세는 응답에 노출하지 않는다)
-  if (!isAdminConfigured()) return fail(500, 'ADMIN_NOT_CONFIGURED');
+  //    설정 누락(ADMIN_NOT_CONFIGURED)과 자격증명 파싱 실패(ADMIN_INIT_FAILED)를 구분한다.
+  const initError = getAdminInitError();
+  if (initError) return fail(500, initError);
 
   // 1. shareId 형식 검증
   const { shareId } = await params;

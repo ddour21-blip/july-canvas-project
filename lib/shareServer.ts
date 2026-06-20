@@ -3,7 +3,7 @@
 // public_readonly 공유에 대한 "활성 여부" 판정을 한 곳에 모은다.
 // (S7-2B-2의 GET /api/share 라우트는 자체 인라인 검증을 그대로 유지 — 회귀 방지. 신규 reviews 라우트가 이 헬퍼를 사용한다.)
 // ⚠️ 서버 전용. firebase-admin(Rules 우회)으로만 읽는다. Firestore Rules는 변경하지 않는다.
-import { adminCol, isAdminConfigured } from './firebaseAdmin';
+import { adminCol, getAdminInitError } from './firebaseAdmin';
 import { getTime, nowMs } from './utils';
 import type { ShareRecord } from '@/types';
 
@@ -17,6 +17,7 @@ export type ShareResolveError =
   | 'SHARE_EXPIRED'
   | 'NOT_PUBLIC_READONLY'
   | 'ADMIN_NOT_CONFIGURED'
+  | 'ADMIN_INIT_FAILED'
   | 'INTERNAL_ERROR';
 
 export type ShareResolveResult =
@@ -28,7 +29,8 @@ export type ShareResolveResult =
  * 순서: env 설정 → shareId 형식 → 존재 → isEnabled → expiresAt → accessType==='public_readonly'.
  */
 export async function resolveActivePublicShare(shareId: string): Promise<ShareResolveResult> {
-  if (!isAdminConfigured()) return { ok: false, status: 500, error: 'ADMIN_NOT_CONFIGURED' };
+  const initError = getAdminInitError();
+  if (initError) return { ok: false, status: 500, error: initError };
   if (!shareId || !SHARE_ID_RE.test(shareId)) return { ok: false, status: 400, error: 'INVALID_SHARE_ID' };
 
   const snap = await adminCol('shares').where('shareId', '==', shareId).limit(1).get();

@@ -197,12 +197,18 @@ function CanvasAppInner() {
   // 화면 주석 딥링크: screen_{id}_ann_{annId}
   const extraParam: string | null = rest[2] === 'ann' ? (rest[3] ?? null) : null;
 
-  // 프로젝트 내부 딥링크: project_{id}_documents / project_{id}_document_{docId} (S7-1)
-  let projectInitialTab: 'overview' | 'documents' | 'screens' | undefined;
+  // 프로젝트 내부 딥링크: project_{id}_{overview|documents|screens|handoff} / project_{id}_document_{docId}
+  // (기존 'documents'/'document_{docId}' 딥링크는 그대로 동작 — 하위 호환 유지)
+  let projectInitialTab: 'overview' | 'documents' | 'screens' | 'handoff' | undefined;
   let projectInitialDocId: string | null = null;
+  let projectInitialScreenNew = false;
   if (viewType === 'project') {
-    if (rest[2] === 'documents') projectInitialTab = 'documents';
-    else if (rest[2] === 'document') {
+    const seg = rest[2];
+    if (seg === 'documents' || seg === 'screens' || seg === 'handoff' || seg === 'overview') {
+      projectInitialTab = seg;
+      // project_{id}_screens_new → 프로토타입 탭 진입 + 새 화면 추가 모달 자동 오픈(문서 탭 CTA 연결).
+      if (seg === 'screens' && rest[3] === 'new') projectInitialScreenNew = true;
+    } else if (seg === 'document') {
       projectInitialTab = 'documents';
       projectInitialDocId = rest[3] ?? null;
     }
@@ -328,6 +334,7 @@ function CanvasAppInner() {
               user={user}
               initialTab={projectInitialTab}
               initialDocId={projectInitialDocId}
+              initialScreenNew={projectInitialScreenNew}
             />
           ) : (
             <div className="jca-content">

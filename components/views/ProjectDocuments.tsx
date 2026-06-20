@@ -15,6 +15,7 @@ import { shareHash, toShareUrl } from '@/lib/shareLinks';
 import { useAuth } from '@/lib/auth';
 import { downloadTextFile } from '@/lib/export/exportMarkdown';
 import { Button } from '@/components/common/Button';
+import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
 import { Copy, CheckCircle2, Circle, Clock, Download, ExternalLink, Eye, FileText, Link2, Lock, MonitorPlay, Package, Plus, RefreshCw, Save, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { EMPTY_ACTIVATION } from '@/types';
 import type {
@@ -95,6 +96,10 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     setHandoffTab(0);
   }
 
+  // 앱 스타일 확인 모달(브라우저 confirm 대체). 기준 변경/덮어쓰기 같은 주의 액션에 사용.
+  const [confirm, setConfirm] = useState<ConfirmState>({ isOpen: false, title: '', msg: '', action: null });
+  const closeConfirm = () => setConfirm((c) => ({ ...c, isOpen: false }));
+
   // 확정 프로토타입(lock) 관리용 — 화면(screens)/URL(projectSources) 목록 구독.
   const [prototypeUrls, setPrototypeUrls] = useState<ProjectSource[]>([]);
 
@@ -110,12 +115,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   const isLockTarget = (targetType: 'screen' | 'source', id: string) =>
     !!lock && lock.targetType === targetType && lock.targetId === id;
 
-  const handleLock = async (input: { targetType: 'screen' | 'source'; targetId: string; title?: string; url?: string }) => {
-    // 이미 다른 항목이 확정돼 있으면 변경 확인
-    if (lock && !(lock.targetType === input.targetType && lock.targetId === input.targetId)) {
-      const ok = window.confirm('이미 확정된 프로토타입이 있습니다. 기준 프로토타입을 변경하시겠습니까?\n변경하면 이후 IA/기능정의서 생성 기준이 바뀝니다.');
-      if (!ok) return;
-    }
+  const doLock = async (input: { targetType: 'screen' | 'source'; targetId: string; title?: string; url?: string }) => {
     try {
       await lockPrototype(project.id, { ...input, lockedBy: user?.uid ?? 'anonymous' });
       showToast('기준 프로토타입으로 확정되었습니다.');
@@ -123,6 +123,25 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       console.error(err);
       showToast('확정 중 오류가 발생했습니다.', 'error');
     }
+  };
+
+  const handleLock = (input: { targetType: 'screen' | 'source'; targetId: string; title?: string; url?: string }) => {
+    // 이미 다른 항목이 확정돼 있으면 앱 스타일 모달로 기준 변경을 확인(기존 문서는 자동 삭제하지 않음).
+    if (lock && !(lock.targetType === input.targetType && lock.targetId === input.targetId)) {
+      setConfirm({
+        isOpen: true,
+        title: '확정 기준을 변경할까요?',
+        msg: '선택한 프로토타입 화면이 이후 IA와 기능정의서 생성 기준으로 사용됩니다. 기존에 작성된 문서는 삭제되지 않지만, 새로 생성하는 초안의 기준은 변경됩니다.',
+        confirmLabel: '기준 변경',
+        tone: 'warning',
+        action: () => {
+          closeConfirm();
+          doLock(input);
+        },
+      });
+      return;
+    }
+    doLock(input);
   };
 
   const handleUnlock = async () => {
@@ -161,12 +180,31 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   };
 
   // B5: 확정 프로토타입(lock) 기준 IA 초안 생성 → 기존 ia 문서 생성/업데이트. (IA만, FEATURE_SPEC/PRD 미변경)
-  const handleGenerateIA = async () => {
+  const handleGenerateIA = () => {
+    if (!lock) return;
+    const existing = byType('ia');
+    if (existing) {
+      setConfirm({
+        isOpen: true,
+        title: 'IA 초안을 다시 생성할까요?',
+        msg: '확정 프로토타입 기준으로 IA를 다시 생성하면 현재 IA 문서 내용이 새 초안으로 덮어써집니다. (버전은 올라가며 기존 문서가 삭제되는 것은 아닙니다.)',
+        confirmLabel: '다시 생성',
+        tone: 'warning',
+        action: () => {
+          closeConfirm();
+          runGenerateIA();
+        },
+      });
+      return;
+    }
+    runGenerateIA();
+  };
+
+  const runGenerateIA = async () => {
     if (!lock) return;
     const target = resolveLockTarget();
     if (!target) return;
     const existing = byType('ia');
-    if (existing && !window.confirm('기존 IA 문서가 있습니다. 확정 프로토타입 기준으로 다시 생성하면 기존 내용이 덮어써질 수 있습니다. 계속하시겠습니까?')) return;
     const content = buildInformationArchitecture(project, lock, target, formatDateTime(nowMs()));
     try {
       if (existing) {
@@ -194,14 +232,35 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   };
 
   // B6: 확정 프로토타입 + IA 기준 기능정의서(feature_spec) 초안 역작성. (IA/PRD content 미변경)
-  const handleGenerateFeatureSpec = async () => {
+  const handleGenerateFeatureSpec = () => {
+    if (!lock) return;
+    const iaDoc = byType('ia');
+    if (!iaDoc) { showToast('먼저 IA를 생성해주세요.', 'error'); return; }
+    const existing = byType('feature_spec');
+    if (existing) {
+      setConfirm({
+        isOpen: true,
+        title: '기능정의서를 다시 생성할까요?',
+        msg: '확정 프로토타입과 IA 기준으로 기능정의서를 다시 생성하면 현재 기능정의서 내용이 새 초안으로 덮어써집니다. (버전은 올라가며 기존 문서가 삭제되는 것은 아닙니다.)',
+        confirmLabel: '다시 생성',
+        tone: 'warning',
+        action: () => {
+          closeConfirm();
+          runGenerateFeatureSpec();
+        },
+      });
+      return;
+    }
+    runGenerateFeatureSpec();
+  };
+
+  const runGenerateFeatureSpec = async () => {
     if (!lock) return;
     const iaDoc = byType('ia');
     if (!iaDoc) { showToast('먼저 IA를 생성해주세요.', 'error'); return; }
     const target = resolveLockTarget();
     if (!target) return;
     const existing = byType('feature_spec');
-    if (existing && !window.confirm('기존 기능정의서가 있습니다. 확정 프로토타입과 IA 기준으로 다시 생성하면 기존 내용이 덮어써질 수 있습니다. 계속하시겠습니까?')) return;
     const iaRef = `${iaDoc.title} (v${iaDoc.version})`;
     const content = buildFeatureSpec(project, lock, target, iaRef, formatDateTime(nowMs()));
     try {
@@ -286,10 +345,17 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   // 문서 구독이 늦게 도착할 수 있어, 해당 문서를 찾은 시점에만 1회 적용한다.
   const [appliedDocId, setAppliedDocId] = useState<string | null>(null);
   if (initialDocId && initialDocId !== appliedDocId) {
-    const doc = documents.find((d) => d.id === initialDocId);
-    if (doc) {
+    // initialDocId 는 문서 타입(document_ia 등) 또는 Firestore 문서 id(document_{id}, 하위 호환) 둘 다 허용.
+    if (Object.prototype.hasOwnProperty.call(DOCUMENT_META, initialDocId)) {
+      // 타입 기반: 문서가 아직 없어도 해당 타입을 선택(빈 상태 복원).
       setAppliedDocId(initialDocId);
-      setSelectedType(doc.type);
+      setSelectedType(initialDocId as DocumentType);
+    } else {
+      const doc = documents.find((d) => d.id === initialDocId);
+      if (doc) {
+        setAppliedDocId(initialDocId);
+        setSelectedType(doc.type);
+      }
     }
   }
 
@@ -374,6 +440,12 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   const selectDoc = (type: DocumentType) => {
     setSelectedType(type);
     setEditingId(null);
+    // 새로고침 복원용: 선택 문서를 해시에 replace로 반영(history 누적 방지 — 탭 전환만 push로 남긴다).
+    // 형식: #project_{id}_document_{type}. 라우터(hashchange)를 트리거하지 않으므로 탭/렌더와 충돌 없음.
+    if (section === 'documents' && typeof window !== 'undefined') {
+      const hash = `#project_${project.id}_document_${type}`;
+      if (window.location.hash !== hash) window.history.replaceState(null, '', hash);
+    }
   };
 
   // 프로토타입 제작 패키지: 초기 문서 3종이 모두 생성된 뒤 활성화.
@@ -389,8 +461,29 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     else showToast('복사 실패', 'error');
   };
 
+  // 순차 흐름 게이팅 기준: 확정 → IA → 기능정의서 → PRD → 개발 전달 패키지.
+  const hasIA = !!byType('ia');
+  const hasFeatureSpec = !!byType('feature_spec');
+  const hasPRD = !!byType('prd');
+  const flowSteps: { label: string; done: boolean }[] = [
+    { label: '프로토타입 확정', done: !!lock },
+    { label: 'IA 생성', done: hasIA },
+    { label: '기능정의서 생성', done: hasFeatureSpec },
+    { label: 'PRD 생성', done: hasPRD },
+    { label: '개발 전달 패키지', done: false },
+  ];
+
   return (
     <div className="space-y-5">
+      <ConfirmModal
+        isOpen={confirm.isOpen}
+        title={confirm.title}
+        message={confirm.msg}
+        confirmLabel={confirm.confirmLabel}
+        tone={confirm.tone}
+        onConfirm={confirm.action}
+        onCancel={closeConfirm}
+      />
       {!isEditor && (
         <div className="flex items-center gap-2 bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-lg)] px-4 py-3 text-sm text-[var(--text-secondary)]">
           <Eye size={16} className="shrink-0" />
@@ -440,9 +533,17 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
               )}
             </div>
           </div>
-          <Button icon={Sparkles} onClick={handleBuildPrototypePackage} disabled={!initialDocsReady} className="shrink-0">
-            {prototypePkg ? '다시 생성' : '프로토타입 프롬프트 생성'}
-          </Button>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <Button
+              variant={prototypePkg ? 'outline' : 'primary'}
+              icon={prototypePkg ? RefreshCw : Sparkles}
+              onClick={handleBuildPrototypePackage}
+              disabled={!initialDocsReady}
+            >
+              {prototypePkg ? '다시 생성' : '프로토타입 프롬프트 생성'}
+            </Button>
+            {prototypePkg && <span className="text-[11px] text-[var(--text-tertiary)]">다시 생성하면 현재 패키지가 갱신됩니다</span>}
+          </div>
         </div>
 
         {prototypePkg && (
@@ -453,7 +554,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                 <button
                   type="button"
                   onClick={handleCopyPrototypePackage}
-                  className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:bg-[var(--color-primary-hover)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
+                  className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
                 >
                   <Copy size={13} /> 프롬프트 복사
                 </button>
@@ -487,9 +588,33 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           <div className="min-w-0">
             <h3 className="font-bold text-[var(--text-strong)] text-lg">확정 프로토타입 · 문서 역작성</h3>
             <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
-              프로토타입 탭에서 추가한 화면 중 하나를 기준으로 확정하면, 그 화면 구조를 바탕으로 IA·기능정의서 초안을 생성할 수 있습니다.
+              아래 화면 중 하나를 기준으로 확정한 뒤, 그 화면 구조를 바탕으로 IA·기능정의서를 순서대로 생성합니다.
             </p>
           </div>
+        </div>
+
+        {/* 진행 단계: 확정 → IA → 기능정의서 → PRD → 개발 전달 패키지 (현재 위치를 한눈에) */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-1 gap-y-2">
+          {flowSteps.map((s, i) => {
+            const isCurrent = !s.done && flowSteps.slice(0, i).every((p) => p.done);
+            return (
+              <span key={s.label} className="flex items-center gap-1">
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-pill)] text-[11px] font-semibold ${
+                    s.done
+                      ? 'bg-[var(--green-50)] text-[var(--green-700)]'
+                      : isCurrent
+                        ? 'bg-[var(--surface-active)] text-[var(--color-primary-text)] border border-[var(--color-primary)]'
+                        : 'bg-[var(--surface-sunken)] text-[var(--text-tertiary)]'
+                  }`}
+                >
+                  {s.done ? <CheckCircle2 size={12} /> : <span className="font-mono">{i + 1}</span>}
+                  {s.label}
+                </span>
+                {i < flowSteps.length - 1 && <span className="text-[var(--text-tertiary)] text-xs">›</span>}
+              </span>
+            );
+          })}
         </div>
 
         {/* 확정 대상 목록: 화면(screens) + 기존 URL(projectSources) */}
@@ -552,34 +677,49 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           </ul>
         )}
 
-        {/* IA / 기능정의서 생성 CTA (B5/B6): 확정 프로토타입이 있을 때만 */}
+        {/* IA / 기능정의서 생성 액션 (단일 흐름): IA primary 1개 + 기능정의서 outline. 조건 미충족 시 비활성 + 사유. */}
         {lock ? (
-          <div className="mt-4 border-t border-[var(--border-subtle)] pt-4 space-y-3">
-            {/* IA 생성 (B5) */}
-            <div className="flex items-start justify-between flex-wrap gap-3">
-              <p className="text-xs text-[var(--color-primary-text)] font-medium min-w-0 flex-1">
-                확정된 프로토타입을 기준으로 IA 초안을 생성합니다. 생성 후 문서 화면에서 수정할 수 있습니다.
-              </p>
-              {isEditor && (
-                <Button icon={Sparkles} onClick={handleGenerateIA} className="shrink-0">IA 생성</Button>
+          isEditor && (
+            <div className="mt-4 border-t border-[var(--border-subtle)] pt-4">
+              {/* 현재 단계의 '다음 액션' 1개만 primary. 병렬 경쟁 금지. 비활성 사유는 버튼이 아닌 helper text로 분리. */}
+              {!hasIA ? (
+                <>
+                  <Button icon={Sparkles} onClick={handleGenerateIA}>IA 생성</Button>
+                  <p className="mt-2 text-[11px] text-[var(--text-tertiary)]">IA를 생성한 뒤 기능정의서를 작성할 수 있습니다.</p>
+                </>
+              ) : !hasFeatureSpec ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button icon={Sparkles} onClick={handleGenerateFeatureSpec}>기능정의서 생성</Button>
+                    <Button variant="outline" icon={RefreshCw} onClick={handleGenerateIA}>IA 다시 생성</Button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-[var(--text-tertiary)]">기능정의서까지 작성하면 아래 문서 목록의 PRD에서 PRD를 생성할 수 있습니다.</p>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" icon={RefreshCw} onClick={handleGenerateIA}>IA 다시 생성</Button>
+                    <Button variant="outline" icon={RefreshCw} onClick={handleGenerateFeatureSpec}>기능정의서 다시 생성</Button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-[var(--text-tertiary)]">다음 단계는 PRD입니다. 아래 문서 목록의 PRD에서 생성하세요.</p>
+                </>
               )}
             </div>
-            {/* 기능정의서 생성 (B6): IA가 있어야 활성 */}
-            <div className="flex items-start justify-between flex-wrap gap-3">
-              <p className="text-xs min-w-0 flex-1 font-medium" style={{ color: byType('ia') ? 'var(--color-primary-text)' : 'var(--text-tertiary)' }}>
-                {byType('ia')
-                  ? '확정된 프로토타입과 IA를 기준으로 기능정의서 초안을 생성합니다. 생성 후 문서 화면에서 수정할 수 있습니다.'
-                  : '먼저 확정 프로토타입 기반 IA를 생성해야 기능정의서를 작성할 수 있습니다.'}
-              </p>
-              {isEditor && (
-                <Button variant="outline" icon={Sparkles} onClick={handleGenerateFeatureSpec} disabled={!byType('ia')} className="shrink-0">기능정의서 생성</Button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <p className="mt-4 text-xs text-[var(--text-tertiary)]">
-            프로토타입을 확정하면 이 화면 구조를 기준으로 IA를 생성할 수 있습니다. (기능정의서는 IA 생성 후 작성)
+          )
+        ) : (projectScreens.length > 0 || prototypeUrls.length > 0) ? (
+          <p className="mt-4 border-t border-[var(--border-subtle)] pt-4 text-xs text-[var(--text-tertiary)]">
+            위 목록에서 프로토타입을 <b className="text-[var(--text-secondary)]">기준으로 확정</b>하면 그 화면 구조를 기준으로 IA를 생성할 수 있습니다. (기능정의서는 IA 생성 후, PRD는 기능정의서 작성 후)
           </p>
+        ) : (
+          // 프로토타입이 0개: 단계만 보여주지 않고, 먼저 화면을 추가하도록 유도.
+          <div className="mt-4 border-t border-[var(--border-subtle)] pt-4">
+            <p className="text-xs text-[var(--text-secondary)]">먼저 프로토타입 화면을 추가해야 IA를 생성할 수 있습니다.</p>
+            {isEditor && navigate && (
+              <Button variant="outline" icon={Plus} onClick={() => navigate(`#project_${project.id}_screens_new`)} className="mt-3">
+                프로토타입 추가하기
+              </Button>
+            )}
+          </div>
         )}
       </div>
       )}
@@ -612,7 +752,16 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             </div>
           </div>
           {isEditor && (
-            <Button icon={Sparkles} onClick={handleBuildHandoff} className="shrink-0">{handoffPkg ? '다시 생성' : '개발 전달 패키지 생성'}</Button>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <Button
+                variant={handoffPkg ? 'outline' : 'primary'}
+                icon={handoffPkg ? RefreshCw : Sparkles}
+                onClick={handleBuildHandoff}
+              >
+                {handoffPkg ? '다시 생성' : '개발 전달 패키지 생성'}
+              </Button>
+              {handoffPkg && <span className="text-[11px] text-[var(--text-tertiary)]">다시 생성하면 현재 패키지가 갱신됩니다</span>}
+            </div>
           )}
         </div>
 
@@ -647,7 +796,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
         )}
 
         <p className="mt-4 text-xs text-[var(--text-tertiary)]">
-          선행 문서가 일부 없어도 생성됩니다(없는 부분은 안내 문구로 표시). 이 패키지는 저장하지 않으며 복사해서 전달합니다. (ZIP 다운로드는 후속 단계)
+          선행 문서가 일부 없어도 생성됩니다(없는 부분은 안내 문구로 표시). 이 패키지는 저장하지 않으며, 복사하거나 .md·ZIP으로 내려받아 전달합니다.
         </p>
       </div>
       )}
@@ -733,11 +882,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               {selectedDoc && <StatusBadge status={selectedDoc.status} />}
-              {!selectedDoc && isEditor && (
-                <Button variant="outline" icon={Plus} onClick={() => handleCreate(selectedType)} className="text-sm py-1.5">
-                  {selectedType === 'prd' ? 'PRD 생성' : '생성'}
-                </Button>
-              )}
+              {/* 빈 문서 생성 CTA는 아래 중앙 빈 상태 한 곳으로 통일(상단 중복 버튼 제거). */}
               {selectedDoc && (
                 <Button
                   variant="outline"
@@ -759,13 +904,35 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
               </div>
               <h5 className="text-base font-bold text-[var(--text-strong)] mb-1">아직 생성되지 않은 문서입니다</h5>
               <p className="text-sm text-[var(--text-secondary)] mb-5 max-w-sm">
-                {isEditor
-                  ? `'${selectedMeta.title}' 문서를 생성해 작성을 시작하세요.`
-                  : '문서가 생성되면 여기에서 조회할 수 있습니다.'}
+                {!isEditor
+                  ? '문서가 생성되면 여기에서 조회할 수 있습니다.'
+                  : selectedType === 'ia'
+                    ? '확정한 프로토타입 화면을 기준으로 IA 초안을 생성하세요.'
+                    : selectedType === 'feature_spec'
+                      ? 'IA가 생성된 뒤 기능정의서를 작성할 수 있습니다.'
+                      : selectedType === 'prd'
+                        ? '기능정의서까지 작성된 뒤 PRD를 생성할 수 있습니다.'
+                        : `'${selectedMeta.title}' 문서를 생성해 작성을 시작하세요.`}
               </p>
-              {isEditor && (
+              {/* IA·기능정의서는 위 '확정 프로토타입 · 문서 역작성' 영역에서 단일 생성(중복 CTA 방지). */}
+              {isEditor && (selectedType === 'ia' || selectedType === 'feature_spec') && (
+                <span className="text-[11px] text-[var(--text-tertiary)]">
+                  위 ‘확정 프로토타입 · 문서 역작성’ 영역에서 생성합니다.
+                </span>
+              )}
+              {/* PRD는 기능정의서가 있어야 생성 가능. 사유를 함께 표시. */}
+              {isEditor && selectedType === 'prd' && (
+                <div className="flex flex-col items-center gap-1">
+                  <Button icon={Plus} onClick={() => handleCreate('prd')} disabled={!hasFeatureSpec}>
+                    PRD 생성
+                  </Button>
+                  {!hasFeatureSpec && <span className="text-[11px] text-[var(--text-tertiary)]">기능정의서를 먼저 작성하세요</span>}
+                </div>
+              )}
+              {/* 브리프·시장조사·제품화전략은 직접 생성 가능. */}
+              {isEditor && selectedType !== 'ia' && selectedType !== 'feature_spec' && selectedType !== 'prd' && (
                 <Button icon={Plus} onClick={() => handleCreate(selectedType)}>
-                  {selectedType === 'prd' ? 'PRD 생성' : `${selectedMeta.title} 생성`}
+                  {`${selectedMeta.title} 생성`}
                 </Button>
               )}
             </div>

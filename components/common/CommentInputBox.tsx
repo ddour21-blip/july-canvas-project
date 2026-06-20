@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { AtSign, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
 import type { Member } from '@/types';
 
 interface CommentInputBoxProps {
@@ -71,8 +71,8 @@ export function CommentInputBox({ onSubmit, members, placeholder = '댓글 추�
           ))}
         </div>
       )}
+      {/* 멘션은 입력 중 '@' 타이핑으로 동작(드롭다운). 입력값처럼 보이던 상시 @ 아이콘은 제거해 일반 댓글 입력으로 정리. */}
       <div className="flex items-center gap-2 bg-[var(--surface-card)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] pl-3 pr-1 py-1 focus-within:ring-2 focus-within:ring-[var(--color-focus-ring)] transition-all shadow-[var(--shadow-sm)]">
-        <AtSign size={16} className="text-[var(--text-tertiary)] shrink-0" />
         <input
           ref={inputRef}
           type="text"

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Copy, FileText, Folder, Layout, Link2, Package, Power, Share2, X } from 'lucide-react';
 import { Button } from '@/components/common/Button';
-import { copyToClipboard, formatDateTime, getTime, showToast } from '@/lib/utils';
+import { copyToClipboard, formatDateTime, showToast } from '@/lib/utils';
 import { shareHash, toPublicShareUrl, toShareUrl } from '@/lib/shareLinks';
 import { useAuth, useRole } from '@/lib/auth';
 import {
@@ -193,7 +193,7 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
                 </div>
               ) : (
                 <p className="text-[11px] text-[var(--text-tertiary)] mb-3">
-                  Public Review(비로그인 댓글)는 S7-2C에서 지원 예정입니다.
+                  내부 공유 링크는 로그인한 프로젝트 멤버만 열 수 있습니다.
                 </p>
               )}
 
@@ -210,6 +210,9 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
                   </button>
                 ))}
               </div>
+              <p className="text-[11px] text-[var(--text-tertiary)] mb-3 leading-relaxed">
+                프로젝트=개요·문서 목록 · 문서=선택한 문서 본문 · 개발 전달 패키지=조립된 전달 문서
+              </p>
 
               {/* 생성된 공유 링크 목록 */}
               {shares.length > 0 && (
@@ -221,21 +224,16 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
                     const accessLabel = publicReadonly ? '외부 읽기 전용' : s.accessType === 'public_review' ? '외부 리뷰' : '내부 전용';
                     const Icon = s.targetType === 'screen' ? Layout : s.targetType === 'handoff_package' ? Package : s.targetType === 'document' ? FileText : Folder;
                     return (
-                      <li key={s.id} className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)]">
-                        <span className="shrink-0 w-8 h-8 rounded-[var(--radius-md)] bg-[var(--surface-card)] text-[var(--color-primary-text)] flex items-center justify-center border border-[var(--border-default)]"><Icon size={15} /></span>
+                      <li key={s.id} className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-card)]">
+                        <span className="shrink-0 w-8 h-8 rounded-[var(--radius-md)] bg-[var(--surface-sunken)] text-[var(--text-secondary)] flex items-center justify-center border border-[var(--border-subtle)]"><Icon size={15} /></span>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[11px] font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-1.5 py-0.5 rounded">{TARGET_LABEL[s.targetType]}</span>
-                            <span
-                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${publicReadonly ? 'text-[var(--amber-700)] bg-[var(--amber-50)]' : 'text-[var(--text-secondary)] bg-[var(--surface-hover)]'}`}
-                            >
-                              {accessLabel}
-                            </span>
-                            <span className="text-sm font-medium text-[var(--text-body)] truncate">{s.targetTitle || s.shareId}</span>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${active ? 'text-[var(--green-700)] bg-[var(--green-50)]' : 'text-[var(--text-tertiary)] bg-[var(--surface-hover)]'}`}>{active ? '활성' : s.isEnabled ? '만료됨' : '비활성'}</span>
+                          {/* 제목 + 상태 1개만 강조. 타입/접근/만료는 아래 muted 메타로 분리(배지 나열 정리). */}
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-semibold text-[var(--text-body)] truncate">{s.targetTitle || TARGET_LABEL[s.targetType]}</span>
+                            <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${active ? 'text-[var(--green-700)] bg-[var(--green-50)]' : 'text-[var(--text-tertiary)] bg-[var(--surface-hover)]'}`}>{active ? '활성' : s.isEnabled ? '만료됨' : '비활성'}</span>
                           </div>
                           <div className="text-[11px] text-[var(--text-tertiary)] mt-0.5 truncate" title={url}>
-                            {publicReadonly ? '/share 링크' : '내부 딥링크'} · {s.expiresAt ? `만료 ${formatDateTime(s.expiresAt)}` : '만료 없음'}{getTime(s.createdAt) ? ` · ${formatDateTime(s.createdAt)}` : ''}
+                            {TARGET_LABEL[s.targetType]} · {accessLabel} · {s.expiresAt ? `만료 ${formatDateTime(s.expiresAt)}` : '만료 없음'}
                           </div>
                         </div>
                         <button type="button" onClick={() => { if (copyToClipboard(url)) showToast('공유 링크를 복사했습니다.'); else showToast('복사 실패', 'error'); }} aria-label="링크 복사" className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={15} /></button>

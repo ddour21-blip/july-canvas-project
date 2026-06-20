@@ -8,7 +8,6 @@
 //    문자 그대로 보인다. ScreenEditor의 iframe/HTML 렌더 구조를 복사하지 않는다.
 //  - 편집/로그인/승인/삭제/공유관리 UI 없음(읽기 전용).
 import { useEffect, useRef, useState } from 'react';
-import ShareFallback from '@/components/views/ShareFallback';
 import { REVIEW_LIMITS } from '@/lib/publicShareSanitizer';
 
 // Cloudflare Turnstile (env-gated 위젯). 스크립트는 site key 설정 시에만 로드된다.
@@ -91,13 +90,24 @@ function describeError(code: string | undefined, status: number): { title: strin
     case 'NOT_PUBLIC_READONLY':
       return { title: '외부 공개용 링크가 아님', detail: '이 링크는 외부 공개 보기용이 아닙니다. 접근하려면 로그인 후 워크스페이스에서 열어주세요.' };
     case 'ADMIN_NOT_CONFIGURED':
-      return { title: '공유를 표시할 수 없음', detail: '서버 설정 문제로 공유 내용을 불러올 수 없습니다. 잠시 후 다시 시도해주세요.' };
+    case 'ADMIN_INIT_FAILED':
+      return { title: '공유를 표시할 수 없음', detail: '서버 설정 문제로 공유 내용을 불러올 수 없습니다. 잠시 후 다시 시도하거나 공유한 사람에게 문의해주세요.' };
+    case 'INTERNAL_ERROR':
+      return { title: '일시적인 오류', detail: '요청 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' };
+    case 'NETWORK':
+      return { title: '연결할 수 없음', detail: '네트워크 연결을 확인한 뒤 다시 시도해주세요.' };
     default:
       return {
         title: '공유 내용을 불러오지 못했습니다',
         detail: status > 0 ? `요청 처리 중 문제가 발생했습니다. (오류 ${status})` : '네트워크 연결을 확인한 뒤 다시 시도해주세요.',
       };
   }
+}
+
+/** 재시도로 해결될 가능성이 있는 오류(서버/네트워크 일시 오류)만 '다시 시도' 버튼을 노출한다. */
+const RETRYABLE_CODES = new Set(['ADMIN_NOT_CONFIGURED', 'ADMIN_INIT_FAILED', 'INTERNAL_ERROR', 'NETWORK']);
+function isRetryable(code: string): boolean {
+  return RETRYABLE_CODES.has(code) || /^HTTP_5\d\d$/.test(code);
 }
 
 // ---- 공통 UI 조각 ----
@@ -111,6 +121,59 @@ function ReadonlyBadge() {
       <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: 'var(--color-live)' }} />
       읽기 전용 공유 보기
     </span>
+  );
+}
+
+/** 원인별 공유 오류 안내 (읽기 전용). 재시도 가능한 오류만 '다시 시도'를 노출한다. */
+function ShareErrorView({
+  code,
+  title,
+  detail,
+  onRetry,
+}: {
+  code: string;
+  title: string;
+  detail: string;
+  onRetry: () => void;
+}) {
+  const retryable = isRetryable(code);
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div
+        className="flex h-14 w-14 items-center justify-center rounded-2xl text-2xl"
+        style={{ background: 'var(--surface-sunken)', color: 'var(--text-tertiary)' }}
+      >
+        {code === 'SHARE_EXPIRED' ? '⏳' : code === 'SHARE_DISABLED' ? '🚫' : retryable ? '⚠️' : '🔗'}
+      </div>
+      <h2 className="mt-5 text-lg font-bold" style={{ color: 'var(--text-strong)' }}>
+        {title}
+      </h2>
+      <p className="mt-2 max-w-sm text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+        {detail}
+      </p>
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+        {retryable && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+            style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}
+          >
+            다시 시도
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = '/';
+          }}
+          className="rounded-lg border px-4 py-2 text-sm font-semibold transition-colors"
+          style={{ borderColor: 'var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-body)' }}
+        >
+          July Canvas 홈으로
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -372,9 +435,12 @@ function HandoffView({
 
 export default function ShareViewer({ shareId }: { shareId: string }) {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  // '다시 시도' 시 effect를 재실행하기 위한 nonce.
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setState({ kind: 'loading' });
     (async () => {
       try {
         const res = await fetch(`/api/share/${encodeURIComponent(shareId)}`, { cache: 'no-store' });
@@ -393,14 +459,14 @@ export default function ShareViewer({ shareId }: { shareId: string }) {
         }
       } catch {
         if (cancelled) return;
-        const { title, detail } = describeError(undefined, 0);
+        const { title, detail } = describeError('NETWORK', 0);
         setState({ kind: 'error', code: 'NETWORK', title, detail });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [shareId]);
+  }, [shareId, reloadKey]);
 
   return (
     <main className="min-h-full" style={{ background: 'var(--gradient-aurora)' }}>
@@ -430,7 +496,14 @@ export default function ShareViewer({ shareId }: { shareId: string }) {
           </div>
         )}
 
-        {state.kind === 'error' && <ShareFallback onHome={() => { window.location.href = '/'; }} />}
+        {state.kind === 'error' && (
+          <ShareErrorView
+            code={state.code}
+            title={state.title}
+            detail={state.detail}
+            onRetry={() => setReloadKey((k) => k + 1)}
+          />
+        )}
 
         {state.kind === 'ok' && (
           <>

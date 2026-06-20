@@ -718,9 +718,9 @@ export default function ScreenEditor({
         <div className={`flex-1 flex flex-col relative bg-[var(--surface-page)] transition-all duration-300 ${mode === 'annotate' ? 'mr-[420px]' : ''}`}>
           <div className="absolute top-4 left-6 z-20 flex items-center gap-3 bg-[var(--surface-card)] px-4 py-2.5 rounded-[var(--radius-lg)] shadow-[var(--shadow-md)] border border-[var(--border-default)]">
             <button
-              onClick={() => navigate(`#project_${project.id}`)}
+              onClick={() => navigate(`#project_${project.id}_screens`)}
               className="text-[var(--text-tertiary)] hover:text-[var(--text-strong)] transition-colors"
-              title="프로젝트로 돌아가기"
+              title="프로토타입 목록으로 돌아가기"
             >
               <ArrowLeft size={20} />
             </button>
@@ -776,10 +776,10 @@ export default function ScreenEditor({
                 visibleAnnotations.map((ann, idx) => (
                   <div
                     key={ann.id}
-                    className={`absolute z-20 flex items-center justify-center w-8 h-8 rounded-[var(--radius-md)] shadow-lg cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-all border-2 border-white ${
+                    className={`absolute z-30 flex items-center justify-center w-8 h-8 rounded-[var(--radius-md)] shadow-lg cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-all border-2 border-[var(--surface-card)] ${
                       activeAnnotationId === ann.id
-                        ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] scale-125 z-30 ring-4 ring-[var(--color-focus-ring)]'
-                        : 'bg-rose-500 text-white hover:bg-rose-600'
+                        ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] scale-125 z-40 ring-4 ring-[var(--color-focus-ring)]'
+                        : 'bg-[var(--ink-soft)] text-[var(--text-on-ink)] hover:opacity-90'
                     }`}
                     style={{ left: ann.currentX ?? ann.x, top: ann.currentY ?? ann.y }}
                     onClick={(e) => {
@@ -976,18 +976,18 @@ export default function ScreenEditor({
                       : 'border-[var(--border-subtle)] shadow-[var(--shadow-xs)] cursor-pointer hover:border-[var(--brand-300)]'
                   }`}
                 >
-                  <div
-                    className={`absolute -left-3.5 top-5 w-7 h-7 rounded-[var(--radius-md)] flex items-center justify-center text-[13px] font-extrabold border-2 border-[var(--surface-card)] shadow-md transition-colors ${
-                      activeAnnotationId === ann.id && !showDraftForm ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]' : 'bg-rose-500 text-white'
-                    }`}
-                  >
-                    {idx + 1}
-                  </div>
-
-                  <div className="flex justify-between items-start ml-2 mb-3 pr-12">
-                    <div className="flex items-center gap-2">
-                      <span className="bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] font-bold text-[10px] px-2 py-0.5 rounded-full">v{ann.version || '1.0'}</span>
-                      <h3 className="font-extrabold text-[var(--text-strong)] text-[15px]">{ann.title}</h3>
+                  {/* 번호 배지를 카드 헤더 안 인라인으로 배치(카드 overflow-hidden에 잘리던 -left 돌출 제거). */}
+                  <div className="flex justify-between items-start mb-3 pr-12">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`shrink-0 w-6 h-6 rounded-[var(--radius-md)] flex items-center justify-center text-xs font-extrabold transition-colors ${
+                          activeAnnotationId === ann.id && !showDraftForm ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]' : 'bg-[var(--ink-soft)] text-[var(--text-on-ink)]'
+                        }`}
+                      >
+                        {idx + 1}
+                      </span>
+                      <span className="bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0">v{ann.version || '1.0'}</span>
+                      <h3 className="font-extrabold text-[var(--text-strong)] text-[15px] truncate">{ann.title}</h3>
                     </div>
                     {isEditor && (
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1056,7 +1056,7 @@ export default function ScreenEditor({
 
                         {replyingToCommentId === comment.id && (
                           <div className="ml-6">
-                            <CommentInputBox onSubmit={(text) => handleCommentSubmit(ann.id, text, comment.id)} members={globalMembers} placeholder="답글을 입력하세요 ( @멘션 가능 )" />
+                            <CommentInputBox onSubmit={(text) => handleCommentSubmit(ann.id, text, comment.id)} members={globalMembers} placeholder="답글을 입력하세요" />
                           </div>
                         )}
                       </div>
@@ -1092,12 +1092,8 @@ export default function ScreenEditor({
           >
             <GripVertical size={20} />
           </div>
+          {/* '실시간 공유 켜짐' 배지 제거: 실제 presence/공유 세션과 연결되지 않은 정적 표시라 오해 소지. */}
           <div className="w-px h-6 bg-[var(--border-default)] mx-1" />
-          <div className="flex items-center gap-2 px-4 py-2 bg-[var(--green-50)] rounded-full mr-2 whitespace-nowrap">
-            <div className="w-2 h-2 bg-[var(--green-500)] rounded-full shrink-0 animate-pulse" />
-            <span className="text-sm font-bold text-[var(--green-700)] tracking-tight whitespace-nowrap">실시간 공유 켜짐</span>
-          </div>
-          <div className="w-px h-8 bg-[var(--border-default)] mx-2" />
           <button
             onClick={() => setShowHistory(true)}
             className="flex items-center gap-2 px-5 py-2.5 bg-[var(--surface-active)] text-[var(--color-primary-text)] rounded-full hover:bg-[var(--brand-100)] transition-colors mr-2 group whitespace-nowrap"

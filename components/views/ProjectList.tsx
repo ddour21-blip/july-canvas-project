@@ -10,7 +10,7 @@ import { getPermissions } from '@/lib/auth';
 import { deleteProjectCascade } from '@/lib/projects';
 import { getTime, nowMs, showToast } from '@/lib/utils';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
-import { CheckCircle2, ChevronRight, Download, FileText, FolderOpen, Plus, Search, Trash2, X } from 'lucide-react';
+import { CheckCircle2, ChevronRight, FileText, FolderOpen, Plus, Search, Trash2, X } from 'lucide-react';
 import type { Project, ProjectDocument, ProjectStatus, Screen } from '@/types';
 
 const STATUS: Record<ProjectStatus, { cls: string; label: string }> = {
@@ -159,14 +159,12 @@ export default function ProjectList({ projects, screens, documents, user, naviga
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4">
+            {/* 모호한 '내보내기'(동작 없음) 버튼 제거. 실제 산출물 내보내기는 프로젝트 상세의 MD/ZIP/공유/패키지에서 제공. */}
             <div className="jca-table-search" style={{ minWidth: 280 }}>
               <Search size={15} />
               <input placeholder="프로젝트 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
-            <button type="button" className="jca-btn jca-btn--secondary jca-btn--sm">
-              <Download size={15} />내보내기
-            </button>
           </div>
           <div className="jca-proj-grid">
             {filtered.map((project) => {
