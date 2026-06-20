@@ -151,12 +151,18 @@ export function isAdminConfigured(): boolean {
 
 /** Admin 초기화 가능 여부를 분류한다(설정 누락 vs 자격증명 파싱 실패 vs 정상). 라우트의 에러코드 매핑용. */
 export function getAdminInitError(): 'ADMIN_NOT_CONFIGURED' | 'ADMIN_INIT_FAILED' | null {
-  if (!isAdminConfigured()) return 'ADMIN_NOT_CONFIGURED';
+  if (!isAdminConfigured()) {
+    // 어떤 변수가 누락됐는지 서버 로그로만 남긴다(값은 노출하지 않음). Vercel Runtime Log에서 원인 추적용.
+    const missing = [ENV_PROJECT_ID, ENV_CLIENT_EMAIL, ENV_PRIVATE_KEY].filter((k) => !process.env[k]);
+    console.error(`[firebaseAdmin] ADMIN_NOT_CONFIGURED — 누락된 서버 env: ${missing.join(', ') || '(알 수 없음)'}`);
+    return 'ADMIN_NOT_CONFIGURED';
+  }
   try {
     getAdminApp();
     return null;
   } catch (err) {
-    console.error('[firebaseAdmin] init error', err);
+    // ADMIN_INIT_FAILED: env는 있으나 cert/PEM 파싱 실패(따옴표/개행 escape 등). 상세는 AdminInitError 메시지에 포함.
+    console.error('[firebaseAdmin] ADMIN_INIT_FAILED', err);
     return 'ADMIN_INIT_FAILED';
   }
 }

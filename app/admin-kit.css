@@ -639,8 +639,8 @@
 .jca-alert--danger  { background: var(--admin-danger-soft); border-color: color-mix(in srgb, var(--red-600) 24%, transparent); color: var(--red-700); }
 
 /* ============================ TOAST ============================ */
-.jca-toast-region { position: fixed; bottom: var(--space-6); left: 50%; transform: translateX(-50%); z-index: var(--z-toast); display: flex; flex-direction: column; gap: var(--space-2); align-items: center; }
-.jca-toast { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-radius: var(--admin-radius-md); background: var(--gray-900); color: #fff; font: var(--fw-medium) var(--text-base)/1.2 var(--font-sans); box-shadow: var(--shadow-xl); animation: jca-pop var(--dur-normal) var(--ease-out); }
+.jca-toast-region { position: fixed; bottom: var(--space-6); left: 50%; transform: translateX(-50%); z-index: var(--z-toast); display: flex; flex-direction: column; gap: var(--space-2); align-items: center; pointer-events: none; }
+.jca-toast { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-radius: var(--admin-radius-md); background: var(--gray-900); color: #fff; font: var(--fw-medium) var(--text-base)/1.2 var(--font-sans); box-shadow: var(--shadow-xl); animation: jca-pop var(--dur-normal) var(--ease-out); pointer-events: auto; }
 .jca-toast > svg { flex: none; }
 .jca-toast--success svg { color: var(--brand-500); }
 .jca-toast--danger svg { color: #f87171; }

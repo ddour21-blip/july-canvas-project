@@ -123,7 +123,8 @@ export function ShareModal({ isOpen, type, id, projectId, documentId, screenId, 
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center p-4 backdrop-blur-sm">
+    // z는 모달 레이어(--z-modal:120). 토스트(--z-toast:9999)가 항상 위에 보이도록 9999 하드코딩 제거.
+    <div className="fixed inset-0 z-[var(--z-modal)] bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-[var(--surface-card)] rounded-[var(--radius-3xl)] shadow-[var(--shadow-2xl)] w-full max-w-md p-8 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-[var(--text-strong)] flex items-center gap-2.5">
