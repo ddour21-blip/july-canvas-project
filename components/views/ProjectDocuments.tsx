@@ -28,12 +28,44 @@ import type {
   Screen,
 } from '@/types';
 
-// 문서 상태 배지: semantic 토큰(fg/bg) 직접 소비.
-const DOC_STATUS: Record<DocumentStatus, { label: string; fg: string; bg: string }> = {
+// 문서 목록 시각 그룹: 기초 기획 / 프로토타입 기반 산출. (DocumentType/순서/데이터는 그대로, UI 표시용)
+const DOC_GROUPS: { label: string; types: DocumentType[] }[] = [
+  { label: '기초 기획', types: ['brief', 'market_research', 'product_strategy'] },
+  { label: '프로토타입 기반 산출', types: ['ia', 'feature_spec', 'prd'] },
+];
+
+// 확정 프로토타입 변경 시 '재생성 필요' 판정 대상(역작성 산출물).
+const REGEN_TYPES: DocumentType[] = ['ia', 'feature_spec', 'prd'];
+
+// UI 표시용 파생 상태(저장 status는 변경하지 않음). 미작성/초안/검토중/승인됨/재생성 필요.
+type DerivedDocStatus = 'missing' | 'draft' | 'review' | 'approved' | 'needs_regen';
+
+const DERIVED_STATUS: Record<DerivedDocStatus, { label: string; fg: string; bg: string }> = {
+  missing: { label: '미작성', fg: 'var(--text-tertiary)', bg: 'var(--surface-hover)' },
   draft: { label: '초안', fg: 'var(--status-draft-fg)', bg: 'var(--status-draft-bg)' },
-  review: { label: '리뷰', fg: 'var(--status-review-fg)', bg: 'var(--status-review-bg)' },
-  approved: { label: '승인', fg: 'var(--status-approved-fg)', bg: 'var(--status-approved-bg)' },
+  review: { label: '검토중', fg: 'var(--status-review-fg)', bg: 'var(--status-review-bg)' },
+  approved: { label: '승인됨', fg: 'var(--status-approved-fg)', bg: 'var(--status-approved-bg)' },
+  needs_regen: { label: '재생성 필요', fg: 'var(--amber-700)', bg: 'var(--amber-50)' },
 };
+
+/**
+ * 저장 status + 확정 프로토타입 기준으로 UI 표시 상태를 파생한다(저장값 변경 없음).
+ * 우선순위: 미작성 → 재생성 필요 → 승인됨 → 검토중 → 초안.
+ * - IA·기능정의서·PRD: prototypeLock.lockedAt 보다 문서 updatedAt 이 이전이면 needs_regen.
+ *   (승인된 문서라도 기준이 바뀌면 재생성 필요를 우선 안내. 단 DB status:approved 값은 그대로 보존.)
+ *   타임스탬프가 없거나 비교 불가하면 needs_regen 으로 표시하지 않는다(오탐 방지).
+ */
+function deriveDocStatus(doc: ProjectDocument | undefined, project: Project): DerivedDocStatus {
+  if (!doc) return 'missing';
+  if (REGEN_TYPES.includes(doc.type) && project.prototypeLock) {
+    const lockedMs = getTime(project.prototypeLock.lockedAt);
+    const updatedMs = getTime(doc.updatedAt);
+    if (lockedMs && updatedMs && updatedMs < lockedMs) return 'needs_regen';
+  }
+  if (doc.status === 'approved') return 'approved';
+  if (doc.status === 'review') return 'review';
+  return 'draft';
+}
 
 /** 마지막 수정일을 가벼운 상대 표현으로. (워크스페이스 톤 일관) */
 function formatRelative(ts: FirestoreTime): string {
@@ -52,8 +84,8 @@ function formatRelative(ts: FirestoreTime): string {
   return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
 }
 
-function StatusBadge({ status }: { status: DocumentStatus }) {
-  const s = DOC_STATUS[status];
+function StatusBadge({ status }: { status: DerivedDocStatus }) {
+  const s = DERIVED_STATUS[status];
   return (
     <span className="text-[11px] font-bold px-2.5 py-1 rounded-[var(--radius-pill)]" style={{ color: s.fg, backgroundColor: s.bg }}>
       {s.label}
@@ -392,9 +424,12 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   const handleSave = async (docu: ProjectDocument) => {
     const cur = parseFloat(docu.version);
     const nextV = isNaN(cur) ? docu.version : (cur + 0.1).toFixed(1);
+    // 일반 수정 저장은 문서를 다시 '초안'으로 되돌린다(검토중/승인됨 문서를 수정한 경우 포함).
+    // locked(승인된 PRD)는 편집 버튼이 가려져 이 경로에 도달하지 않으므로 PRD 승인/잠금 로직과 무관.
     await updateDoc(docRef('documents', docu.id), {
       content: draft,
       version: nextV,
+      status: 'draft' as DocumentStatus,
       updatedAt: serverTimestamp(),
     });
     setEditingId(null);
@@ -805,62 +840,61 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       {section === 'documents' && (
       <div className="flex flex-col lg:flex-row gap-5 items-start">
         {/* 문서 목록 */}
-        <nav className="w-full lg:w-[300px] shrink-0 space-y-2">
-          {DOCUMENT_ORDER.map((type) => {
-            const meta = DOCUMENT_META[type];
-            const docu = byType(type);
-            const active = type === selectedType;
-            return (
-              <button
-                key={type}
-                onClick={() => selectDoc(type)}
-                className={`w-full text-left flex items-start gap-3 p-3.5 rounded-[var(--radius-lg)] border transition-all ${
-                  active
-                    ? 'border-[var(--color-primary)] bg-[var(--surface-active)] shadow-[var(--shadow-xs)]'
-                    : 'border-[var(--border-default)] bg-[var(--surface-card)] hover:border-[var(--brand-300)] hover:bg-[var(--surface-hover)]'
-                }`}
-              >
-                <span
-                  className={`mt-0.5 shrink-0 w-7 h-7 rounded-[var(--radius-md)] flex items-center justify-center font-bold text-xs ${
-                    active ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]' : 'bg-[var(--surface-hover)] text-[var(--text-secondary)]'
-                  }`}
-                >
-                  {meta.order}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className={`font-bold text-sm truncate ${active ? 'text-[var(--color-primary-text)]' : 'text-[var(--text-strong)]'}`}>
-                      {meta.title}
+        <nav className="w-full lg:w-[300px] shrink-0 space-y-4">
+          {DOC_GROUPS.map((group) => (
+            <div key={group.label} className="space-y-2">
+              {/* 문서 성격/생성 흐름을 구분하는 시각 그룹 헤더 (데이터·순서 무변경) */}
+              <div className="px-1 text-[11px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">{group.label}</div>
+              {group.types.map((type) => {
+                const meta = DOCUMENT_META[type];
+                const docu = byType(type);
+                const active = type === selectedType;
+                const ds = deriveDocStatus(docu, project);
+                return (
+                  <button
+                    key={type}
+                    onClick={() => selectDoc(type)}
+                    className={`w-full text-left flex items-start gap-3 p-3.5 rounded-[var(--radius-lg)] border transition-all ${
+                      active
+                        ? 'border-[var(--color-primary)] bg-[var(--surface-active)] shadow-[var(--shadow-xs)]'
+                        : 'border-[var(--border-default)] bg-[var(--surface-card)] hover:border-[var(--brand-300)] hover:bg-[var(--surface-hover)]'
+                    }`}
+                  >
+                    <span
+                      className={`mt-0.5 shrink-0 w-7 h-7 rounded-[var(--radius-md)] flex items-center justify-center font-bold text-xs ${
+                        active ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]' : 'bg-[var(--surface-hover)] text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      {meta.order}
                     </span>
-                    {docu?.locked && <Lock size={11} className="text-[var(--text-tertiary)] shrink-0" />}
-                  </span>
-                  <span className="flex items-center gap-2 mt-1">
-                    {docu ? (
-                      <>
-                        <StatusBadge status={docu.status} />
-                        <span className="text-[10px] font-mono text-[var(--text-tertiary)]">v{docu.version}</span>
-                      </>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-tertiary)]">
-                        <Circle size={11} /> 미작성
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className={`font-bold text-sm truncate ${active ? 'text-[var(--color-primary-text)]' : 'text-[var(--text-strong)]'}`}>
+                          {meta.title}
+                        </span>
+                        {docu?.locked && <Lock size={11} className="text-[var(--text-tertiary)] shrink-0" />}
                       </span>
-                    )}
-                  </span>
-                  {docu && (
-                    <span className="flex items-center gap-1 mt-1 text-[10px] text-[var(--text-tertiary)]">
-                      <Clock size={10} /> {formatRelative(docu.updatedAt ?? docu.createdAt)}
+                      <span className="flex items-center gap-2 mt-1">
+                        <StatusBadge status={ds} />
+                        {docu && <span className="text-[10px] font-mono text-[var(--text-tertiary)]">v{docu.version}</span>}
+                      </span>
+                      {docu && (
+                        <span className="flex items-center gap-1 mt-1 text-[10px] text-[var(--text-tertiary)]">
+                          <Clock size={10} /> {formatRelative(docu.updatedAt ?? docu.createdAt)}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-                {docu && (
-                  <CheckCircle2
-                    size={16}
-                    className={`mt-0.5 shrink-0 ${docu.status === 'approved' ? 'text-[var(--green-600)]' : 'text-[var(--text-tertiary)]'}`}
-                  />
-                )}
-              </button>
-            );
-          })}
+                    {docu && (
+                      <CheckCircle2
+                        size={16}
+                        className={`mt-0.5 shrink-0 ${docu.status === 'approved' ? 'text-[var(--green-600)]' : 'text-[var(--text-tertiary)]'}`}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* 문서 에디터 */}
@@ -881,7 +915,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {selectedDoc && <StatusBadge status={selectedDoc.status} />}
+              {selectedDoc && <StatusBadge status={deriveDocStatus(selectedDoc, project)} />}
               {/* 빈 문서 생성 CTA는 아래 중앙 빈 상태 한 곳으로 통일(상단 중복 버튼 제거). */}
               {selectedDoc && (
                 <Button
@@ -895,6 +929,14 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
               )}
             </div>
           </div>
+
+          {/* 재생성 필요 안내: 확정 프로토타입 기준이 문서보다 최신일 때만(자동 삭제/재생성 없음) */}
+          {selectedDoc && deriveDocStatus(selectedDoc, project) === 'needs_regen' && (
+            <div className="mx-5 mt-4 flex items-start gap-2 rounded-[var(--radius-md)] border border-[var(--amber-100)] bg-[var(--amber-50)] px-3 py-2 text-[12px] text-[var(--amber-700)]">
+              <RefreshCw size={14} className="mt-0.5 shrink-0" />
+              <span>확정 프로토타입 기준이 변경되어 재생성을 권장합니다. {selectedType === 'prd' ? 'IA·기능정의서를 갱신한 뒤 PRD를 재생성하세요.' : '위 ‘확정 프로토타입 · 문서 역작성’ 영역에서 다시 생성할 수 있습니다.'}</span>
+            </div>
+          )}
 
           {/* 에디터 본문 */}
           {!selectedDoc ? (
