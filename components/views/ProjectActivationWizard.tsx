@@ -155,6 +155,10 @@ const buildSteps = (mode: WizardMode): { id: StepId; title: string; desc: string
   { id: 'confirm', title: '문서 생성', desc: '', fields: [] },
 ];
 
+// AI 실행 노출 스위치(클라이언트). Vercel=false(로컬 전용 베타), 로컬=true.
+// 미설정/false면 AI 초안 버튼 비활성 + 안내. 활성화(템플릿) 흐름은 영향 없음.
+const AI_ENABLED = process.env.NEXT_PUBLIC_AI_ENABLED === 'true';
+
 interface Props {
   project: Project;
   onClose: () => void;
@@ -277,7 +281,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
 
   // 아이디어 → AI 초안 생성. 보강 정보 필드 자동 입력 + 문서 초안 보관. (Firestore 저장은 활성화 시점에)
   const handleGenerateAI = async () => {
-    if (!data.intent.trim() || aiLoading) return;
+    if (!AI_ENABLED || !data.intent.trim() || aiLoading) return; // 비활성 환경에서는 실행 차단(버튼도 disabled)
     setAiLoading(true);
     setAiNotice(null);
     try {
@@ -445,16 +449,22 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
               <button
                 type="button"
                 onClick={handleGenerateAI}
-                disabled={!ideaFilled || aiLoading}
+                disabled={!AI_ENABLED || !ideaFilled || aiLoading}
                 className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-[var(--color-on-primary)] font-bold shadow-[var(--shadow-brand)] hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
               >
                 {aiLoading ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
                 {aiLoading ? 'AI가 초안을 만드는 중...' : 'AI로 초안 생성'}
               </button>
-              {aiNotice && (
-                <p className="mt-2 text-xs font-medium text-[var(--color-primary-text)] bg-[var(--surface-active)] border border-[var(--brand-100)] rounded-[var(--radius-md)] px-3 py-2">
-                  {aiNotice}
+              {!AI_ENABLED ? (
+                <p className="mt-2 text-xs font-medium text-[var(--text-secondary)] bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-3 py-2">
+                  AI 실행은 <b>로컬 전용(베타)</b>입니다. 배포 환경에서는 비활성화됩니다. 보강 정보를 직접 입력하거나, 비워두고 활성화하면 입력값 기반 템플릿 초안이 생성됩니다.
                 </p>
+              ) : (
+                aiNotice && (
+                  <p className="mt-2 text-xs font-medium text-[var(--color-primary-text)] bg-[var(--surface-active)] border border-[var(--brand-100)] rounded-[var(--radius-md)] px-3 py-2">
+                    {aiNotice}
+                  </p>
+                )
               )}
             </div>
           )}
