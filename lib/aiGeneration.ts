@@ -91,6 +91,14 @@ function templateDraft(input: GenerateInput, mode: ActivationDraftResult['mode']
   };
 }
 
+/**
+ * 비AI(템플릿) 초안. AI provider 가 비활성/미연동일 때 라우트가 직접 사용한다.
+ * ANTHROPIC_API_KEY 를 일절 참조하지 않으며 네트워크 호출도 없다(순수 템플릿).
+ */
+export function templateActivationDraft(input: GenerateInput): ActivationDraftResult {
+  return templateDraft(input, 'template');
+}
+
 const SYSTEM_PROMPT = `당신은 July Canvas의 기획 자동화 어시스턴트입니다. 사용자가 자유롭게 입력한 서비스 아이디어를 분석해, 한국어로 다음을 생성합니다.
 
 1) fields — 아이디어를 아래 10개 항목으로 분해. 각 항목은 1~3문장. 모르면 합리적으로 추론하되 불확실하면 "(가설)"을 덧붙입니다. 빈 문자열 금지.

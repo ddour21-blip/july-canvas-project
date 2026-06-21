@@ -74,6 +74,96 @@ export const EMPTY_ACTIVATION: ProjectActivation = {
   references: '',
 };
 
+/** 활성화 3단계(분석/보강 확인) 산출물의 핵심 요구사항 항목. */
+export interface ActivationRequirement {
+  id: string;
+  title: string;
+  description: string;
+  required: boolean;
+  rationale: string;
+  /** 관련 projectSources.id (느슨한 참조 — 조인/제약 없음) */
+  sourceIds: string[];
+}
+
+/** 참고자료별 요약(라벨/활용 목적/인사이트). projectSources와 느슨한 참조. */
+export interface ActivationSourceSummary {
+  sourceId: string;
+  label: string;
+  purpose: string;
+  insight: string;
+}
+
+/**
+ * 활성화 3단계 분석 산출물(단일 최신본). projects 문서의 optional field로 저장(A안).
+ * 모든 값은 Firestore 안전 타입(string/string[]/boolean/number/plain object)만 사용한다.
+ * AI 실행과 무관 — 수동/템플릿/AI 어느 경로든 동일 구조를 채운다.
+ *
+ * 3단계 UI는 기초 산출물 흐름(브리프 → 시장조사 → 제품화 전략)을 기준으로 구성되며,
+ * 데이터도 동일하게 brief / marketResearch / productStrategy 그룹으로 계층화한다.
+ */
+export interface ActivationAnalysis {
+  /** 생성 방식. */
+  source: 'ai' | 'template' | 'manual';
+  /** 스키마 버전(향후 호환). v2부터 브리프/시장조사/제품화전략 계층 구조. */
+  schemaVersion: number;
+  /** 사용자가 편집했는지(재생성 경고/표시용). */
+  edited?: boolean;
+  /** 분석 모드. 아이디어 제품화('idea') / 요구사항·RFP('requirements'). UI 분기 기준. */
+  mode: 'idea' | 'requirements';
+
+  /** 1. 브리프 초안 — 서비스의 문제/고객/가치 정의. */
+  brief: {
+    /** 아이디어 요약(아이디어 모드) / 요청 내용 요약(요구사항 모드). */
+    summary: string;
+    problem: string;
+    customer: string;
+    value: string;
+    differentiation: string;
+    /** 제약 조건 / 전제 조건. */
+    constraints: string[];
+  };
+
+  /** 핵심/필수/선택 요구사항. 요구사항·RFP 모드에서 주로 사용(브리프 그룹 안에 표시). */
+  requirements: ActivationRequirement[];
+
+  /** 2. 시장조사 초안 — 시장/경쟁/기회/리스크. */
+  marketResearch: {
+    /** 기존 자사 서비스에 적용할 부분(요구사항 모드). */
+    targetMarket: string;
+    /** 목표 시장 / 최초 진입 시장(아이디어 모드). */
+    entryMarket: string;
+    customerProblemHypothesis: string;
+    /** 경쟁/대안 서비스 / 참고한 타사·레퍼런스. */
+    competitors: string[];
+    /** 참고자료에서 확인한 레퍼런스 링크. */
+    references: string[];
+    /** 시장/사용자 관점 인사이트. */
+    insights: string[];
+    /** 시장 기회 / 유사 기능·차별화 포인트. */
+    opportunities: string[];
+    risks: string[];
+  };
+
+  /** 3. 제품화 전략 초안 — MVP/수익/정책/후속. */
+  productStrategy: {
+    /** 제품 콘셉트(아이디어 모드) / 제품 적용 방향(요구사항 모드). */
+    concept: string;
+    mvpIncluded: string[];
+    mvpExcluded: string[];
+    laterFeatures: string[];
+    revenueModel: string;
+    policyDraft: string[];
+    approvalFlow: string;
+    openQuestions: string[];
+  };
+
+  /** 참고자료별 요약(라벨/목적/인사이트). projectSources 변경 시 동기화. */
+  sourceSummaries: ActivationSourceSummary[];
+
+  generatedAt?: FirestoreTime;
+  updatedAt?: FirestoreTime;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -90,6 +180,8 @@ export interface Project {
   activation?: ProjectActivation;
   /** 확정(lock)된 기준 프로토타입. 이후 IA/기능정의서 역작성의 기준. 미확정/해제 시 없음(null). */
   prototypeLock?: PrototypeLock | null;
+  /** 활성화 3단계 분석 산출물(단일 최신본). 미분석/기존 프로젝트는 없음. */
+  activationAnalysis?: ActivationAnalysis | null;
   activatedAt?: FirestoreTime;
   createdAt?: FirestoreTime;
   updatedAt?: FirestoreTime;
