@@ -113,6 +113,10 @@ const URL_TYPE_OPTIONS: { value: ProjectSourceUrlType; label: string; sourceType
   { value: 'other', label: '기타', sourceType: 'url' },
 ];
 
+// 활성화 입력 단계 참고자료 등록용 옵션. 확정 프로토타입 등록과 혼동되지 않도록 'prototype_url' 제외.
+// (원본 URL_TYPE_OPTIONS·prototype_url 타입은 다른 화면용으로 그대로 유지)
+const ACTIVATION_URL_TYPE_OPTIONS = URL_TYPE_OPTIONS.filter((o) => o.sourceType !== 'prototype_url');
+
 // 입력 소스 유형 → 표시 라벨.
 const SOURCE_TYPE_LABEL: Record<ProjectSource['type'], string> = {
   text: '텍스트',
@@ -132,6 +136,16 @@ const SOURCE_STATUS_LABEL: Record<ProjectSource['status'], string> = {
   failed: '실패',
   skipped: '분석 건너뜀',
 };
+
+// 저장소 연결 미비/권한/용량 류 업로드 실패 → Drive 링크 대체 안내로 묶는다.
+const STORAGE_FALLBACK_CODES = [
+  'storage/retry-limit-exceeded',
+  'storage/unauthorized',
+  'storage/quota-exceeded',
+  'storage/unknown',
+];
+const STORAGE_FALLBACK_MSG =
+  '파일 업로드 저장소 연결이 아직 준비되지 않았습니다. 지금은 Google Drive 공유 링크 또는 문서 URL로 참고자료를 등록해주세요.';
 
 const formatBytes = (n?: number): string => {
   if (!n || n <= 0) return '';
@@ -223,9 +237,15 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
           const { storagePath } = await uploadSourceFileToStorage(project.id, sourceId, f);
           await updateProjectSource(sourceId, { status: 'uploaded', storagePath });
         } catch (err) {
-          console.error('파일 업로드 실패:', err);
+          console.error('파일 업로드 실패:', err); // 내부 확인용 유지
           if (sourceId) await updateProjectSource(sourceId, { status: 'failed' }).catch(() => {});
-          showToast(`업로드 실패: ${f.name}`, 'error');
+          const code = (err as { code?: string })?.code ?? '';
+          if (STORAGE_FALLBACK_CODES.includes(code)) {
+            // 저장소 미비/권한/용량 → Drive 링크 대체 안내(앱 흐름은 계속).
+            showToast(STORAGE_FALLBACK_MSG, 'error');
+          } else {
+            showToast(`파일 업로드에 실패했습니다: ${f.name}. Drive 공유 링크를 URL로 등록해 참고자료로 사용할 수 있습니다.`, 'error');
+          }
         } finally {
           if (sourceId) setUploadingIds((prev) => prev.filter((x) => x !== sourceId));
         }
@@ -469,128 +489,165 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
             </div>
           )}
 
-          {/* 요구사항/RFP 모드: 파일/URL 등록을 보강 입력 필드보다 위(핵심 진입점)에 배치 (아이디어 모드는 fields만). */}
-          {/* 요구사항/RFP 모드 전용: 파일 / URL 입력 소스 등록 (S2 — 메타만 저장) */}
-          {current.id === 'detail' && mode === 'requirement_planning' && (
-            <div className="mt-6 space-y-5">
-              {/* 파일 등록 */}
-              <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
-                <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-strong)] mb-1.5">
-                  <Paperclip size={15} className="text-[var(--color-primary-text)]" /> 파일 등록
-                </div>
-                <p className="text-xs text-[var(--text-secondary)] mb-3 leading-relaxed">
-                  파일을 업로드하면 요구사항/RFP 분석 단계에서 원본 자료로 사용할 수 있습니다. 이번 단계에서는 파일 저장까지만 진행하며, 내용 분석은 다음 단계에서 진행합니다.
-                  <span className="block mt-1 text-[var(--text-tertiary)]">PDF · DOCX · XLSX · CSV · TXT · MD · PNG · JPG · WEBP / 최대 10MB</span>
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  onChange={(e) => handleAddFiles(e.target.files)}
-                  className="hidden"
+          {/* 입력 단계: 아이디어/요구사항 텍스트(필수) + 참고자료(파일/URL) — 두 모드 공통. projectSources 재사용. */}
+          {current.id === 'idea' && (
+            <div className="space-y-5">
+              <p className="text-base font-bold text-[var(--text-strong)]">
+                {mode === 'requirement_planning' ? '요구사항/RFP와 참고자료를 등록하세요' : '아이디어와 참고자료를 입력하세요'}
+              </p>
+
+              {/* 아이디어/요구사항 입력 (유일 필수) */}
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-body)] mb-1.5">
+                  {IDEA_FIELD[mode].label} <span className="text-[var(--red-600)]">*</span>
+                  {ideaFilled && <CheckCircle2 size={13} className="text-[var(--green-600)]" />}
+                </label>
+                <textarea
+                  value={data.intent}
+                  onChange={(e) => set('intent', e.target.value)}
+                  placeholder={IDEA_FIELD[mode].placeholder}
+                  rows={6}
+                  className="w-full px-4 py-3 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-sm resize-y bg-[var(--surface-sunken)] focus:bg-[var(--surface-card)] text-[var(--text-body)] transition-colors"
                 />
-                <Button variant="secondary" icon={Upload} onClick={() => fileInputRef.current?.click()}>
-                  파일 선택
-                </Button>
               </div>
 
-              {/* URL 등록 */}
-              <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
-                <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-strong)] mb-1.5">
-                  <Link2 size={15} className="text-[var(--color-primary-text)]" /> URL 등록
-                </div>
-                <p className="text-xs text-[var(--text-secondary)] mb-1.5 leading-relaxed">
-                  기존 서비스, 경쟁 서비스, 디자인 레퍼런스, 프로토타입 URL, Google Drive 공유 링크를 등록할 수 있습니다. Drive 파일은 공유 권한이 있는 링크만 이후 분석할 수 있습니다.
-                </p>
-                <p className="text-[11px] text-[var(--text-tertiary)] mb-3 leading-relaxed">
-                  Google Drive 문서를 등록하려면 Drive에서 “링크가 있는 사용자 보기 가능”으로 공유한 뒤 URL을 붙여넣어 주세요. 비공개 링크는 이후 분석 단계에서 접근이 제한될 수 있습니다.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <select
-                    value={urlType}
-                    onChange={(e) => setUrlType(e.target.value as ProjectSourceUrlType)}
-                    className="shrink-0 px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none"
-                  >
-                    {URL_TYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="url"
-                    value={urlValue}
-                    onChange={(e) => setUrlValue(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
-                    placeholder="https://example.com 또는 Google Drive 공유 링크"
-                    className="flex-1 min-w-0 px-4 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none"
-                  />
-                  <Button variant="secondary" icon={Plus} onClick={handleAddUrl} disabled={!urlValue.trim()}>
-                    추가
-                  </Button>
-                </div>
-                {isDriveLink && (
-                  <p className="mt-2 text-[11px] font-medium text-[var(--color-primary-text)] bg-[var(--surface-active)] border border-[var(--brand-100)] rounded-[var(--radius-md)] px-2.5 py-1.5 leading-relaxed">
-                    Google Drive 링크로 감지되었습니다. 공유 권한이 없으면 이후 분석이 실패할 수 있습니다.
-                  </p>
-                )}
-              </div>
-
-              {/* 등록 목록 */}
-              {sources.length > 0 && (
+              {/* 참고자료 (파일/URL/Drive) — 기존 projectSources 로직 재사용 */}
+              <div className="space-y-4">
                 <div>
-                  <div className="text-xs font-bold text-[var(--text-secondary)] mb-2">등록된 자료 ({sources.length})</div>
-                  <ul className="space-y-2">
-                    {sources.map((s) => (
-                      <li
-                        key={s.id}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-card)]"
-                      >
-                        <span className="shrink-0 w-8 h-8 rounded-[var(--radius-md)] bg-[var(--surface-sunken)] text-[var(--text-secondary)] flex items-center justify-center">
-                          {s.type === 'file' || s.type === 'screenshot' ? <FileText size={15} /> : <Link2 size={15} />}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[11px] font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-1.5 py-0.5 rounded">
-                              {SOURCE_TYPE_LABEL[s.type]}
-                            </span>
-                            <span className="text-sm font-medium text-[var(--text-body)] truncate" title={s.url || s.fileName || s.title}>
-                              {s.url || s.fileName || s.title || '(제목 없음)'}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-[11px] text-[var(--text-tertiary)] mt-0.5">
-                            {uploadingIds.includes(s.id) ? (
-                              <span className="inline-flex items-center gap-1 font-medium text-[var(--color-primary-text)]">
-                                <Loader2 size={11} className="animate-spin" /> 업로드 중
-                              </span>
-                            ) : (
-                              <span className={`inline-flex items-center gap-1 font-medium ${s.status === 'failed' ? 'text-[var(--red-600)]' : s.status === 'uploaded' ? 'text-[var(--green-700)]' : 'text-[var(--amber-700)]'}`}>
-                                {SOURCE_STATUS_LABEL[s.status]}
-                              </span>
-                            )}
-                            {s.fileType && <span>· {s.fileType}</span>}
-                            {!!s.fileSize && <span>· {formatBytes(s.fileSize)}</span>}
-                            <span>· {formatDateTime(s.createdAt)}</span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSource(s)}
-                          disabled={uploadingIds.includes(s.id)}
-                          aria-label="삭제"
-                          className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--red-600)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="text-sm font-bold text-[var(--text-strong)]">참고자료</div>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+                    기획에 참고할 파일, 기존 서비스 화면 캡처, RFP 문서, URL, Google Drive 공유 링크를 함께 등록할 수 있습니다.
+                  </p>
                 </div>
-              )}
+
+                {/* 파일 첨부 */}
+                <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
+                  <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-strong)] mb-1.5">
+                    <Paperclip size={15} className="text-[var(--color-primary-text)]" /> 파일 첨부
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)] mb-3 leading-relaxed">
+                    {mode === 'requirement_planning'
+                      ? 'RFP·사업계획서 문서와 기존 서비스 UI 캡처 이미지를 함께 업로드할 수 있습니다.'
+                      : '참고할 자료나 화면 캡처를 업로드할 수 있습니다.'}
+                    <span className="block mt-1 text-[var(--text-tertiary)]">PDF · DOCX · XLSX · CSV · TXT · MD · PNG · JPG · WEBP / 최대 10MB</span>
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    onChange={(e) => handleAddFiles(e.target.files)}
+                    className="hidden"
+                  />
+                  <Button variant="secondary" icon={Upload} onClick={() => fileInputRef.current?.click()}>
+                    파일 선택
+                  </Button>
+                  <p className="mt-2 text-[11px] text-[var(--text-tertiary)] leading-relaxed">
+                    파일 업로드가 실패하는 경우 Google Drive 공유 링크를 URL로 등록해주세요.
+                  </p>
+                </div>
+
+                {/* URL 추가 */}
+                <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
+                  <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-strong)] mb-1.5">
+                    <Link2 size={15} className="text-[var(--color-primary-text)]" /> URL 추가
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)] mb-1.5 leading-relaxed">
+                    기존 서비스, 경쟁 서비스, 디자인 레퍼런스, 프로토타입 URL, Google Drive 공유 링크를 등록할 수 있습니다.
+                  </p>
+                  <p className="text-[11px] text-[var(--text-tertiary)] mb-3 leading-relaxed">
+                    Google Drive 문서는 “링크가 있는 사용자 보기 가능”으로 공유한 뒤 URL을 붙여넣어 주세요. 비공개 링크는 이후 분석 단계에서 접근이 제한될 수 있습니다.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <select
+                      value={urlType}
+                      onChange={(e) => setUrlType(e.target.value as ProjectSourceUrlType)}
+                      className="shrink-0 px-3 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none"
+                    >
+                      {ACTIVATION_URL_TYPE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="url"
+                      value={urlValue}
+                      onChange={(e) => setUrlValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
+                      placeholder="https://example.com 또는 Google Drive 공유 링크"
+                      className="flex-1 min-w-0 px-4 py-2.5 border border-[var(--border-strong)] rounded-[var(--radius-lg)] text-sm bg-[var(--surface-card)] text-[var(--text-body)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none"
+                    />
+                    <Button variant="secondary" icon={Plus} onClick={handleAddUrl} disabled={!urlValue.trim()}>
+                      추가
+                    </Button>
+                  </div>
+                  {isDriveLink && (
+                    <p className="mt-2 text-[11px] font-medium text-[var(--color-primary-text)] bg-[var(--surface-active)] border border-[var(--brand-100)] rounded-[var(--radius-md)] px-2.5 py-1.5 leading-relaxed">
+                      Google Drive 링크로 감지되었습니다. 공유 권한이 없으면 이후 분석이 실패할 수 있습니다.
+                    </p>
+                  )}
+                </div>
+
+                {/* 등록 목록 */}
+                {sources.length > 0 && (
+                  <div>
+                    <div className="text-xs font-bold text-[var(--text-secondary)] mb-2">등록된 참고자료 ({sources.length})</div>
+                    <ul className="space-y-2">
+                      {sources.map((s) => (
+                        <li
+                          key={s.id}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-card)]"
+                        >
+                          <span className="shrink-0 w-8 h-8 rounded-[var(--radius-md)] bg-[var(--surface-sunken)] text-[var(--text-secondary)] flex items-center justify-center">
+                            {s.type === 'file' || s.type === 'screenshot' ? <FileText size={15} /> : <Link2 size={15} />}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] px-1.5 py-0.5 rounded">
+                                {SOURCE_TYPE_LABEL[s.type]}
+                              </span>
+                              <span className="text-sm font-medium text-[var(--text-body)] truncate" title={s.url || s.fileName || s.title}>
+                                {s.url || s.fileName || s.title || '(제목 없음)'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-[var(--text-tertiary)] mt-0.5">
+                              {uploadingIds.includes(s.id) ? (
+                                <span className="inline-flex items-center gap-1 font-medium text-[var(--color-primary-text)]">
+                                  <Loader2 size={11} className="animate-spin" /> 업로드 중
+                                </span>
+                              ) : (
+                                <span className={`inline-flex items-center gap-1 font-medium ${s.status === 'failed' ? 'text-[var(--red-600)]' : s.status === 'uploaded' ? 'text-[var(--green-700)]' : 'text-[var(--amber-700)]'}`}>
+                                  {SOURCE_STATUS_LABEL[s.status]}
+                                </span>
+                              )}
+                              {s.fileType && <span>· {s.fileType}</span>}
+                              {!!s.fileSize && <span>· {formatBytes(s.fileSize)}</span>}
+                              <span>· {formatDateTime(s.createdAt)}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSource(s)}
+                            disabled={uploadingIds.includes(s.id)}
+                            aria-label="삭제"
+                            className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--red-600)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <p className="text-[11px] text-[var(--text-tertiary)]">
+                  첨부한 파일과 링크는 이후 AI 분석, 기초 기획 문서, 프로토타입 생성, PRD 역작성에 참고자료로 사용됩니다.
+                </p>
+              </div>
             </div>
           )}
 
-          {/* 보강 입력 필드 (아이디어 모드 detail 9필드 / 아이디어 자유입력 등). 요구사항 모드에선 파일·URL 등록 아래에 위치. */}
-          {!isConfirm && (
-            <div className={`space-y-4 ${current.id === 'detail' && mode === 'requirement_planning' ? 'mt-6' : ''}`}>
+          {/* 보강 정보 입력 필드 — 보강 정보(detail) 단계 전용. 파일/URL 등록은 입력(idea) 단계로 이동. */}
+          {current.id === 'detail' && (
+            <div className="space-y-4">
               {current.fields.map((f) => {
                 const filled = !!data[f.key].trim();
                 return (
