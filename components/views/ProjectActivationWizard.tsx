@@ -527,8 +527,9 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
 
       // 2) 기본 문서 3종 자동 생성 (brief / market_research / product_strategy)
       //    mode에 따라 제목·content 프레이밍이 달라진다(DocumentType은 동일).
-      //    분석/매핑된 activation 입력값으로 템플릿 문서를 생성한다.
-      const docs = buildActivationDocuments({ ...project, activation }, activation);
+      //    분석/매핑된 activation 입력값으로 템플릿 문서를 생성하고,
+      //    analysis가 있으면 보조 인자로 전달해 문서에 직접 반영한다(없으면 기존 동작 유지).
+      const docs = buildActivationDocuments({ ...project, activation }, activation, undefined, analysis ?? undefined);
       await Promise.all(
         docs.map((d) =>
           addDoc(col('documents'), {
