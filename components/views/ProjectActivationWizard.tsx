@@ -270,6 +270,8 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
     project.activationAnalysis ? sanitizeActivationAnalysis(project.activationAnalysis) : null,
   );
   const [analysisSaving, setAnalysisSaving] = useState(false);
+  // 로컬 AI 분석 실행 진행 상태(버튼 비활성/로딩 표시용).
+  const [aiRunning, setAiRunning] = useState(false);
 
   // 분석 초기값 생성(현재 입력/소스 기반, AI 미실행). 자동 생성하지 않고 사용자가 버튼을 눌렀을 때만 호출.
   // 기존 activation(보강 정보) 값이 있으면 브리프/시장조사/제품화 전략 그룹에 시드 — 동일 내용 재입력 방지.
@@ -319,11 +321,45 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
     if (!analysis) setAnalysis(buildInitialAnalysis('manual'));
   };
 
-  // 'AI 분석 실행' — 이번 단계는 실제 실행 미연결. 활성 환경에서도 템플릿 초안으로 시작(추후 local-cli 연결).
-  const startAiAnalysis = () => {
-    if (!AI_ENABLED) return; // 비활성 환경: 버튼 disabled
-    if (!analysis) setAnalysis(buildInitialAnalysis('template'));
-    showToast('지금은 템플릿 초안으로 시작합니다. 실제 AI 분석은 다음 단계에서 연결됩니다.');
+  // 'AI 분석 실행' — 로컬 전용(local-cli). 서버 라우트가 disabled면 호출해도 AI_DISABLED로 떨어진다.
+  // 성공: 응답 analysis를 sanitize 후 setAnalysis. 실패/비활성: 기존 템플릿 시드로 폴백.
+  const startAiAnalysis = async () => {
+    if (!AI_ENABLED || aiRunning) return; // 비활성 환경: 버튼 disabled
+    setAiRunning(true);
+    try {
+      const res = await fetch('/api/generate/activation-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: mode === 'requirement_planning' ? 'requirements' : 'idea',
+          idea: data.intent,
+          projectName: project.name,
+          currentFields: data,
+          sources: sources.map((s) => ({ sourceId: s.id, label: s.url || s.fileName || s.title || '(제목 없음)' })),
+          currentAnalysis: analysis ?? undefined,
+        }),
+      });
+      const json = (await res.json()) as { ok?: boolean; analysis?: ActivationAnalysis; reason?: string };
+      if (json?.ok && json.analysis) {
+        // mode/source/schemaVersion은 신뢰 가능한 값으로 고정 후 sanitize. sourceSummaries는 이후 useEffect가 실제 소스와 동기화.
+        const normalized = sanitizeActivationAnalysis({
+          ...(json.analysis as ActivationAnalysis),
+          source: 'ai',
+          schemaVersion: 2,
+          mode: mode === 'requirement_planning' ? 'requirements' : 'idea',
+        });
+        setAnalysis(normalized);
+        showToast('AI 분석 초안을 생성했습니다. 결과를 확인하고 필요한 부분만 수정하세요.');
+      } else {
+        if (!analysis) setAnalysis(buildInitialAnalysis('template'));
+        showToast('로컬 AI 실행이 준비되지 않아 기본 초안으로 시작합니다.', 'error');
+      }
+    } catch {
+      if (!analysis) setAnalysis(buildInitialAnalysis('template'));
+      showToast('로컬 AI 실행이 준비되지 않아 기본 초안으로 시작합니다.', 'error');
+    } finally {
+      setAiRunning(false);
+    }
   };
 
   // 참고자료 목록(projectSources)이 바뀌면 analysis.sourceSummaries를 동기화(입력한 목적/인사이트는 보존).
@@ -817,7 +853,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                 </p>
               </div>
 
-              {/* AI 분석 실행 영역 (상태 카드). 실제 실행은 미연결 — provider 정책에 따라 비활성/안내. */}
+              {/* AI 분석 실행 영역 (상태 카드). 로컬 전용(local-cli) — Vercel은 disabled로 비활성/안내. */}
               <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0 flex items-center gap-2 text-sm font-bold text-[var(--text-strong)]">
@@ -826,10 +862,11 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                   <button
                     type="button"
                     onClick={startAiAnalysis}
-                    disabled={!AI_ENABLED}
+                    disabled={!AI_ENABLED || aiRunning}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-[var(--color-on-primary)] text-sm font-bold shadow-[var(--shadow-brand)] hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
                   >
-                    <Sparkles size={16} /> AI 분석 실행
+                    {aiRunning ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {aiRunning ? 'AI 분석 중…' : 'AI 분석 실행'}
                   </button>
                 </div>
                 {!AI_ENABLED && (
