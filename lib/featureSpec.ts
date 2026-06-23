@@ -10,6 +10,27 @@ import type { PrototypeLock, Project, ProjectActivation, ProjectSource, Screen }
 const f = (s: string | undefined, placeholder: string): string => (s && s.trim() ? s.trim() : `_(${placeholder})_`);
 const dedupe = (arr: string[]): string[] => [...new Set(arr.map((s) => s.trim()).filter(Boolean))];
 
+// 화면 힌트(입력/액션/상태)를 바탕으로 최소한의 상태값 행을 자동 작성한다('확인 필요'만 남지 않게).
+const buildStateRows = (h: ReturnType<typeof extractFeatureHints>): string => {
+  const rows: string[] = ['| 기본 | 사용자가 화면에 처음 진입한 상태 | 데이터 로딩 전 또는 초기 진입 | 주요 CTA 안내 |'];
+  if (h.hasInputEls || h.inputs.length) rows.push('| 입력 중 | 사용자가 필드/선택지를 입력하는 상태 | 입력 폼 변경 발생 | 입력값 검증 |');
+  if (h.actions.length) rows.push('| 결과 확인 | 생성/분석/제출 결과를 확인하는 상태 | 주요 CTA 실행 완료 | 저장/공유/다음 단계 유도 |');
+  if (h.states.includes('로딩 상태')) rows.push('| 로딩 | 데이터를 불러오는 상태 | 요청 진행 중 | 로딩 표시 유지 |');
+  if (h.states.includes('빈 상태')) rows.push('| 빈 상태 | 표시할 데이터가 없는 상태 | 결과 0건 | 빈 상태 안내 + 다음 행동 CTA |');
+  rows.push('| 오류 | 요청 실패 또는 필수값 누락 상태 | API 실패, 필수 입력 누락 | 오류 안내 및 재시도 제공 |');
+  return rows.join('\n');
+};
+
+// 화면 힌트를 바탕으로 최소한의 예외 처리 행을 자동 작성한다.
+const buildExceptionRows = (h: ReturnType<typeof extractFeatureHints>): string => {
+  const rows: string[] = [];
+  if (h.hasInputEls || h.inputs.length) rows.push('| 필수 입력값 누락 | CTA 실행 전 입력값을 검증하고 누락 필드를 강조 | 필수 정보를 입력해주세요. |');
+  if (h.actions.length) rows.push('| 생성/저장 실패 | 실패 메시지를 표시하고 재시도 버튼 제공 | 잠시 후 다시 시도해주세요. |');
+  rows.push('| 데이터 없음 | 빈 상태 화면과 다음 행동 CTA 제공 | 아직 생성된 데이터가 없습니다. |');
+  rows.push('| 권한 없음 | 편집/승인 액션을 비활성화하고 권한 안내 표시 | 이 작업은 권한이 필요합니다. |');
+  return rows.join('\n');
+};
+
 /** 기능정의서용 추가 정적 추출 (IA 힌트 + 입력/액션/상태). 모두 "추정". */
 const extractFeatureHints = (code: string) => {
   const base = extractScreenHints(code);
@@ -83,7 +104,9 @@ ${screenBlock}
 ${permPolicy}
 
 ## 8. Empty / Loading / Error 상태
-- 빈 상태 / 로딩 / 에러 처리 기준 _(확인 필요)_
+- 빈 상태: 표시할 데이터가 없을 때 안내 문구와 다음 행동 CTA를 제공한다.
+- 로딩: 요청 진행 중 로딩 표시(스피너/스켈레톤)를 유지하고 중복 요청을 막는다.
+- 에러: 실패 메시지를 노출하고 재시도 경로를 제공한다. 필수값 누락은 입력 검증으로 사전 차단한다.
 
 ## 9. 관리자/운영 기능
 ${adminFeat}
@@ -121,9 +144,8 @@ const buildFromScreen = (project: Project, screen: Screen, iaRef: string, genera
   const inputRows = h.inputs.length
     ? h.inputs.map((i) => `| ${i} | _(추정)_ | _(확인 필요)_ | _(확인 필요)_ | placeholder 기반 |`).join('\n')
     : (h.hasInputEls ? '| _(입력 요소 있음 — 필드명 확인 필요)_ | | | | |' : '| _(입력 없음/확인 필요)_ | | | | |');
-  const stateRows = h.states.length
-    ? h.states.map((s) => `| ${s} | _(추정)_ | _(확인 필요)_ | _(확인 필요)_ |`).join('\n')
-    : '| _(확인 필요)_ | | | |';
+  // 상태값: 감지된 상태가 있어도 최소 기준(기본/입력/결과/오류 등)을 자동 작성. '확인 필요'만 남지 않게.
+  const stateRows = buildStateRows(h);
 
   const screenBlock = `### 4.1 ${screen.name}
 
@@ -156,7 +178,7 @@ ${stateRows}
 #### 예외 처리
 | 상황 | 처리 방식 | 사용자 안내 |
 |---|---|---|
-| _(확인 필요)_ | | |
+${buildExceptionRows(h)}
 
 > 화면 구조 힌트: ${h.structure.length ? h.structure.join(', ') : '없음'} / 역할 힌트: ${h.roles.length ? h.roles.join(', ') : '없음'} / 정책 주석 ${annCount}개 _(모두 추정, ScreenEditor에서 확인)_
 

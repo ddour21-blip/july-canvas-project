@@ -51,18 +51,32 @@ const DERIVED_STATUS: Record<DerivedDocStatus, { label: string; fg: string; bg: 
 };
 
 /**
- * 저장 status + 확정 프로토타입 기준으로 UI 표시 상태를 파생한다(저장값 변경 없음).
+ * 저장 status + 문서 의존성 기준으로 UI 표시 상태를 파생한다(저장값 변경 없음).
  * 우선순위: 미작성 → 재생성 필요 → 승인됨 → 검토중 → 초안.
- * - IA·기능정의서·PRD: prototypeLock.lockedAt 보다 문서 updatedAt 이 이전이면 needs_regen.
- *   (승인된 문서라도 기준이 바뀌면 재생성 필요를 우선 안내. 단 DB status:approved 값은 그대로 보존.)
- *   타임스탬프가 없거나 비교 불가하면 needs_regen 으로 표시하지 않는다(오탐 방지).
+ * stale(재생성 필요) 의존성:
+ *  - IA: prototypeLock.lockedAt > ia.updatedAt
+ *  - 기능정의서: prototypeLock.lockedAt > fs.updatedAt  또는  ia.updatedAt > fs.updatedAt
+ *  - PRD: prototypeLock.lockedAt > prd.updatedAt  또는  feature_spec.updatedAt > prd.updatedAt
+ * 타임스탬프가 없거나 비교 불가하면 needs_regen 으로 표시하지 않는다(오탐 방지).
+ * docs를 넘기면 상위 문서(IA/기능정의서) 변경까지 반영한다.
  */
-function deriveDocStatus(doc: ProjectDocument | undefined, project: Project): DerivedDocStatus {
+function deriveDocStatus(
+  doc: ProjectDocument | undefined,
+  project: Project,
+  docs?: ProjectDocument[],
+): DerivedDocStatus {
   if (!doc) return 'missing';
-  if (REGEN_TYPES.includes(doc.type) && project.prototypeLock) {
-    const lockedMs = getTime(project.prototypeLock.lockedAt);
+  if (REGEN_TYPES.includes(doc.type)) {
     const updatedMs = getTime(doc.updatedAt);
-    if (lockedMs && updatedMs && updatedMs < lockedMs) return 'needs_regen';
+    if (updatedMs) {
+      const lockedMs = project.prototypeLock ? getTime(project.prototypeLock.lockedAt) : 0;
+      const iaMs = getTime(docs?.find((d) => d.type === 'ia')?.updatedAt);
+      const fsMs = getTime(docs?.find((d) => d.type === 'feature_spec')?.updatedAt);
+      let threshold = lockedMs || 0;
+      if (doc.type === 'feature_spec' && iaMs) threshold = Math.max(threshold, iaMs);
+      if (doc.type === 'prd' && fsMs) threshold = Math.max(threshold, fsMs);
+      if (threshold && updatedMs < threshold) return 'needs_regen';
+    }
   }
   if (doc.status === 'approved') return 'approved';
   if (doc.status === 'review') return 'review';
@@ -242,10 +256,13 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     if (!lock) return;
     const existing = byType('ia');
     if (existing) {
+      const stale = deriveDocStatus(existing, project, documents) === 'needs_regen';
       setConfirm({
         isOpen: true,
         title: 'IA 초안을 다시 생성할까요?',
-        msg: '확정 프로토타입 기준으로 IA를 다시 생성하면 현재 IA 문서 내용이 새 초안으로 덮어써집니다. (버전은 올라가며 기존 문서가 삭제되는 것은 아닙니다.)',
+        msg: stale
+          ? '최신 기준(확정 프로토타입)으로 IA를 재생성하면 현재 IA 문서 내용이 새 초안으로 덮어써집니다. (버전은 올라가며 기존 문서가 삭제되는 것은 아닙니다.)'
+          : '현재 IA 문서를 다시 생성하면 기존 내용이 새 초안으로 덮어써집니다. (버전은 올라가며 기존 문서가 삭제되는 것은 아닙니다.)',
         confirmLabel: '다시 생성',
         tone: 'warning',
         action: () => {
@@ -296,10 +313,13 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     if (!iaDoc) { showToast('먼저 IA를 생성해주세요.', 'error'); return; }
     const existing = byType('feature_spec');
     if (existing) {
+      const stale = deriveDocStatus(existing, project, documents) === 'needs_regen';
       setConfirm({
         isOpen: true,
         title: '기능정의서를 다시 생성할까요?',
-        msg: '확정 프로토타입과 IA 기준으로 기능정의서를 다시 생성하면 현재 기능정의서 내용이 새 초안으로 덮어써집니다. (버전은 올라가며 기존 문서가 삭제되는 것은 아닙니다.)',
+        msg: stale
+          ? '최신 기준(확정 프로토타입·IA)으로 기능정의서를 재생성하면 현재 기능정의서 내용이 새 초안으로 덮어써집니다. (버전은 올라가며 기존 문서가 삭제되는 것은 아닙니다.)'
+          : '현재 기능정의서를 다시 생성하면 기존 내용이 새 초안으로 덮어써집니다. (버전은 올라가며 기존 문서가 삭제되는 것은 아닙니다.)',
         confirmLabel: '다시 생성',
         tone: 'warning',
         action: () => {
@@ -538,10 +558,18 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   const url = prototypeUrl();
 
   // 확정 프로토타입 변경 후 재생성 안내/잠금 교착 처리용 파생값.
-  const selectedDocStatus = deriveDocStatus(selectedDoc, project);
+  const selectedDocStatus = deriveDocStatus(selectedDoc, project, documents);
   const prdNeedsRegen = selectedType === 'prd' && selectedDocStatus === 'needs_regen';
   // 역작성 산출물(IA/기능정의서/PRD) 중 하나라도 재생성 필요 → 순차 재생성 안내 노출.
-  const anyDocNeedsRegen = REGEN_TYPES.some((t) => deriveDocStatus(byType(t), project) === 'needs_regen');
+  const anyDocNeedsRegen = REGEN_TYPES.some((t) => deriveDocStatus(byType(t), project, documents) === 'needs_regen');
+  // 재생성 필요가 '확정 프로토타입 변경' 때문인지(IA/기능정의서 수정 등 상위 문서 변경과 구분).
+  const prototypeStale =
+    !!project.prototypeLock &&
+    REGEN_TYPES.some((t) => {
+      const u = getTime(byType(t)?.updatedAt);
+      const l = getTime(project.prototypeLock?.lockedAt);
+      return !!(u && l && u < l);
+    });
 
   const selectDoc = (type: DocumentType) => {
     setSelectedType(type);
@@ -766,7 +794,9 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           <div className="flex items-start gap-2">
             <RefreshCw size={15} className="text-[var(--amber-700)] shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <div className="text-sm font-bold text-[var(--amber-700)]">확정 프로토타입 기준이 변경되었습니다</div>
+              <div className="text-sm font-bold text-[var(--amber-700)]">
+                {prototypeStale ? '확정 프로토타입 기준이 변경되었습니다' : '상위 문서(IA·기능정의서)가 변경되었습니다'}
+              </div>
               <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
                 <b>IA → 기능정의서 → PRD</b> 순서로 재생성하면 최신 기준의 개발 전달 문서를 만들 수 있습니다.
                 {isOwner ? ' 승인된 PRD는 재생성 시 잠금이 해제되고 초안으로 돌아갑니다(재승인 필요).' : ' 재생성은 가능하며, PRD 승인은 Owner 권한이 필요합니다.'}
@@ -1178,7 +1208,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                 const meta = DOCUMENT_META[type];
                 const docu = byType(type);
                 const active = type === selectedType;
-                const ds = deriveDocStatus(docu, project);
+                const ds = deriveDocStatus(docu, project, documents);
                 return (
                   <button
                     key={type}
@@ -1244,7 +1274,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {selectedDoc && <StatusBadge status={deriveDocStatus(selectedDoc, project)} />}
+              {selectedDoc && <StatusBadge status={deriveDocStatus(selectedDoc, project, documents)} />}
               {/* 빈 문서 생성 CTA는 아래 중앙 빈 상태 한 곳으로 통일(상단 중복 버튼 제거). */}
               {selectedDoc && (
                 <Button
@@ -1260,10 +1290,10 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           </div>
 
           {/* 재생성 필요 안내: 확정 프로토타입 기준이 문서보다 최신일 때만(자동 삭제/재생성 없음) */}
-          {selectedDoc && deriveDocStatus(selectedDoc, project) === 'needs_regen' && (
+          {selectedDoc && deriveDocStatus(selectedDoc, project, documents) === 'needs_regen' && (
             <div className="mx-5 mt-4 flex items-start gap-2 rounded-[var(--radius-md)] border border-[var(--amber-100)] bg-[var(--amber-50)] px-3 py-2 text-[12px] text-[var(--amber-700)]">
               <RefreshCw size={14} className="mt-0.5 shrink-0" />
-              <span>확정 프로토타입 기준이 변경되어 재생성을 권장합니다. {selectedType === 'prd' ? 'IA·기능정의서를 갱신한 뒤 PRD를 재생성하세요.' : '위 ‘확정 프로토타입 · 문서 역작성’ 영역에서 다시 생성할 수 있습니다.'}</span>
+              <span>{prototypeStale ? '확정 프로토타입 기준이 변경되어' : '상위 문서(IA·기능정의서)가 변경되어'} 재생성을 권장합니다. {selectedType === 'prd' ? 'IA·기능정의서를 갱신한 뒤 PRD를 재생성하세요.' : '위 ‘확정 프로토타입 · 문서 역작성’ 영역에서 다시 생성할 수 있습니다.'}</span>
             </div>
           )}
 
