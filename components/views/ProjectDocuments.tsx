@@ -12,6 +12,7 @@ import { buildHandoffPackage, type HandoffPackage, type HandoffPrototype } from 
 import { downloadHandoffFile, downloadHandoffZip } from '@/lib/exportHandoffPackage';
 import { deletePrototypeUrl, lockPrototype, registerPrototypeScreen, subscribePrototypeUrls, unlockPrototype } from '@/lib/prototypes';
 import { generateHtmlBoilerplate } from '@/lib/htmlRenderer';
+import type { PrototypeMode } from '@/lib/ai/prompts/prototype';
 import { shareHash, toShareUrl } from '@/lib/shareLinks';
 import { useAuth } from '@/lib/auth';
 import { downloadTextFile } from '@/lib/export/exportMarkdown';
@@ -152,6 +153,10 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   const [aiProto, setAiProto] = useState<{ title: string; description: string; html: string } | null>(null);
   const [aiProtoLoading, setAiProtoLoading] = useState(false);
   const [savingProto, setSavingProto] = useState(false);
+  // AI 프로토타입 디자인 입력: 유형(mode) · 참고 URL/이미지 링크 · 디자인 메모. (생성 payload에 전달)
+  const [protoMode, setProtoMode] = useState<PrototypeMode>('auto');
+  const [protoRefs, setProtoRefs] = useState('');
+  const [protoNotes, setProtoNotes] = useState('');
   // AI 프로토타입 생성 실패 안내(카드에 잔류 표시). reason 매핑 메시지.
   const [aiProtoError, setAiProtoError] = useState<string | null>(null);
   // background job polling 타이머. 페이지 이동 후 복귀 시 localStorage jobId로 재개.
@@ -685,6 +690,14 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             marketResearch: byType('market_research')?.content ?? '',
             productStrategy: byType('product_strategy')?.content ?? '',
           },
+          prototypeMode: protoMode,
+          // 줄바꿈/쉼표로 구분된 참고 링크를 배열로 정리.
+          referenceUrls: protoRefs
+            .split(/[\n,]/)
+            .map((u) => u.trim())
+            .filter(Boolean)
+            .slice(0, 8),
+          designNotes: protoNotes.trim(),
         }),
       });
       const json = (await res.json()) as { ok?: boolean; jobId?: string; reason?: string };
@@ -844,6 +857,52 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             </Button>
           </div>
         </div>
+
+        {/* 디자인 입력: 프로토타입 유형 · 참고 링크 · 디자인 메모 (생성 payload에 전달). 로컬 AI 전용. */}
+        {AI_ENABLED && (
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-bold text-[var(--text-secondary)]">프로토타입 유형</span>
+              <select
+                value={protoMode}
+                onChange={(e) => setProtoMode(e.target.value as PrototypeMode)}
+                disabled={!isEditor || aiProtoLoading}
+                className="w-full rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-card)] px-3 py-2 text-sm text-[var(--text-body)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] disabled:opacity-60"
+              >
+                <option value="auto">자동 추천</option>
+                <option value="mobile-app">모바일 앱</option>
+                <option value="web-landing">웹 랜딩</option>
+                <option value="saas-dashboard">SaaS 대시보드</option>
+                <option value="admin-console">관리자 콘솔</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-bold text-[var(--text-secondary)]">참고 URL / 이미지 링크 <span className="font-medium text-[var(--text-tertiary)]">(선택 · 줄바꿈·쉼표로 여러 개)</span></span>
+              <textarea
+                value={protoRefs}
+                onChange={(e) => setProtoRefs(e.target.value)}
+                disabled={!isEditor || aiProtoLoading}
+                rows={2}
+                placeholder="https://example.com/reference"
+                className="w-full resize-y rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-card)] px-3 py-2 text-sm text-[var(--text-body)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] disabled:opacity-60"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 sm:col-span-2">
+              <span className="text-xs font-bold text-[var(--text-secondary)]">디자인 메모 <span className="font-medium text-[var(--text-tertiary)]">(선택 · 톤·레이아웃·색감 등)</span></span>
+              <textarea
+                value={protoNotes}
+                onChange={(e) => setProtoNotes(e.target.value)}
+                disabled={!isEditor || aiProtoLoading}
+                rows={2}
+                placeholder="예: 미니멀한 느낌, 보라색 포인트, 카드 위주 구성"
+                className="w-full resize-y rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-card)] px-3 py-2 text-sm text-[var(--text-body)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] disabled:opacity-60"
+              />
+            </label>
+            <p className="text-[11px] text-[var(--text-tertiary)] sm:col-span-2 -mt-1">
+              참고 링크는 AI가 직접 열람하지 않고 디자인 힌트로만 사용합니다. 유형을 “자동 추천”으로 두면 문서 내용에 맞는 유형을 AI가 선택합니다.
+            </p>
+          </div>
+        )}
 
         {/* 생성 중 안내: 페이지 이동해도 백그라운드로 계속 진행됨. */}
         {aiProtoLoading && !aiProto && (
@@ -1178,9 +1237,9 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                 ))}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <button type="button" onClick={handleCopyHandoffFile} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={13} /> 이 문서 복사</button>
+                <button type="button" onClick={handleCopyHandoffFile} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={13} /> 현재 MD 복사</button>
                 <button type="button" onClick={handleDownloadHandoffFile} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><Download size={13} /> 이 문서 .md</button>
-                <button type="button" onClick={handleCopyHandoffAll} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={13} /> 전체 복사</button>
+                <button type="button" onClick={handleCopyHandoffAll} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors"><Copy size={13} /> 전체 MD 패키지 복사</button>
                 <button type="button" onClick={handleDownloadHandoffZip} className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:bg-[var(--color-primary-hover)] transition-colors"><Download size={13} /> ZIP 다운로드</button>
                 <button type="button" onClick={() => setHandoffPkg(null)} aria-label="닫기" className="p-1.5 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] transition-colors"><X size={15} /></button>
               </div>

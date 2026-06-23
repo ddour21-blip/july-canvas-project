@@ -4,7 +4,7 @@
 // - provider disabled(Vercel 기본): job 생성 없이 { ok:false, reason:'AI_DISABLED' }. CLI/키 미접근.
 // Firestore 저장/문서 생성/screen 저장/ANTHROPIC_API_KEY 사용 없음 — 확정은 클라이언트가 별도로 수행.
 import { getAiProvider } from '@/lib/ai/provider';
-import { buildPrototypePrompt } from '@/lib/ai/prompts/prototype';
+import { buildPrototypePrompt, type PrototypeMode } from '@/lib/ai/prompts/prototype';
 import { extractJsonObject } from '@/lib/ai/parseJson';
 import { buildPrototypeHtmlFromSpec, normalizePrototypeSpec } from '@/lib/ai/prototypeHtmlTemplate';
 import {
@@ -25,6 +25,9 @@ interface PrototypeRequestBody {
   projectName?: string;
   activationAnalysis?: Partial<ActivationAnalysis> | null;
   documents?: { brief?: string; marketResearch?: string; productStrategy?: string };
+  prototypeMode?: PrototypeMode;
+  referenceUrls?: string[];
+  designNotes?: string;
 }
 
 // 백그라운드 실행: Claude CLI → PrototypeSpec → HTML. 결과를 job store에 기록(요청 응답과 분리).
@@ -34,6 +37,9 @@ async function runPrototypeJob(jobId: string, body: PrototypeRequestBody): Promi
     projectName: body.projectName,
     activationAnalysis: body.activationAnalysis ?? null,
     documents: body.documents,
+    prototypeMode: body.prototypeMode,
+    referenceUrls: body.referenceUrls,
+    designNotes: body.designNotes,
   });
 
   const startedAt = Date.now();

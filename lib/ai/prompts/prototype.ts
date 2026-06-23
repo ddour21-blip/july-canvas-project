@@ -3,12 +3,29 @@
 //    HTML 변환은 lib/ai/prototypeHtmlTemplate.ts(buildPrototypeHtmlFromSpec)가 담당한다.
 import type { ActivationAnalysis, ProjectActivation } from '@/types';
 
+/** 프로토타입 디자인 모드. 'auto'면 모델이 문서를 보고 적합한 유형을 고른다. */
+export type PrototypeMode = 'auto' | 'mobile-app' | 'web-landing' | 'saas-dashboard' | 'admin-console';
+
 export interface PrototypePromptInput {
   projectName?: string;
   activationAnalysis?: Partial<ActivationAnalysis> | null;
   /** 기초 문서 3종 content(마크다운). 일부 없으면 빈 문자열 — 모델이 합리적 가정으로 보완. */
   documents?: { brief?: string; marketResearch?: string; productStrategy?: string };
+  /** 사용자가 선택한 프로토타입 유형. 미지정/auto면 모델이 결정. */
+  prototypeMode?: PrototypeMode;
+  /** 참고 URL/이미지 링크(디자인 힌트 — 모델은 열람 불가, 문자열로만 참고). */
+  referenceUrls?: string[];
+  /** 디자인 메모(톤·레이아웃·색감 등 자유 입력). */
+  designNotes?: string;
 }
+
+// 모드별 권장 화면 구조(프롬프트 지시문에 사용).
+const MODE_GUIDE: Record<Exclude<PrototypeMode, 'auto'>, string> = {
+  'mobile-app': '모바일 앱: home(히어로/핵심가치) + input(폼) + result(지표/리스트) + (pricing 또는 detail). 한 손 사용 흐름.',
+  'web-landing': '웹 랜딩: home은 hero + feature 카드 3개 + workflow(detail/listItems) + CTA, 그리고 pricing(요금제 카드). 마케팅 톤.',
+  'saas-dashboard': 'SaaS 대시보드: dashboard(지표 metrics + 리스트/표) 중심 + detail + settings + input. 데이터/운영 톤.',
+  'admin-console': '관리자 콘솔: dashboard(지표+표) + detail(상세/항목 관리) + input(등록/편집 폼) + settings. 표·상태 관리 톤.',
+};
 
 const clip = (s: string | undefined, max = 4000): string => {
   const t = (s ?? '').trim();
@@ -19,8 +36,8 @@ const clip = (s: string | undefined, max = 4000): string => {
 const SPEC_HINT = `{
   "title": string,            // 서비스명처럼 자연스럽게 (예: "트립노트", "케어로그"). "MVP/프로토타입" 같은 단어 금지
   "description": string,      // 한 줄 설명
-  "productType": "mobile-app" | "web-app" | "admin" | "landing",
-  "visualTone": "clean" | "premium" | "friendly" | "professional" | "playful",
+  "productType": "mobile-app" | "web-landing" | "saas-dashboard" | "admin-console",
+  "visualTone": "clean" | "premium" | "friendly" | "professional" | "playful" | "dark",
   "primaryColor": string,     // #06C755 처럼 서비스에 어울리는 hex 한 가지
   "screens": [                // 4~5개 권장(최소 3)
     {
@@ -39,6 +56,34 @@ const SPEC_HINT = `{
     }
   ]
 }`;
+
+// 사용자가 준 디자인 입력(모드/참고URL/메모)을 프롬프트 섹션으로 변환.
+function designDirectives(input: PrototypePromptInput): string {
+  const mode = input.prototypeMode && input.prototypeMode !== 'auto' ? input.prototypeMode : 'auto';
+  const urls = (input.referenceUrls ?? []).map((u) => u.trim()).filter(Boolean).slice(0, 8);
+  const notes = (input.designNotes ?? '').trim();
+
+  const lines: string[] = [];
+  if (mode === 'auto') {
+    lines.push(
+      '- 프로토타입 유형(productType)은 문서/분석 내용을 보고 가장 적합한 하나를 직접 고르세요(mobile-app / web-landing / saas-dashboard / admin-console).',
+    );
+    lines.push('- 유형별 권장 구조:');
+    for (const g of Object.values(MODE_GUIDE)) lines.push(`  · ${g}`);
+  } else {
+    lines.push(`- 프로토타입 유형(productType)은 반드시 "${mode}" 로 고정하세요.`);
+    lines.push(`- "${mode}" 권장 구조: ${MODE_GUIDE[mode]}`);
+  }
+  if (urls.length) {
+    lines.push(
+      `- 참고 URL/이미지 링크(아래)는 직접 열람할 수 없으니, URL 문자열과 디자인 메모를 "톤/구성 힌트"로만 참고하세요(링크 내용을 사실처럼 단정 금지):\n  ${urls.join('\n  ')}`,
+    );
+  }
+  if (notes) {
+    lines.push(`- 디자인 메모(반영 권장): ${notes}`);
+  }
+  return lines.join('\n');
+}
 
 /** Claude CLI에 넘길 단일 프롬프트 문자열을 만든다. */
 export function buildPrototypePrompt(input: PrototypePromptInput): string {
@@ -71,7 +116,11 @@ export function buildPrototypePrompt(input: PrototypePromptInput): string {
 - 실제 로그인/결제/네트워크 동작은 가정하지 말고, 화면 전환 흐름만 설계합니다.
 - 헬스/이너뷰티 관련 문구는 효능을 단정하지 말고 보수적으로.
 - primaryColor 는 서비스 톤에 맞는 hex 한 가지(예: #06C755, #2563EB, #7C3AED 등).
+- visualTone 은 서비스 분위기에 맞게 고르세요(어두운 테마가 어울리면 "dark").
 - 자료가 부족하면 합리적인 가정으로 보완해서라도 4~5개 화면을 완성합니다.
+
+[디자인 지시]
+${designDirectives(input)}
 
 [JSON 구조]
 ${SPEC_HINT}
