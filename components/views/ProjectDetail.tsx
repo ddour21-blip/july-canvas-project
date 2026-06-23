@@ -267,15 +267,11 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               <ExternalLink size={16} />공유
             </button>
           )}
-          {/* primary CTA는 상태/탭에 따라 1개만: 비활성→활성화, 활성+프로토타입 탭→새 화면 추가 */}
+          {/* primary CTA: 비활성→활성화 시작하기. (프로토타입 탭의 '새 화면 추가'는 AI 생성이 기본 플로우가 되어 */}
+          {/*  상단 공통 액션에서 제거 — 수동 코드 추가는 프로토타입 탭의 '수동 생성 옵션' 아코디언에서 진입한다.) */}
           {canEdit && !isActivated && (
             <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
               <Rocket size={16} />활성화 시작하기
-            </button>
-          )}
-          {canEdit && isActivated && tab === 'screens' && (
-            <button type="button" className="jca-btn jca-btn--primary" onClick={openAddScreen}>
-              <Plus size={16} />새 화면 추가
             </button>
           )}
           {canDelete && (

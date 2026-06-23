@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
 import { copyToClipboard, formatDateTime, getTime, nowMs, showToast } from '@/lib/utils';
@@ -121,6 +121,7 @@ const PROTOTYPE_FAIL_MESSAGES: Record<string, string> = {
   CLI_ERROR: 'Claude CLI 실행 중 문제가 발생했습니다. 터미널에서 Claude 로그인 상태 또는 실행 시간을 확인해주세요.',
   PARSE_ERROR: 'AI가 프로토타입 HTML을 올바른 JSON 형식으로 반환하지 못했습니다. 다시 생성하거나 수동 생성 옵션을 사용해주세요.',
   BAD_REQUEST: '프로토타입 생성에 필요한 입력값이 부족합니다. 프로젝트 활성화 또는 문서 생성을 먼저 확인해주세요.',
+  JOB_NOT_FOUND: '진행 중이던 프로토타입 생성 작업을 찾을 수 없습니다(서버 재시작 등). 다시 생성해주세요.',
   UNKNOWN: '프로토타입 생성 중 알 수 없는 오류가 발생했습니다.',
 };
 const prototypeFailMessage = (reason?: string): string =>
@@ -139,6 +140,8 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   const [savingProto, setSavingProto] = useState(false);
   // AI 프로토타입 생성 실패 안내(카드에 잔류 표시). reason 매핑 메시지.
   const [aiProtoError, setAiProtoError] = useState<string | null>(null);
+  // background job polling 타이머. 페이지 이동 후 복귀 시 localStorage jobId로 재개.
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // 개발 전달 패키지 (B7/B8): 로컬 생성 → 복사. Firestore 저장 안 함.
   const [handoffPkg, setHandoffPkg] = useState<HandoffPackage | null>(null);
   const [handoffTab, setHandoffTab] = useState(0);
@@ -569,8 +572,74 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     else showToast('복사 실패', 'error');
   };
 
-  // AI 클릭형 HTML 프로토타입 생성 — 로컬 전용(local-cli). 서버 disabled면 AI_DISABLED로 떨어진다.
-  // 성공 시 미리보기만 표시(저장은 사용자가 '확정'할 때). 실패/비활성 시 기존 상태 유지 + 안내.
+  // --- AI 프로토타입 생성 background job + polling ---
+  // 서버가 job을 만들어 백그라운드로 진행하고, 클라는 jobId(localStorage)로 폴링한다.
+  // 페이지 이동/언마운트 후 복귀해도 jobId가 있으면 진행/완료/실패를 다시 확인한다.
+  const protoJobKey = `july_canvas_proto_job_${project.id}`;
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  const pollPrototypeJob = async (jobId: string) => {
+    try {
+      const res = await fetch(`/api/generate/prototype?jobId=${encodeURIComponent(jobId)}`);
+      const json = (await res.json()) as {
+        ok?: boolean;
+        status?: 'running' | 'done' | 'error';
+        prototype?: { title: string; description: string; html: string };
+        reason?: string;
+      };
+      if (json?.status === 'done' && json.prototype?.html) {
+        stopPolling();
+        if (typeof window !== 'undefined') window.localStorage.removeItem(protoJobKey);
+        setAiProto(json.prototype);
+        setAiProtoError(null);
+        setAiProtoLoading(false);
+        showToast('프로토타입 생성이 완료되었습니다. 미리보기를 확인한 뒤 기준 프로토타입으로 확정할 수 있습니다.');
+      } else if (json?.status === 'running') {
+        setAiProtoLoading(true);
+      } else {
+        // error / JOB_NOT_FOUND / ok:false → 폴링 중단 + 안내.
+        stopPolling();
+        if (typeof window !== 'undefined') window.localStorage.removeItem(protoJobKey);
+        setAiProtoLoading(false);
+        const msg = prototypeFailMessage(json?.reason);
+        setAiProtoError(msg);
+        showToast(msg, 'error');
+      }
+    } catch {
+      // 일시적 네트워크 오류 → 다음 tick에 재시도(중단하지 않음).
+    }
+  };
+
+  const startPolling = (jobId: string) => {
+    stopPolling();
+    setAiProtoLoading(true);
+    void pollPrototypeJob(jobId);
+    pollRef.current = setInterval(() => {
+      void pollPrototypeJob(jobId);
+    }, 2500);
+  };
+
+  // 마운트/프로젝트 전환 시: 상태 초기화 후 localStorage에 진행 중 jobId가 있으면 폴링 재개.
+  useEffect(() => {
+    stopPolling();
+    setAiProto(null);
+    setAiProtoError(null);
+    setAiProtoLoading(false);
+    if (AI_ENABLED && typeof window !== 'undefined') {
+      const jid = window.localStorage.getItem(protoJobKey);
+      if (jid) startPolling(jid);
+    }
+    return () => stopPolling();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
+
+  // 'AI 프로토타입 생성' — job 생성(즉시 반환) 후 폴링 시작. 결과는 폴링이 채운다.
   const handleGenerateAiPrototype = async () => {
     if (!AI_ENABLED || aiProtoLoading) return;
     setAiProtoLoading(true);
@@ -580,6 +649,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          projectId: project.id,
           projectName: project.name,
           activationAnalysis: project.activationAnalysis ?? null,
           documents: {
@@ -589,26 +659,22 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           },
         }),
       });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        prototype?: { title: string; description: string; html: string };
-        reason?: string;
-      };
-      if (json?.ok && json.prototype?.html) {
-        setAiProto(json.prototype);
-        showToast('프로토타입 초안을 생성했습니다. 미리보기를 확인하고 확정하세요.');
+      const json = (await res.json()) as { ok?: boolean; jobId?: string; reason?: string };
+      if (json?.ok && json.jobId) {
+        if (typeof window !== 'undefined') window.localStorage.setItem(protoJobKey, json.jobId);
+        startPolling(json.jobId);
+        showToast('AI 프로토타입을 생성하고 있습니다. 다른 페이지로 이동해도 작업은 계속 진행됩니다.');
       } else {
-        // 응답 reason을 사용자 메시지로 매핑(카드에 잔류 + 토스트).
+        setAiProtoLoading(false);
         const msg = prototypeFailMessage(json?.reason);
         setAiProtoError(msg);
         showToast(msg, 'error');
       }
     } catch {
+      setAiProtoLoading(false);
       const msg = prototypeFailMessage('UNKNOWN');
       setAiProtoError(msg);
       showToast(msg, 'error');
-    } finally {
-      setAiProtoLoading(false);
     }
   };
 
@@ -749,6 +815,16 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           </div>
         </div>
 
+        {/* 생성 중 안내: 페이지 이동해도 백그라운드로 계속 진행됨. */}
+        {aiProtoLoading && !aiProto && (
+          <div className="mt-5 rounded-[var(--radius-lg)] border border-[var(--brand-200)] bg-[var(--color-primary-softer)] px-4 py-3 flex items-start gap-2">
+            <RefreshCw size={15} className="text-[var(--color-primary-text)] shrink-0 mt-0.5 animate-spin" />
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              AI 프로토타입을 생성하고 있습니다. <b className="text-[var(--text-body)]">다른 페이지로 이동해도 작업은 계속 진행</b>되며, 프로토타입 탭으로 돌아오면 결과를 확인할 수 있습니다.
+            </p>
+          </div>
+        )}
+
         {aiProto && (
           <div className="mt-5 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] overflow-hidden">
             <div className="flex items-start justify-between gap-2 px-4 py-3 border-b border-[var(--border-default)] bg-[var(--surface-card)]">
@@ -801,13 +877,13 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             </span>
             <span className="min-w-0">
               <span className="block font-bold text-[var(--text-strong)]">수동 생성 옵션 <span className="text-[11px] font-medium text-[var(--text-tertiary)]">AI 생성이 실패했을 때 사용</span></span>
-              <span className="block text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">AI 프로토타입 생성이 실패하거나 Gemini Canvas에서 직접 제작할 때 사용할 수 있는 프롬프트 패키지를 만듭니다.</span>
+              <span className="block text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">AI 생성이 실패했거나 직접 코드를 붙여넣어 화면을 추가할 때 사용할 수 있습니다.</span>
             </span>
           </span>
           <ChevronRight size={16} className="shrink-0 text-[var(--text-tertiary)] transition-transform group-open:rotate-90" />
         </summary>
         <div className="px-5 pb-5">
-          <div className="flex flex-col items-start gap-1">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant={prototypePkg ? 'outline' : 'secondary'}
               icon={prototypePkg ? RefreshCw : Sparkles}
@@ -816,8 +892,19 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             >
               {prototypePkg ? '다시 생성' : '프로토타입 프롬프트 생성'}
             </Button>
+            {isEditor && navigate && (
+              <Button
+                variant="outline"
+                icon={Plus}
+                onClick={() => navigate(`#project_${project.id}_screens_new`)}
+              >
+                새 화면 직접 추가
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-col items-start gap-1 mt-2">
             {!initialDocsReady && (
-              <span className="text-[11px] text-[var(--amber-700)]">브리프·시장조사·제품화전략 문서가 모두 생성되면 사용할 수 있습니다.</span>
+              <span className="text-[11px] text-[var(--amber-700)]">‘프로토타입 프롬프트 생성’은 브리프·시장조사·제품화전략 문서가 모두 생성되면 사용할 수 있습니다.</span>
             )}
             {prototypePkg && <span className="text-[11px] text-[var(--text-tertiary)]">다시 생성하면 현재 패키지가 갱신됩니다</span>}
           </div>
