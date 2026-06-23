@@ -26,6 +26,7 @@ import type {
   Project,
   ProjectDocument,
   ProjectSource,
+  ProjectStatus,
   Screen,
 } from '@/types';
 
@@ -458,12 +459,51 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     showToast('문서가 저장되었습니다.');
   };
 
-  const handleRegeneratePRD = async (docu: ProjectDocument) => {
+  // PRD 재생성 공통 로직. fromLocked=true면 승인 잠금을 해제하고 draft로 되돌린다(명시적 Owner 동작에서만 호출).
+  const runRegeneratePRD = async (docu: ProjectDocument, fromLocked: boolean) => {
+    const cur = parseFloat(docu.version);
+    const nextV = isNaN(cur) ? docu.version : (cur + 0.1).toFixed(1);
     await updateDoc(docRef('documents', docu.id), {
       content: generatePRD(project, documents, prototypeUrl()),
+      status: 'draft' as DocumentStatus,
+      locked: false,
+      version: nextV,
       updatedAt: serverTimestamp(),
     });
-    showToast('PRD가 최신 데이터로 재생성되었습니다.');
+    // 승인 잠금을 푸는 재생성이면 프로젝트도 최종 승인 상태에서 승인 전(active)으로 되돌린다(상태 불일치 방지).
+    // 활성화 시 사용하는 기존 값 'active'만 사용하고, approved일 때만 변경(archived/handoff 등은 보존).
+    if (fromLocked && project.status === 'approved') {
+      await updateDoc(docRef('projects', project.id), {
+        status: 'active' as ProjectStatus,
+        updatedAt: serverTimestamp(),
+      });
+    }
+    showToast(
+      fromLocked
+        ? '승인을 해제하고 최신 프로토타입 기준으로 PRD를 재생성했습니다. 검토 후 다시 승인하세요.'
+        : 'PRD가 최신 데이터로 재생성되었습니다.',
+    );
+  };
+
+  // 일반(미잠금) PRD 재생성.
+  const handleRegeneratePRD = (docu: ProjectDocument) => {
+    void runRegeneratePRD(docu, false);
+  };
+
+  // 확정 프로토타입 변경으로 needs_regen 된 '승인·잠금' PRD를 Owner가 명시적으로 재생성(잠금 해제).
+  // 일반 locked 보호는 유지하고, 이 경로(needs_regen + Owner + 확인)에서만 unlock을 허용한다.
+  const handleRegenerateLockedPRD = (docu: ProjectDocument) => {
+    setConfirm({
+      isOpen: true,
+      title: '승인을 해제하고 PRD를 재생성할까요?',
+      msg: '확정 프로토타입 기준이 바뀌어 현재 PRD가 오래되었습니다. 재생성하면 승인·잠금이 해제되고 초안(draft)으로 되돌아갑니다. 검토 후 다시 승인할 수 있습니다.',
+      confirmLabel: '재생성',
+      tone: 'warning',
+      action: () => {
+        closeConfirm();
+        void runRegeneratePRD(docu, true);
+      },
+    });
   };
 
   const handleApprovePRD = async (docu: ProjectDocument) => {
@@ -493,6 +533,12 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   const selectedDoc = byType(selectedType);
   const isEditing = selectedDoc && editingId === selectedDoc.id;
   const url = prototypeUrl();
+
+  // 확정 프로토타입 변경 후 재생성 안내/잠금 교착 처리용 파생값.
+  const selectedDocStatus = deriveDocStatus(selectedDoc, project);
+  const prdNeedsRegen = selectedType === 'prd' && selectedDocStatus === 'needs_regen';
+  // 역작성 산출물(IA/기능정의서/PRD) 중 하나라도 재생성 필요 → 순차 재생성 안내 노출.
+  const anyDocNeedsRegen = REGEN_TYPES.some((t) => deriveDocStatus(byType(t), project) === 'needs_regen');
 
   const selectDoc = (type: DocumentType) => {
     setSelectedType(type);
@@ -646,6 +692,22 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           </div>
         </div>
       </div>
+      )}
+
+      {/* 확정 프로토타입 기준 변경 시 순차 재생성 안내(IA → 기능정의서 → PRD). */}
+      {section === 'documents' && anyDocNeedsRegen && (
+        <div className="bg-[var(--amber-50)] border border-[var(--amber-100)] rounded-[var(--radius-xl)] px-4 py-3">
+          <div className="flex items-start gap-2">
+            <RefreshCw size={15} className="text-[var(--amber-700)] shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <div className="text-sm font-bold text-[var(--amber-700)]">확정 프로토타입 기준이 변경되었습니다</div>
+              <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+                <b>IA → 기능정의서 → PRD</b> 순서로 재생성하면 최신 기준의 개발 전달 문서를 만들 수 있습니다.
+                {isOwner ? ' 승인된 PRD는 재생성 시 잠금이 해제되고 초안으로 돌아갑니다(재승인 필요).' : ' 재생성은 가능하며, PRD 승인은 Owner 권한이 필요합니다.'}
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* AI 클릭형 HTML 프로토타입 생성 (로컬 전용). 미리보기 후 확정 시 screen 저장 + prototypeLock. */}
@@ -1214,9 +1276,22 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                     승인 및 잠금
                   </Button>
                 )}
+                {/* 승인은 Owner 권한 — Editor에게는 안내만(미잠금 PRD 한정). */}
+                {selectedType === 'prd' && isEditor && !isOwner && !selectedDoc.locked && (
+                  <span className="text-xs text-[var(--text-tertiary)]">승인은 Owner 권한이 필요합니다.</span>
+                )}
+                {/* locked PRD: 평소엔 보호 유지. 단 확정 프로토타입 변경으로 needs_regen 이면 Owner가 잠금 해제·재생성 가능. */}
+                {selectedType === 'prd' && selectedDoc.locked && prdNeedsRegen && isOwner && (
+                  <Button variant="outline" icon={RefreshCw} onClick={() => handleRegenerateLockedPRD(selectedDoc)} className="text-sm py-1.5">
+                    최신 프로토타입 기준으로 재생성
+                  </Button>
+                )}
+                {selectedType === 'prd' && selectedDoc.locked && prdNeedsRegen && !isOwner && (
+                  <span className="text-xs text-[var(--amber-700)]">확정 프로토타입이 변경됨 · 재승인/재생성은 Owner 권한이 필요합니다.</span>
+                )}
                 {selectedDoc.locked && (
                   <span className="flex items-center gap-1.5 text-sm font-bold text-[var(--text-secondary)] bg-[var(--surface-hover)] px-3 py-1.5 rounded-[var(--radius-pill)]">
-                    <Lock size={14} /> 승인 완료 · 잠금됨
+                    <Lock size={14} /> {prdNeedsRegen ? '승인 완료(기준 변경됨)' : '승인 완료 · 잠금됨'}
                   </span>
                 )}
               </div>
