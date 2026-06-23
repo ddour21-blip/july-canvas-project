@@ -10,13 +10,14 @@ import { buildInformationArchitecture, type IaTarget } from '@/lib/informationAr
 import { buildFeatureSpec } from '@/lib/featureSpec';
 import { buildHandoffPackage, type HandoffPackage, type HandoffPrototype } from '@/lib/handoffPackage';
 import { downloadHandoffFile, downloadHandoffZip } from '@/lib/exportHandoffPackage';
-import { deletePrototypeUrl, lockPrototype, subscribePrototypeUrls, unlockPrototype } from '@/lib/prototypes';
+import { deletePrototypeUrl, lockPrototype, registerPrototypeScreen, subscribePrototypeUrls, unlockPrototype } from '@/lib/prototypes';
+import { generateHtmlBoilerplate } from '@/lib/htmlRenderer';
 import { shareHash, toShareUrl } from '@/lib/shareLinks';
 import { useAuth } from '@/lib/auth';
 import { downloadTextFile } from '@/lib/export/exportMarkdown';
 import { Button } from '@/components/common/Button';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
-import { Copy, CheckCircle2, Circle, Clock, Download, ExternalLink, Eye, FileText, Link2, Lock, MonitorPlay, Package, Plus, RefreshCw, Save, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { Copy, CheckCircle2, ChevronRight, Circle, Clock, Download, ExternalLink, Eye, FileText, Link2, Lock, MonitorPlay, Package, Plus, RefreshCw, Save, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { EMPTY_ACTIVATION } from '@/types';
 import type {
   DocumentStatus,
@@ -109,6 +110,21 @@ interface Props {
   navigate?: (hash: string) => void;
 }
 
+// AI 실행 노출 스위치(클라이언트). Vercel=false(로컬 전용 베타), 로컬=true. provider도 서버에서 disabled 기본.
+const AI_ENABLED = process.env.NEXT_PUBLIC_AI_ENABLED === 'true';
+
+// /api/generate/prototype 실패 reason → 사용자 안내 메시지.
+const PROTOTYPE_FAIL_MESSAGES: Record<string, string> = {
+  AI_DISABLED: '로컬 AI 실행이 꺼져 있습니다. AI_PROVIDER=local-cli, NEXT_PUBLIC_AI_ENABLED=true로 dev 서버를 다시 실행해야 합니다.',
+  TIMEOUT: '프로토타입 생성 시간이 초과되었습니다. 다시 시도하거나 수동 생성 옵션을 사용해주세요.',
+  CLI_ERROR: 'Claude CLI 실행 중 문제가 발생했습니다. 터미널에서 Claude 로그인 상태 또는 실행 시간을 확인해주세요.',
+  PARSE_ERROR: 'AI가 프로토타입 HTML을 올바른 JSON 형식으로 반환하지 못했습니다. 다시 생성하거나 수동 생성 옵션을 사용해주세요.',
+  BAD_REQUEST: '프로토타입 생성에 필요한 입력값이 부족합니다. 프로젝트 활성화 또는 문서 생성을 먼저 확인해주세요.',
+  UNKNOWN: '프로토타입 생성 중 알 수 없는 오류가 발생했습니다.',
+};
+const prototypeFailMessage = (reason?: string): string =>
+  PROTOTYPE_FAIL_MESSAGES[reason ?? 'UNKNOWN'] ?? PROTOTYPE_FAIL_MESSAGES.UNKNOWN;
+
 export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, section = 'documents', initialDocId, onCurrentDocChange, navigate }: Props) {
   const { user } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -116,6 +132,12 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   const [selectedType, setSelectedType] = useState<DocumentType>(DOCUMENT_ORDER[0]);
   // 프로토타입 제작 패키지 (로컬 생성 → 복사. Firestore 저장 안 함)
   const [prototypePkg, setPrototypePkg] = useState<string | null>(null);
+  // AI 클릭형 HTML 프로토타입 (로컬 Claude CLI 생성 → 미리보기 후 확정 시 screen 저장)
+  const [aiProto, setAiProto] = useState<{ title: string; description: string; html: string } | null>(null);
+  const [aiProtoLoading, setAiProtoLoading] = useState(false);
+  const [savingProto, setSavingProto] = useState(false);
+  // AI 프로토타입 생성 실패 안내(카드에 잔류 표시). reason 매핑 메시지.
+  const [aiProtoError, setAiProtoError] = useState<string | null>(null);
   // 개발 전달 패키지 (B7/B8): 로컬 생성 → 복사. Firestore 저장 안 함.
   const [handoffPkg, setHandoffPkg] = useState<HandoffPackage | null>(null);
   const [handoffTab, setHandoffTab] = useState(0);
@@ -486,6 +508,11 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   // 프로토타입 제작 패키지: 초기 문서 3종이 모두 생성된 뒤 활성화.
   const initialDocsReady = (['brief', 'market_research', 'product_strategy'] as const).every((t) => byType(t));
 
+  // AI 프로토타입 생성 입력 컨텍스트: 문서 3종 중 하나라도 content가 있거나 activationAnalysis가 있으면 생성 가능.
+  const hasPrototypeSourceContext =
+    (['brief', 'market_research', 'product_strategy'] as const).some((t) => byType(t)?.content?.trim()) ||
+    !!project.activationAnalysis;
+
   const handleBuildPrototypePackage = () => {
     setPrototypePkg(buildPrototypePackage(project, project.activation ?? EMPTY_ACTIVATION));
   };
@@ -494,6 +521,76 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     if (!prototypePkg) return;
     if (copyToClipboard(prototypePkg)) showToast('프로토타입 제작 프롬프트를 복사했습니다.');
     else showToast('복사 실패', 'error');
+  };
+
+  // AI 클릭형 HTML 프로토타입 생성 — 로컬 전용(local-cli). 서버 disabled면 AI_DISABLED로 떨어진다.
+  // 성공 시 미리보기만 표시(저장은 사용자가 '확정'할 때). 실패/비활성 시 기존 상태 유지 + 안내.
+  const handleGenerateAiPrototype = async () => {
+    if (!AI_ENABLED || aiProtoLoading) return;
+    setAiProtoLoading(true);
+    setAiProtoError(null);
+    try {
+      const res = await fetch('/api/generate/prototype', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectName: project.name,
+          activationAnalysis: project.activationAnalysis ?? null,
+          documents: {
+            brief: byType('brief')?.content ?? '',
+            marketResearch: byType('market_research')?.content ?? '',
+            productStrategy: byType('product_strategy')?.content ?? '',
+          },
+        }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        prototype?: { title: string; description: string; html: string };
+        reason?: string;
+      };
+      if (json?.ok && json.prototype?.html) {
+        setAiProto(json.prototype);
+        showToast('프로토타입 초안을 생성했습니다. 미리보기를 확인하고 확정하세요.');
+      } else {
+        // 응답 reason을 사용자 메시지로 매핑(카드에 잔류 + 토스트).
+        const msg = prototypeFailMessage(json?.reason);
+        setAiProtoError(msg);
+        showToast(msg, 'error');
+      }
+    } catch {
+      const msg = prototypeFailMessage('UNKNOWN');
+      setAiProtoError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setAiProtoLoading(false);
+    }
+  };
+
+  // 생성된 AI 프로토타입을 screen으로 저장하고 기준 프로토타입으로 확정.
+  const handleConfirmAiPrototype = async () => {
+    if (!aiProto || savingProto) return;
+    setSavingProto(true);
+    try {
+      const screenId = await registerPrototypeScreen({
+        projectId: project.id,
+        name: aiProto.title || 'AI 프로토타입',
+        code: aiProto.html,
+        ownerId: user?.uid ?? null,
+      });
+      await lockPrototype(project.id, {
+        targetType: 'screen',
+        targetId: screenId,
+        title: aiProto.title || 'AI 프로토타입',
+        lockedBy: user?.uid ?? 'anonymous',
+      });
+      showToast('AI 프로토타입을 화면으로 저장하고 기준으로 확정했습니다.');
+      setAiProto(null);
+    } catch (err) {
+      console.error(err);
+      showToast('프로토타입 확정 중 오류가 발생했습니다.', 'error');
+    } finally {
+      setSavingProto(false);
+    }
   };
 
   // 순차 흐름 게이팅 기준: 확정 → IA → 기능정의서 → PRD → 개발 전달 패키지.
@@ -551,67 +648,150 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       </div>
       )}
 
+      {/* AI 클릭형 HTML 프로토타입 생성 (로컬 전용). 미리보기 후 확정 시 screen 저장 + prototypeLock. */}
       {section === 'prototype' && (
       <div className="bg-[var(--surface-card)] border border-[var(--brand-200)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div className="flex items-start gap-3 min-w-0">
             <span className="shrink-0 w-10 h-10 rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
-              <Wand2 size={20} />
+              <MonitorPlay size={20} />
             </span>
             <div className="min-w-0">
-              <h3 className="font-bold text-[var(--text-strong)] text-lg">프로토타입 제작 패키지</h3>
+              <h3 className="font-bold text-[var(--text-strong)] text-lg">AI 프로토타입 생성 (클릭형 HTML)</h3>
               <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
-                초기 문서 3종을 기반으로 Gemini Canvas 등에 붙여넣을 수 있는 최소 IA, 핵심 기능, 프로토타입 생성 프롬프트를 만듭니다.
+                {initialDocsReady
+                  ? '기초 문서와 분석 결과를 기반으로 화면 구조를 설계하고, 클릭 가능한 HTML 프로토타입으로 변환합니다. 미리보기를 확인하고 기준 프로토타입으로 확정할 수 있습니다.'
+                  : hasPrototypeSourceContext
+                    ? '일부 기초 문서 또는 분석 결과를 기반으로 화면 구조를 설계해 클릭형 HTML 프로토타입으로 변환합니다. 부족한 정보는 AI가 합리적으로 보완합니다.'
+                    : '기초 문서와 분석 결과를 기반으로 화면 구조를 설계하고, 클릭 가능한 HTML 프로토타입으로 변환합니다.'}
               </p>
-              {!initialDocsReady && (
-                <p className="text-xs text-[var(--amber-700)] mt-1.5">브리프·시장조사·제품화전략 문서가 모두 생성되면 사용할 수 있습니다.</p>
+              {!hasPrototypeSourceContext && (
+                <p className="text-xs text-[var(--amber-700)] mt-1.5">프로토타입 생성을 위해 먼저 프로젝트 활성화 또는 기초 문서 생성이 필요합니다.</p>
+              )}
+              {!AI_ENABLED && (
+                <p className="text-xs font-medium text-[var(--text-secondary)] bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-3 py-2 mt-2">
+                  AI 프로토타입 생성은 <b>로컬 전용(베타)</b>입니다. 배포 환경에서는 비활성화됩니다.
+                </p>
               )}
             </div>
           </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className="shrink-0">
             <Button
-              variant={prototypePkg ? 'outline' : 'primary'}
+              variant={aiProto ? 'outline' : 'primary'}
+              icon={aiProtoLoading ? undefined : aiProto ? RefreshCw : Sparkles}
+              onClick={handleGenerateAiPrototype}
+              disabled={!AI_ENABLED || !isEditor || !hasPrototypeSourceContext || aiProtoLoading}
+            >
+              {aiProtoLoading ? '생성 중…' : aiProto ? '다시 생성' : 'AI 프로토타입 생성'}
+            </Button>
+          </div>
+        </div>
+
+        {aiProto && (
+          <div className="mt-5 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] overflow-hidden">
+            <div className="flex items-start justify-between gap-2 px-4 py-3 border-b border-[var(--border-default)] bg-[var(--surface-card)]">
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-[var(--text-strong)] truncate">{aiProto.title}</div>
+                {aiProto.description && <div className="text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">{aiProto.description}</div>}
+              </div>
+              <button
+                type="button"
+                onClick={() => setAiProto(null)}
+                aria-label="닫기"
+                className="shrink-0 p-1.5 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] transition-colors"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            {/* 미리보기: ScreenEditor와 동일한 iframe sandbox 정책(이번 작업에서 변경하지 않음). */}
+            <iframe
+              title="프로토타입 미리보기"
+              srcDoc={generateHtmlBoilerplate(aiProto.html)}
+              sandbox="allow-scripts allow-same-origin"
+              className="w-full h-[480px] border-0 bg-white"
+            />
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-[var(--border-default)] bg-[var(--surface-card)]">
+              <span className="text-[11px] text-[var(--text-tertiary)] mr-auto">확정하면 화면(screen)으로 저장되고 IA·기능정의서 역작성의 기준이 됩니다.</span>
+              <Button variant="primary" icon={Lock} onClick={handleConfirmAiPrototype} disabled={!isEditor || savingProto}>
+                {savingProto ? '확정 중…' : '확정 프로토타입으로 지정'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {aiProtoError && !aiProto && (
+          <div className="mt-5 rounded-[var(--radius-lg)] border border-[var(--red-100)] bg-[var(--red-50)] px-4 py-3">
+            <div className="text-sm font-bold text-[var(--red-600)]">생성 실패</div>
+            <p className="text-xs text-[var(--red-600)] mt-1 leading-relaxed">{aiProtoError}</p>
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-1.5">다시 시도하거나, 아래 “수동 생성 옵션”으로 진행할 수 있습니다.</p>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* 수동 생성 옵션(보조): 기존 Gemini Canvas 프롬프트 패키지. 기본 접힘. AI 생성 실패 시 대체 경로. */}
+      {section === 'prototype' && (
+      <details className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] shadow-[var(--shadow-xs)] group">
+        <summary className="cursor-pointer select-none list-none flex items-center justify-between gap-3 p-5">
+          <span className="flex items-center gap-3 min-w-0">
+            <span className="shrink-0 w-9 h-9 rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] text-[var(--text-secondary)] flex items-center justify-center">
+              <Wand2 size={18} />
+            </span>
+            <span className="min-w-0">
+              <span className="block font-bold text-[var(--text-strong)]">수동 생성 옵션 <span className="text-[11px] font-medium text-[var(--text-tertiary)]">AI 생성이 실패했을 때 사용</span></span>
+              <span className="block text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">AI 프로토타입 생성이 실패하거나 Gemini Canvas에서 직접 제작할 때 사용할 수 있는 프롬프트 패키지를 만듭니다.</span>
+            </span>
+          </span>
+          <ChevronRight size={16} className="shrink-0 text-[var(--text-tertiary)] transition-transform group-open:rotate-90" />
+        </summary>
+        <div className="px-5 pb-5">
+          <div className="flex flex-col items-start gap-1">
+            <Button
+              variant={prototypePkg ? 'outline' : 'secondary'}
               icon={prototypePkg ? RefreshCw : Sparkles}
               onClick={handleBuildPrototypePackage}
               disabled={!initialDocsReady}
             >
               {prototypePkg ? '다시 생성' : '프로토타입 프롬프트 생성'}
             </Button>
+            {!initialDocsReady && (
+              <span className="text-[11px] text-[var(--amber-700)]">브리프·시장조사·제품화전략 문서가 모두 생성되면 사용할 수 있습니다.</span>
+            )}
             {prototypePkg && <span className="text-[11px] text-[var(--text-tertiary)]">다시 생성하면 현재 패키지가 갱신됩니다</span>}
           </div>
-        </div>
 
-        {prototypePkg && (
-          <div className="mt-5 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] overflow-hidden">
-            <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-[var(--border-default)] bg-[var(--surface-card)]">
-              <span className="text-xs font-bold text-[var(--text-secondary)]">생성된 프로토타입 제작 패키지 (초안)</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleCopyPrototypePackage}
-                  className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
-                >
-                  <Copy size={13} /> 프롬프트 복사
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPrototypePkg(null)}
-                  aria-label="닫기"
-                  className="p-1.5 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] transition-colors"
-                >
-                  <X size={15} />
-                </button>
+          {prototypePkg && (
+            <div className="mt-4 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] overflow-hidden">
+              <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-[var(--border-default)] bg-[var(--surface-card)]">
+                <span className="text-xs font-bold text-[var(--text-secondary)]">생성된 프로토타입 제작 패키지 (초안)</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyPrototypePackage}
+                    className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
+                  >
+                    <Copy size={13} /> 프롬프트 복사
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrototypePkg(null)}
+                    aria-label="닫기"
+                    className="p-1.5 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] transition-colors"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
               </div>
+              <textarea
+                readOnly
+                value={prototypePkg}
+                rows={16}
+                className="w-full px-4 py-3 text-xs font-mono leading-relaxed resize-y bg-transparent text-[var(--text-body)] outline-none"
+              />
             </div>
-            <textarea
-              readOnly
-              value={prototypePkg}
-              rows={16}
-              className="w-full px-4 py-3 text-xs font-mono leading-relaxed resize-y bg-transparent text-[var(--text-body)] outline-none"
-            />
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </details>
       )}
 
       {section === 'documents' && (

@@ -65,8 +65,10 @@ export const localCliProvider: AiProvider = {
     if (!prompt) {
       return { ok: false, provider: 'local-cli', reason: 'ERROR' };
     }
+    // task별 timeout: 프로토타입(HTML) 생성은 분석보다 오래 걸려 300초까지 허용. 그 외는 기존 120초.
+    const timeoutMs = input.task === 'prototype' ? 300_000 : 120_000;
     try {
-      const text = await runClaudeCli(prompt);
+      const text = await runClaudeCli(prompt, timeoutMs);
       if (!text.trim()) return { ok: false, provider: 'local-cli', reason: 'ERROR' };
       return { ok: true, provider: 'local-cli', text };
     } catch (err) {
