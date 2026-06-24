@@ -262,6 +262,22 @@ ${featureSpec ? 'FEATURE_SPEC "관리자/운영 기능" 섹션 기준.' : MISSIN
     { name: FILE_NAMES[3], content: adminSpec },
   ];
 
+  // Pipeline MVP: 작성된 산출물을 개발 전달 패키지에 함께 포함(존재하는 문서만 — 빈 파일 노이즈 방지).
+  // 우선순위: FEATURE_SPEC → IA → SERVICE_STRUCTURE → DEVELOPMENT_PLAN → QA_CRITERIA → LAUNCH_CHECKLIST → OPERATION_REPORT.
+  const extraFiles: Array<[string, string | undefined]> = [
+    ['FEATURE_SPEC.md', featureSpec],
+    ['IA.md', ia],
+    ['DESIGN_CONTEXT.md', contentOf(documents, 'design_context')],
+    ['SERVICE_STRUCTURE.md', contentOf(documents, 'service_structure')],
+    ['DEVELOPMENT_PLAN.md', contentOf(documents, 'development_plan')],
+    ['QA_CRITERIA.md', contentOf(documents, 'qa_criteria')],
+    ['LAUNCH_CHECKLIST.md', contentOf(documents, 'launch_checklist')],
+    ['OPERATION_REPORT.md', contentOf(documents, 'operation_report')],
+  ];
+  for (const [name, content] of extraFiles) {
+    if (content && content.trim()) files.push({ name, content });
+  }
+
   return {
     files,
     readiness: {

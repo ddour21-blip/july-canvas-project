@@ -4,7 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
 import { copyToClipboard, formatDateTime, getTime, nowMs, showToast } from '@/lib/utils';
-import { DOCUMENT_META, DOCUMENT_ORDER, generatePRD, injectPrototypeUrl } from '@/lib/documents';
+import { DOCUMENT_META, DOCUMENT_ORDER, REQUIRED_DOCUMENT_TYPES, generatePRD, injectPrototypeUrl } from '@/lib/documents';
+import { buildDesignContext } from '@/lib/designContext';
+import { buildServiceStructure } from '@/lib/serviceStructure';
+import { buildDevelopmentPlan } from '@/lib/developmentPlan';
+import { buildQaCriteria } from '@/lib/qaCriteria';
+import { buildLaunchChecklist } from '@/lib/launchChecklist';
+import { buildOperationReport } from '@/lib/operationReport';
 import { buildPrototypePackage } from '@/lib/prototypePrompt';
 import { buildInformationArchitecture, type IaTarget } from '@/lib/informationArchitecture';
 import { buildFeatureSpec } from '@/lib/featureSpec';
@@ -24,6 +30,7 @@ import type {
   DocumentStatus,
   DocumentType,
   FirestoreTime,
+  PipelineStep,
   Project,
   ProjectDocument,
   ProjectSource,
@@ -32,10 +39,37 @@ import type {
 } from '@/types';
 
 // 문서 목록 시각 그룹: 기초 기획 / 프로토타입 기반 산출. (DocumentType/순서/데이터는 그대로, UI 표시용)
+// 파이프라인 흐름에 맞춘 문서 그룹. 각 그룹은 한 단계(stage)에 대응한다.
 const DOC_GROUPS: { label: string; types: DocumentType[] }[] = [
-  { label: '기초 기획', types: ['brief', 'market_research', 'product_strategy'] },
-  { label: '프로토타입 기반 산출', types: ['ia', 'feature_spec', 'prd'] },
+  { label: '기획', types: ['brief', 'market_research', 'product_strategy'] },
+  { label: '디자인', types: ['design_context'] },
+  { label: '구조 설계', types: ['ia', 'feature_spec', 'service_structure'] },
+  { label: '개발 패키지', types: ['prd', 'development_plan'] },
+  { label: 'QA/배포', types: ['qa_criteria', 'launch_checklist'] },
+  { label: '운영', types: ['operation_report'] },
 ];
+
+// stage(파이프라인 단계) → 해당 단계에서 다루는 문서 타입. 탭별 워크스페이스 필터/기본 선택에 사용.
+const STAGE_TYPES: Partial<Record<PipelineStep, DocumentType[]>> = {
+  planning: ['brief', 'market_research', 'product_strategy'],
+  design: ['design_context'],
+  structure: ['ia', 'feature_spec', 'service_structure'],
+  build_plan: ['prd', 'development_plan'],
+  qa: ['qa_criteria', 'launch_checklist'],
+  operate: ['operation_report'],
+};
+
+// 템플릿 기반 신규 문서 생성기 디스패치(동일 시그니처). prd/ia/feature_spec은 별도 흐름 사용.
+const PIPELINE_DOC_BUILDERS: Partial<
+  Record<DocumentType, (project: Project, docs: ProjectDocument[], generatedAt: string) => string>
+> = {
+  design_context: buildDesignContext,
+  service_structure: buildServiceStructure,
+  development_plan: buildDevelopmentPlan,
+  qa_criteria: buildQaCriteria,
+  launch_checklist: buildLaunchChecklist,
+  operation_report: buildOperationReport,
+};
 
 // 확정 프로토타입 변경 시 '재생성 필요' 판정 대상(역작성 산출물).
 const REGEN_TYPES: DocumentType[] = ['ia', 'feature_spec', 'prd'];
@@ -118,6 +152,14 @@ interface Props {
   isOwner: boolean;
   /** 렌더할 섹션 — 프로젝트 상세 탭별로 기능을 분리(문서/프로토타입/개발 전달). 기본 'documents'. */
   section?: 'documents' | 'prototype' | 'handoff';
+  /** prototype 섹션 세분화 — 'generate'=AI 생성 카드만, 'manual'=화면 직접 추가만. 미지정 시 둘 다(하위 호환). */
+  prototypePart?: 'generate' | 'manual';
+  /** documents 섹션 렌더 방식 — 'compact'면 무거운 워크스페이스 대신 stage 문서를 상태 카드로 노출(디자인 탭용). */
+  variant?: 'full' | 'compact';
+  /** 상위 그룹 카드 안에 끼워 넣는 모드 — 자체 카드 chrome를 낮추고(인셋) 보조 액션처럼 렌더. 디자인 탭 단계용. */
+  embedded?: boolean;
+  /** 문서 워크스페이스를 특정 파이프라인 단계로 한정(좌측 그룹/기본 선택/보조 패널 노출). 미지정 시 전체. */
+  stage?: PipelineStep;
   /** 딥링크로 진입한 초기 선택 문서 id (해당 문서 타입을 선택 상태로) */
   initialDocId?: string | null;
   /** 현재 선택된 문서 id를 상위로 보고 (공유 '현재 문서 링크'용) */
@@ -142,11 +184,15 @@ const PROTOTYPE_FAIL_MESSAGES: Record<string, string> = {
 const prototypeFailMessage = (reason?: string): string =>
   PROTOTYPE_FAIL_MESSAGES[reason ?? 'UNKNOWN'] ?? PROTOTYPE_FAIL_MESSAGES.UNKNOWN;
 
-export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, section = 'documents', initialDocId, onCurrentDocChange, navigate }: Props) {
+export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, section = 'documents', stage, prototypePart, variant = 'full', embedded = false, initialDocId, onCurrentDocChange, navigate }: Props) {
   const { user } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
-  const [selectedType, setSelectedType] = useState<DocumentType>(DOCUMENT_ORDER[0]);
+  // stage가 지정되면 그 단계의 첫 문서를 기본 선택(탭별 워크스페이스). 아니면 기존처럼 첫 문서.
+  const stageTypes = stage ? STAGE_TYPES[stage] ?? null : null;
+  const [selectedType, setSelectedType] = useState<DocumentType>(stageTypes?.[0] ?? DOCUMENT_ORDER[0]);
+  // 좌측 네비에 노출할 그룹: stage 지정 시 해당 단계 그룹만, 아니면 전체.
+  const visibleGroups = stageTypes ? DOC_GROUPS.filter((g) => g.types.some((t) => stageTypes.includes(t))) : DOC_GROUPS;
   // 프로토타입 제작 패키지 (로컬 생성 → 복사. Firestore 저장 안 함)
   const [prototypePkg, setPrototypePkg] = useState<string | null>(null);
   // AI 클릭형 HTML 프로토타입 (로컬 Claude CLI 생성 → 미리보기 후 확정 시 screen 저장)
@@ -455,10 +501,14 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
 
   const handleCreate = async (type: DocumentType) => {
     const meta = DOCUMENT_META[type];
+    // prd는 종합 조립, 신규 파이프라인 문서는 전용 템플릿 생성기, 그 외는 빈 초안.
+    const builder = PIPELINE_DOC_BUILDERS[type];
     const content =
       type === 'prd'
         ? generatePRD(project, documents, prototypeUrl())
-        : `# ${meta.title}\n\n_(내용을 입력하세요)_\n`;
+        : builder
+          ? builder(project, documents, formatDateTime(nowMs()))
+          : `# ${meta.title}\n\n_(내용을 입력하세요)_\n`;
     await addDoc(col('documents'), {
       projectId: project.id,
       type,
@@ -469,7 +519,34 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    setSelectedType(type);
     showToast(`${meta.title} 문서가 생성되었습니다.`);
+  };
+
+  // 신규 파이프라인 문서 재생성(기존 문서 덮어쓰기, 버전 업). prd/ia/feature_spec은 기존 전용 흐름 사용.
+  const handleRegeneratePipelineDoc = async (docu: ProjectDocument) => {
+    const builder = PIPELINE_DOC_BUILDERS[docu.type];
+    if (!builder) return;
+    const cur = parseFloat(docu.version);
+    const nextV = isNaN(cur) ? docu.version : (cur + 0.1).toFixed(1);
+    await updateDoc(docRef('documents', docu.id), {
+      content: builder(project, documents, formatDateTime(nowMs())),
+      status: 'draft' as DocumentStatus,
+      version: nextV,
+      updatedAt: serverTimestamp(),
+    });
+    showToast(`${DOCUMENT_META[docu.type].title}를(을) 다시 생성했습니다.`);
+  };
+
+  // 단계 승인: 사람이 단계 산출물을 승인하며 다음 단계로 넘어가는 파이프라인 원칙용(Owner 전용, PRD 제외).
+  // PRD는 프로토타입 URL 주입 + 잠금이 필요한 별도 승인(handleApprovePRD)을 사용한다.
+  const handleApproveDoc = async (docu: ProjectDocument) => {
+    await updateDoc(docRef('documents', docu.id), { status: 'approved' as DocumentStatus, updatedAt: serverTimestamp() });
+    showToast(`${DOCUMENT_META[docu.type].title}를(을) 승인했습니다.`);
+  };
+  const handleUnapproveDoc = async (docu: ProjectDocument) => {
+    await updateDoc(docRef('documents', docu.id), { status: 'draft' as DocumentStatus, updatedAt: serverTimestamp() });
+    showToast(`${DOCUMENT_META[docu.type].title} 승인을 해제했습니다.`);
   };
 
   const handleSave = async (docu: ProjectDocument) => {
@@ -554,8 +631,9 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     showToast('PRD가 승인·잠금되었습니다. 최신 프로토타입 URL이 포함되었습니다.');
   };
 
-  const missingRequired = DOCUMENT_ORDER.filter((t) => t !== 'prd').filter((t) => !byType(t));
-  const createdCount = DOCUMENT_ORDER.filter((t) => byType(t)).length;
+  // 필수 진행률은 기존 핵심 문서(REQUIRED_DOCUMENT_TYPES)만 기준 — 신규 파이프라인 문서는 제외(오염 방지).
+  const missingRequired = REQUIRED_DOCUMENT_TYPES.filter((t) => t !== 'prd').filter((t) => !byType(t));
+  const createdCount = REQUIRED_DOCUMENT_TYPES.filter((t) => byType(t)).length;
 
   const selectedMeta = DOCUMENT_META[selectedType];
   const selectedDoc = byType(selectedType);
@@ -776,7 +854,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
         </div>
       )}
 
-      {section === 'documents' && (
+      {section === 'documents' && (stage === undefined || stage === 'planning') && (
       <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -786,7 +864,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-[var(--text-secondary)]">{createdCount} / {DOCUMENT_ORDER.length} 작성</span>
+            <span className="text-sm font-medium text-[var(--text-secondary)]">{createdCount} / {REQUIRED_DOCUMENT_TYPES.length} 작성</span>
             {missingRequired.length === 0 ? (
               <span className="flex items-center gap-1.5 text-sm font-bold text-[var(--green-700)] bg-[var(--green-50)] px-3 py-1.5 rounded-[var(--radius-pill)]">
                 <CheckCircle2 size={16} /> 필수 문서 완료
@@ -802,7 +880,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       )}
 
       {/* 확정 프로토타입 기준 변경 시 순차 재생성 안내(IA → 기능정의서 → PRD). */}
-      {section === 'documents' && anyDocNeedsRegen && (
+      {section === 'documents' && anyDocNeedsRegen && (stage === undefined || stage === 'structure' || stage === 'build_plan') && (
         <div className="bg-[var(--amber-50)] border border-[var(--amber-100)] rounded-[var(--radius-xl)] px-4 py-3">
           <div className="flex items-start gap-2">
             <RefreshCw size={15} className="text-[var(--amber-700)] shrink-0 mt-0.5" />
@@ -820,15 +898,17 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       )}
 
       {/* AI 클릭형 HTML 프로토타입 생성 (로컬 전용). 미리보기 후 확정 시 screen 저장 + prototypeLock. */}
-      {section === 'prototype' && (
-      <div className="bg-[var(--surface-card)] border border-[var(--brand-200)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
-        {/* 설명 영역(좌측 정렬, 버튼은 입력 아래로 이동) */}
+      {section === 'prototype' && prototypePart !== 'manual' && (
+      <div className={embedded ? 'bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-xl)] p-5' : 'bg-[var(--surface-card)] border border-[var(--brand-200)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]'}>
+        {/* 설명 영역(좌측 정렬, 버튼은 입력 아래로 이동). embedded면 단계 헤더가 제목을 대신하므로 아이콘/제목 생략. */}
         <div className="flex items-start gap-3 min-w-0">
-          <span className="shrink-0 w-10 h-10 rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
-            <MonitorPlay size={20} />
-          </span>
+          {!embedded && (
+            <span className="shrink-0 w-10 h-10 rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
+              <MonitorPlay size={20} />
+            </span>
+          )}
           <div className="min-w-0">
-            <h3 className="font-bold text-[var(--text-strong)] text-lg">AI 프로토타입 생성 (클릭형 HTML)</h3>
+            {!embedded && <h3 className="font-bold text-[var(--text-strong)] text-lg">AI 프로토타입 생성 (클릭형 HTML)</h3>}
             <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
               {initialDocsReady
                 ? '기초 문서와 분석 결과를 기반으로 화면 구조를 설계하고, 클릭 가능한 HTML 프로토타입으로 변환합니다. 미리보기를 확인하고 기준 프로토타입으로 확정할 수 있습니다.'
@@ -836,10 +916,11 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                   ? '일부 기초 문서 또는 분석 결과를 기반으로 화면 구조를 설계해 클릭형 HTML 프로토타입으로 변환합니다. 부족한 정보는 AI가 합리적으로 보완합니다.'
                   : '기초 문서와 분석 결과를 기반으로 화면 구조를 설계하고, 클릭 가능한 HTML 프로토타입으로 변환합니다.'}
             </p>
-            {!hasPrototypeSourceContext && (
+            {/* embedded에서는 비활성 사유를 버튼 아래에서 한 번만 노출(중복 방지). */}
+            {!embedded && !hasPrototypeSourceContext && (
               <p className="text-xs text-[var(--amber-700)] mt-1.5">프로토타입 생성을 위해 먼저 프로젝트 활성화 또는 기초 문서 생성이 필요합니다.</p>
             )}
-            {!AI_ENABLED && (
+            {!embedded && !AI_ENABLED && (
               <p className="text-xs font-medium text-[var(--text-secondary)] bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-3 py-2 mt-2">
                 AI 프로토타입 생성은 <b>로컬 전용(베타)</b>입니다. 배포 환경에서는 비활성화됩니다.
               </p>
@@ -896,7 +977,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           </div>
         )}
 
-        {/* 4) 생성 버튼: 입력 영역 아래에 배치(입력 → 생성 흐름) */}
+        {/* 4) 생성 버튼: 입력 영역 아래에 배치(입력 → 생성 흐름) + 비활성 사유 명시 */}
         <div className="mt-5">
           <Button
             variant={aiProto ? 'outline' : 'primary'}
@@ -907,6 +988,16 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           >
             {aiProtoLoading ? '생성 중…' : aiProto ? '다시 생성' : 'AI 프로토타입 생성'}
           </Button>
+          {/* 버튼 비활성 사유를 버튼 바로 아래에 명확히 안내(우선순위: 권한 → 소스 → AI 비활성). */}
+          {!aiProtoLoading && (!AI_ENABLED || !isEditor || !hasPrototypeSourceContext) && (
+            <p className="mt-2 text-xs text-[var(--amber-700)]">
+              {!isEditor
+                ? '프로토타입 생성에는 Owner 또는 Editor 권한이 필요합니다.'
+                : !hasPrototypeSourceContext
+                  ? '프로토타입 생성을 위해 프로젝트 활성화 또는 기초 문서 생성이 필요합니다.'
+                  : 'AI 프로토타입 생성은 로컬 전용(베타)입니다. 배포 환경에서는 비활성화됩니다.'}
+            </p>
+          )}
         </div>
 
         {/* 생성 중 안내: 페이지 이동해도 백그라운드로 계속 진행됨. */}
@@ -955,89 +1046,96 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           <div className="mt-5 rounded-[var(--radius-lg)] border border-[var(--red-100)] bg-[var(--red-50)] px-4 py-3">
             <div className="text-sm font-bold text-[var(--red-600)]">생성 실패</div>
             <p className="text-xs text-[var(--red-600)] mt-1 leading-relaxed">{aiProtoError}</p>
-            <p className="text-[11px] text-[var(--text-tertiary)] mt-1.5">다시 시도하거나, 아래 “수동 생성 옵션”으로 진행할 수 있습니다.</p>
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-1.5">다시 시도하거나, ‘화면 관리’ 단계의 “화면 직접 추가”로 진행할 수 있습니다.</p>
           </div>
         )}
       </div>
       )}
 
-      {/* 수동 생성 옵션(보조): 기존 Gemini Canvas 프롬프트 패키지. 기본 접힘. AI 생성 실패 시 대체 경로. */}
-      {section === 'prototype' && (
-      <details className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] shadow-[var(--shadow-xs)] group">
-        <summary className="cursor-pointer select-none list-none flex items-center justify-between gap-3 p-5">
-          <span className="flex items-center gap-3 min-w-0">
-            <span className="shrink-0 w-9 h-9 rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] text-[var(--text-secondary)] flex items-center justify-center">
-              <Wand2 size={18} />
-            </span>
-            <span className="min-w-0">
-              <span className="block font-bold text-[var(--text-strong)]">수동 생성 옵션 <span className="text-[11px] font-medium text-[var(--text-tertiary)]">AI 생성이 실패했을 때 사용</span></span>
-              <span className="block text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">AI 생성이 실패했거나 직접 코드를 붙여넣어 화면을 추가할 때 사용할 수 있습니다.</span>
-            </span>
-          </span>
-          <ChevronRight size={16} className="shrink-0 text-[var(--text-tertiary)] transition-transform group-open:rotate-90" />
-        </summary>
-        <div className="px-5 pb-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant={prototypePkg ? 'outline' : 'secondary'}
-              icon={prototypePkg ? RefreshCw : Sparkles}
-              onClick={handleBuildPrototypePackage}
-              disabled={!initialDocsReady}
-            >
-              {prototypePkg ? '다시 생성' : '프로토타입 프롬프트 생성'}
-            </Button>
-            {isEditor && navigate && (
+      {/* 화면 직접 추가(보조): 프롬프트 패키지 + 수동 코드 화면 추가.
+          embedded면 '프로토타입 화면' 영역의 보조 toolbar로, 아니면 접이식 카드로 렌더. */}
+      {section === 'prototype' && prototypePart !== 'generate' && (() => {
+        const manualBody = (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              {isEditor && navigate && (
+                <Button
+                  variant="outline"
+                  icon={Plus}
+                  onClick={() => navigate(`#project_${project.id}_screens_new`)}
+                >
+                  새 화면 직접 추가
+                </Button>
+              )}
               <Button
-                variant="outline"
-                icon={Plus}
-                onClick={() => navigate(`#project_${project.id}_screens_new`)}
+                variant={prototypePkg ? 'outline' : 'secondary'}
+                icon={prototypePkg ? RefreshCw : Sparkles}
+                onClick={handleBuildPrototypePackage}
+                disabled={!initialDocsReady}
               >
-                새 화면 직접 추가
+                {prototypePkg ? '프롬프트 다시 생성' : '프로토타입 프롬프트 생성'}
               </Button>
-            )}
-          </div>
-          <div className="flex flex-col items-start gap-1 mt-2">
-            {!initialDocsReady && (
-              <span className="text-[11px] text-[var(--amber-700)]">‘프로토타입 프롬프트 생성’은 브리프·시장조사·제품화전략 문서가 모두 생성되면 사용할 수 있습니다.</span>
-            )}
-            {prototypePkg && <span className="text-[11px] text-[var(--text-tertiary)]">다시 생성하면 현재 패키지가 갱신됩니다</span>}
-          </div>
-
-          {prototypePkg && (
-            <div className="mt-4 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] overflow-hidden">
-              <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-[var(--border-default)] bg-[var(--surface-card)]">
-                <span className="text-xs font-bold text-[var(--text-secondary)]">생성된 프로토타입 제작 패키지 (초안)</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCopyPrototypePackage}
-                    className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
-                  >
-                    <Copy size={13} /> 프롬프트 복사
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPrototypePkg(null)}
-                    aria-label="닫기"
-                    className="p-1.5 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] transition-colors"
-                  >
-                    <X size={15} />
-                  </button>
-                </div>
-              </div>
-              <textarea
-                readOnly
-                value={prototypePkg}
-                rows={16}
-                className="w-full px-4 py-3 text-xs font-mono leading-relaxed resize-y bg-transparent text-[var(--text-body)] outline-none"
-              />
             </div>
-          )}
-        </div>
-      </details>
-      )}
+            <div className="flex flex-col items-start gap-1 mt-2">
+              {!initialDocsReady && (
+                <span className="text-[11px] text-[var(--amber-700)]">‘프로토타입 프롬프트 생성’은 브리프·시장조사·제품화전략 문서가 모두 생성되면 사용할 수 있습니다.</span>
+              )}
+              {prototypePkg && <span className="text-[11px] text-[var(--text-tertiary)]">다시 생성하면 현재 패키지가 갱신됩니다</span>}
+            </div>
+            {prototypePkg && (
+              <div className="mt-4 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] overflow-hidden">
+                <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-[var(--border-default)] bg-[var(--surface-card)]">
+                  <span className="text-xs font-bold text-[var(--text-secondary)]">생성된 프로토타입 제작 패키지 (초안)</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopyPrototypePackage}
+                      className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--surface-active)] hover:text-[var(--color-primary-text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
+                    >
+                      <Copy size={13} /> 프롬프트 복사
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPrototypePkg(null)}
+                      aria-label="닫기"
+                      className="p-1.5 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] transition-colors"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  readOnly
+                  value={prototypePkg}
+                  rows={16}
+                  className="w-full px-4 py-3 text-xs font-mono leading-relaxed resize-y bg-transparent text-[var(--text-body)] outline-none"
+                />
+              </div>
+            )}
+          </>
+        );
+        // embedded: 큰 카드/아코디언 없이 보조 액션 toolbar로 렌더.
+        if (embedded) return <div>{manualBody}</div>;
+        return (
+          <details className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] shadow-[var(--shadow-xs)] group">
+            <summary className="cursor-pointer select-none list-none flex items-center justify-between gap-3 p-5">
+              <span className="flex items-center gap-3 min-w-0">
+                <span className="shrink-0 w-9 h-9 rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] text-[var(--text-secondary)] flex items-center justify-center">
+                  <Wand2 size={18} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-bold text-[var(--text-strong)]">화면 직접 추가 <span className="text-[11px] font-medium text-[var(--text-tertiary)]">AI 생성 대신 수동으로</span></span>
+                  <span className="block text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">프로토타입 제작 프롬프트를 만들거나, 코드를 직접 붙여넣어 화면을 추가할 수 있습니다.</span>
+                </span>
+              </span>
+              <ChevronRight size={16} className="shrink-0 text-[var(--text-tertiary)] transition-transform group-open:rotate-90" />
+            </summary>
+            <div className="px-5 pb-5">{manualBody}</div>
+          </details>
+        );
+      })()}
 
-      {section === 'documents' && (
+      {section === 'documents' && (stage === undefined || stage === 'structure') && (
       <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
         <div className="flex items-start gap-3 min-w-0">
           <span className="shrink-0 w-10 h-10 rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] text-[var(--color-primary-text)] flex items-center justify-center">
@@ -1259,12 +1357,94 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       </div>
       )}
 
+      {/* 디자인 탭 등 compact 모드: 무거운 워크스페이스 대신 stage 문서를 상태 카드로 노출(전역 문서 번호 숨김). */}
+      {section === 'documents' && variant === 'compact' && (
+        <div className="space-y-4">
+          {(stageTypes ?? [selectedType]).map((type) => {
+            const docu = byType(type);
+            const meta = DOCUMENT_META[type];
+            const ds = deriveDocStatus(docu, project, documents);
+            const editing = !!docu && editingId === docu.id;
+            // 본문 미리보기: 제목(첫 # 줄) 제외 후 비어있지 않은 3~5줄만.
+            const preview = (docu?.content ?? '')
+              .split('\n')
+              .filter((l, i) => !(i === 0 && l.trim().startsWith('#')))
+              .map((l) => l.trim())
+              .filter(Boolean)
+              .slice(0, 5)
+              .join('\n');
+            return (
+              <div key={type} className={embedded ? 'bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-xl)] p-5' : 'bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-xl)] p-5 shadow-[var(--shadow-xs)]'}>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    {/* 디자인 탭에서는 전역 문서 번호(order)를 노출하지 않는다. */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-bold text-[var(--text-strong)]">{meta.title}</h4>
+                      {docu && <StatusBadge status={ds} />}
+                      {docu && <span className="text-[11px] text-[var(--text-tertiary)]">· {formatRelative(docu.updatedAt ?? docu.createdAt)}</span>}
+                    </div>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+                      {docu
+                        ? '프로토타입에 반영할 디자인 기준 문서입니다.'
+                        : '참고 URL, 이미지, 디자인 메모를 바탕으로 디자인 기준을 정리합니다.'}
+                    </p>
+                  </div>
+                  {isEditor && !docu && (
+                    <Button icon={Plus} onClick={() => handleCreate(type)} className="shrink-0">
+                      {`${meta.title} 생성`}
+                    </Button>
+                  )}
+                </div>
+
+                {docu && !editing && (
+                  <>
+                    {preview && (
+                      <pre className="mt-3 whitespace-pre-wrap text-[12px] text-[var(--text-secondary)] leading-relaxed font-sans bg-[var(--surface-sunken)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] p-3 max-h-32 overflow-hidden">
+                        {preview}
+                      </pre>
+                    )}
+                    <div className="flex items-center gap-2 flex-wrap mt-3">
+                      {isEditor && (
+                        <Button variant="outline" icon={FileText} onClick={() => { setEditingId(docu.id); setDraft(docu.content); }} className="text-sm py-1.5">편집</Button>
+                      )}
+                      {isEditor && PIPELINE_DOC_BUILDERS[type] && (
+                        <Button variant="outline" icon={RefreshCw} onClick={() => handleRegeneratePipelineDoc(docu)} className="text-sm py-1.5">템플릿 다시 생성</Button>
+                      )}
+                      <Button variant="outline" icon={Download} onClick={() => downloadTextFile(docu.content, meta.filename)} className="text-sm py-1.5">MD 다운로드</Button>
+                      {isOwner && (docu.status === 'approved'
+                        ? <Button variant="outline" icon={RefreshCw} onClick={() => handleUnapproveDoc(docu)} className="text-sm py-1.5">승인 해제</Button>
+                        : <Button icon={CheckCircle2} onClick={() => handleApproveDoc(docu)} className="text-sm py-1.5">승인</Button>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {docu && editing && (
+                  <div className="mt-3 space-y-3">
+                    <textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      rows={14}
+                      className="w-full p-4 border border-[var(--border-strong)] rounded-[var(--radius-lg)] outline-none focus:ring-2 focus:ring-[var(--color-focus-ring)] font-mono text-[13px] leading-relaxed bg-[var(--surface-sunken)] focus:bg-[var(--surface-card)] text-[var(--text-body)]"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button variant="secondary" onClick={() => setEditingId(null)}>취소</Button>
+                      <Button icon={Save} onClick={() => handleSave(docu)}>저장 (버전 업)</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* 문서 워크스페이스: 좌측 목록 + 중앙 에디터 */}
-      {section === 'documents' && (
+      {section === 'documents' && variant !== 'compact' && (
       <div className="flex flex-col lg:flex-row gap-5 items-start">
         {/* 문서 목록 */}
         <nav className="w-full lg:w-[300px] shrink-0 space-y-4">
-          {DOC_GROUPS.map((group) => (
+          {visibleGroups.map((group) => (
             <div key={group.label} className="space-y-2">
               {/* 문서 성격/생성 흐름을 구분하는 시각 그룹 헤더 (데이터·순서 무변경) */}
               <div className="px-1 text-[11px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">{group.label}</div>
@@ -1439,6 +1619,12 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                     최신 데이터로 재생성
                   </Button>
                 )}
+                {/* 신규 파이프라인 문서: 템플릿 기반 재생성(현재 프로젝트/상위 문서 반영). */}
+                {PIPELINE_DOC_BUILDERS[selectedType] && isEditor && (
+                  <Button variant="outline" icon={RefreshCw} onClick={() => handleRegeneratePipelineDoc(selectedDoc)} className="text-sm py-1.5">
+                    템플릿 다시 생성
+                  </Button>
+                )}
                 {isEditor && !selectedDoc.locked && (
                   <Button
                     variant="outline"
@@ -1459,6 +1645,21 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                 )}
                 {/* 승인은 Owner 권한 — Editor에게는 안내만(미잠금 PRD 한정). */}
                 {selectedType === 'prd' && isEditor && !isOwner && !selectedDoc.locked && (
+                  <span className="text-xs text-[var(--text-tertiary)]">승인은 Owner 권한이 필요합니다.</span>
+                )}
+                {/* 단계 승인(PRD 외 문서): 사람이 산출물을 승인하며 다음 단계로 — Owner 전용 토글. */}
+                {selectedType !== 'prd' && isOwner && (
+                  selectedDoc.status === 'approved' ? (
+                    <Button variant="outline" icon={RefreshCw} onClick={() => handleUnapproveDoc(selectedDoc)} className="text-sm py-1.5">
+                      승인 해제
+                    </Button>
+                  ) : (
+                    <Button icon={CheckCircle2} onClick={() => handleApproveDoc(selectedDoc)} className="text-sm py-1.5">
+                      승인
+                    </Button>
+                  )
+                )}
+                {selectedType !== 'prd' && isEditor && !isOwner && selectedDoc.status !== 'approved' && (
                   <span className="text-xs text-[var(--text-tertiary)]">승인은 Owner 권한이 필요합니다.</span>
                 )}
                 {/* locked PRD: 평소엔 보호 유지. 단 확정 프로토타입 변경으로 needs_regen 이면 Owner가 잠금 해제·재생성 가능. */}

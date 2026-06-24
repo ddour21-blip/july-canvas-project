@@ -197,20 +197,40 @@ function CanvasAppInner() {
   // 화면 주석 딥링크: screen_{id}_ann_{annId}
   const extraParam: string | null = rest[2] === 'ann' ? (rest[3] ?? null) : null;
 
-  // 프로젝트 내부 딥링크: project_{id}_{overview|documents|screens|handoff} / project_{id}_document_{docId}
-  // (기존 'documents'/'document_{docId}' 딥링크는 그대로 동작 — 하위 호환 유지)
-  let projectInitialTab: 'overview' | 'documents' | 'screens' | 'handoff' | undefined;
+  // 프로젝트 내부 딥링크: project_{id}_{tab} / project_{id}_document_{docId}
+  // 레거시 탭 키(overview/documents/screens/handoff)와 신규 파이프라인 탭 키를 모두 허용한다.
+  // 레거시→신규 매핑은 ProjectDetail.normalizeTab이 담당(하위 호환 유지).
+  // 다중 단어 탭 키(build_plan / qa_launch / share_feedback)는 '_' split로 잘리므로,
+  // id 이후 세그먼트를 다시 '_'로 합쳐 복원한 뒤 매칭한다(첫 클릭부터 정확히 이동하도록).
+  const PROJECT_TAB_SEGS = [
+    'overview',
+    'documents', // legacy → planning
+    'screens', // legacy → design
+    'handoff', // legacy → build_plan
+    'planning',
+    'design',
+    'structure',
+    'build_plan',
+    'qa_launch',
+    'operate',
+    'share_feedback',
+  ];
+  let projectInitialTab: string | undefined;
   let projectInitialDocId: string | null = null;
   let projectInitialScreenNew = false;
   if (viewType === 'project') {
     const seg = rest[2];
-    if (seg === 'documents' || seg === 'screens' || seg === 'handoff' || seg === 'overview') {
-      projectInitialTab = seg;
-      // project_{id}_screens_new → 프로토타입 탭 진입 + 새 화면 추가 모달 자동 오픈(문서 탭 CTA 연결).
-      if (seg === 'screens' && rest[3] === 'new') projectInitialScreenNew = true;
-    } else if (seg === 'document') {
+    const joined = rest.slice(2).join('_'); // 예: 'build_plan', 'screens_new', 'document_ia'
+    if (seg === 'document') {
       projectInitialTab = 'documents';
-      projectInitialDocId = rest[3] ?? null;
+      projectInitialDocId = rest.slice(3).join('_') || null;
+    } else if (PROJECT_TAB_SEGS.includes(joined)) {
+      // 다중 단어 키 전체 일치(build_plan / qa_launch / share_feedback 등)
+      projectInitialTab = joined;
+    } else if (seg && PROJECT_TAB_SEGS.includes(seg)) {
+      // 단일 단어 키 + 뒤따르는 플래그(screens_new / design_new)
+      projectInitialTab = seg;
+      if ((seg === 'screens' || seg === 'design') && rest[3] === 'new') projectInitialScreenNew = true;
     }
   }
 

@@ -321,9 +321,39 @@ export type DocumentType =
   | 'product_strategy'
   | 'ia'
   | 'feature_spec'
-  | 'prd';
+  | 'prd'
+  // --- Pipeline MVP 신규 산출물 (기존 documents 컬렉션에 type만 추가 — schema/rules 무변경) ---
+  | 'design_context'
+  | 'service_structure'
+  | 'development_plan'
+  | 'qa_criteria'
+  | 'launch_checklist'
+  | 'operation_report';
 
 export type DocumentStatus = 'draft' | 'review' | 'approved';
+
+/**
+ * July Canvas 파이프라인 8단계 (아이디어 → 운영). 저장하지 않고 프론트에서 derive한다.
+ * 기존 documents 상태 / prototypeLock / project.status 기반 계산(신규 저장 필드 없음).
+ */
+export type PipelineStep =
+  | 'idea'
+  | 'planning'
+  | 'design'
+  | 'structure'
+  | 'build_plan'
+  | 'qa'
+  | 'launch'
+  | 'operate';
+
+/** 단계별 파생 상태(UI 표시용). 저장하지 않는다. */
+export type PipelineStepStatus =
+  | 'not_started'
+  | 'ready'
+  | 'in_progress'
+  | 'needs_review'
+  | 'approved'
+  | 'needs_regen';
 
 export interface ProjectDocument {
   id: string;
