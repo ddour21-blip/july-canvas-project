@@ -13,12 +13,13 @@ import { Button } from '@/components/common/Button';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
 import { ShareState } from '@/components/modals/ShareModal';
 import ProjectActivationWizard from './ProjectActivationWizard';
-import { derivePipelineStatus, pipelineStatusLabel } from '@/lib/pipeline';
+import { derivePipelineStatus, deriveNextAction, pipelineStatusLabel } from '@/lib/pipeline';
 import type { PipelineStep, PipelineStepStatus } from '@/types';
 import ProjectDocuments from './ProjectDocuments';
 import ProjectReviews from './ProjectReviews';
 import {
   ArrowLeft,
+  CheckCircle2,
   ChevronRight,
   Clock,
   Eye,
@@ -32,6 +33,7 @@ import {
   Package,
   Plus,
   Rocket,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -142,6 +144,52 @@ function PipelineProgressCard({
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// 개요 탭 상단 '다음 할 일' 카드. 파이프라인 상태에서 가장 먼저 할 작업을 추천(파생, 저장 안 함).
+function NextActionCard({
+  project,
+  documents,
+  screens,
+  onGo,
+}: {
+  project: Project;
+  documents: ProjectDocument[];
+  screens: Screen[];
+  onGo: (tab: string) => void;
+}) {
+  const next = deriveNextAction(project, documents, screens);
+  if (!next) {
+    return (
+      <div className="bg-[var(--green-50)] border border-[var(--green-100)] rounded-[var(--radius-2xl)] p-5 shadow-[var(--shadow-xs)]">
+        <div className="flex items-center gap-2 text-[var(--green-700)] font-bold">
+          <CheckCircle2 size={18} /> 모든 필수 단계를 완료했습니다
+        </div>
+        <p className="text-sm text-[var(--text-secondary)] mt-1">필요하면 QA/배포·운영 단계를 이어서 진행하세요.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-[var(--color-primary-softer)] border border-[var(--color-primary)] rounded-[var(--radius-2xl)] p-5 shadow-[var(--shadow-xs)]">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[var(--color-primary-text)] font-bold">
+            <Sparkles size={16} /> 다음 할 일
+          </div>
+          <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
+            현재 프로젝트 상태 기준으로 가장 먼저 확인할 작업입니다.
+          </p>
+          <div className="mt-2 text-[var(--text-strong)] font-bold">
+            {next.label} <span className="text-xs font-medium text-[var(--text-tertiary)]">· {pipelineStatusLabel(next.status)}</span>
+          </div>
+          <p className="text-xs text-[var(--text-secondary)] mt-0.5">{next.reason}</p>
+        </div>
+        <Button onClick={() => onGo(next.tab)} className="shrink-0">
+          {next.cta}
+        </Button>
       </div>
     </div>
   );
@@ -457,6 +505,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
             documents={documents}
             screenCount={projectScreens.length}
           />
+          {/* 다음 할 일(파생, 저장 안 함) — 가장 먼저 확인할 작업 */}
+          <NextActionCard project={project} documents={documents} screens={screens} onGo={(t) => goTab(normalizeTab(t))} />
           {/* 파이프라인 8단계 진행 상황(파생, 저장 안 함) */}
           <PipelineProgressCard project={project} documents={documents} screens={screens} onGo={(t) => goTab(normalizeTab(t))} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

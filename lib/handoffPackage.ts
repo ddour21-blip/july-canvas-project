@@ -41,10 +41,31 @@ export interface HandoffFile {
   content: string;
 }
 
+/** export 차단이 아닌 경고용 — 문서 content에 남은 미완성 표시(placeholder) 집계. */
+export interface PlaceholderWarning {
+  /** 파일명 */
+  name: string;
+  /** 검출된 미완성 표시 개수 */
+  count: number;
+}
+
 export interface HandoffPackage {
   files: HandoffFile[];
   readiness: HandoffReadiness;
+  /** 미완성 표시 경고(있을 때만). 비어 있으면 생략. export는 차단하지 않는다(warning-only). */
+  warnings?: PlaceholderWarning[];
 }
+
+// 미완성 표시 패턴(문서 content 전용 검사). 코드/소스는 검사하지 않는다.
+// 이탤릭 placeholder `_(...)_` + 명시 토큰(확인 필요/미입력/추후 정의/적절히 처리/TBD/TODO).
+const PLACEHOLDER_RE = /_\([^)]*\)_|확인 필요|미입력|추후 정의|적절히 처리|\bTBD\b|\bTODO\b/g;
+
+/** 전달 파일(00-START-HERE 제외)의 content에서 미완성 표시 개수를 집계. 0건 파일은 제외. */
+const scanPlaceholders = (files: HandoffFile[]): PlaceholderWarning[] =>
+  files
+    .filter((file) => file.name !== '00-START-HERE.md')
+    .map((file) => ({ name: file.name, count: (file.content.match(PLACEHOLDER_RE) || []).length }))
+    .filter((w) => w.count > 0);
 
 const prototypeBlock = (proto?: HandoffPrototype): string => {
   if (!proto) return '- 확정된 프로토타입이 없습니다. 기준 프로토타입을 확정한 뒤 다시 생성하세요.';
@@ -58,6 +79,58 @@ const prototypeBlock = (proto?: HandoffPrototype): string => {
 };
 
 const FILE_NAMES = ['DEVELOPMENT_HANDOFF.md', 'PRD.md', 'USER_APP_UI_SPEC.md', 'ADMIN_UI_SPEC.md'];
+
+// 패키지 맨 앞에 들어가는 시작 안내(읽는 순서/작업 규칙/검증 규칙/금지/포함 문서 인덱스).
+// DEVELOPMENT_HANDOFF.md(프로젝트 개요/기준)와 역할이 다르다 — 여기는 "어떻게 진행할지"의 인덱스.
+const buildStartHere = (projectName: string, generatedAt: string, documents: ProjectDocument[]): string => {
+  const present = (t: DocumentType) => !!contentOf(documents, t);
+  // 읽는 순서(권장). PRD는 패키지에 항상 포함, 나머지는 작성된 경우만 포함.
+  const readOrder: Array<[string, boolean]> = [
+    ['PRD.md', true],
+    ['FEATURE_SPEC.md', present('feature_spec')],
+    ['IA.md', present('ia')],
+    ['DESIGN_CONTEXT.md', present('design_context')],
+    ['SERVICE_STRUCTURE.md', present('service_structure')],
+    ['DEVELOPMENT_PLAN.md', present('development_plan')],
+    ['QA_CRITERIA.md', present('qa_criteria')],
+    ['LAUNCH_CHECKLIST.md', present('launch_checklist')],
+    ['OPERATION_REPORT.md', present('operation_report')],
+  ];
+  const orderLines = readOrder
+    .map(([name, ok], i) => `${i + 1}. ${name}${ok ? '' : ' _(미작성 — 전달 전 보완 권장)_'}`)
+    .join('\n');
+
+  return `# 00 START HERE
+
+> ${projectName} · 생성 ${generatedAt}
+> 이 패키지를 받은 개발자/AI를 위한 시작 안내입니다. 먼저 이 문서를 읽고 순서대로 진행하세요.
+> 프로젝트 개요·기준 문서는 DEVELOPMENT_HANDOFF.md 를 참고하세요(본 문서는 진행 방법 인덱스).
+
+## 1. 읽는 순서
+${orderLines}
+
+## 2. 작업 우선순위
+- P0: 출시를 막는 필수 기능(없으면 동작 불가)
+- P1: 출시 직후 보완할 항목
+- P2: 후속/선택 항목
+
+## 3. 개발 규칙
+- 기존 기능 보존(회귀 금지)
+- unrelated refactor 금지
+- 민감정보(API 키·토큰·비밀번호·개인정보) 출력·커밋 금지
+- 작은 단위로 변경(리뷰 가능 단위)
+
+## 4. 검증 규칙
+- npx tsc --noEmit
+- npm run build
+- 핵심 시나리오 브라우저 확인
+
+## 5. 완료 보고 형식
+- 변경 파일
+- 검증 결과(tsc / build / 시나리오)
+- 남은 리스크
+`;
+};
 
 export const buildHandoffPackage = (
   project: Project,
@@ -278,6 +351,12 @@ ${featureSpec ? 'FEATURE_SPEC "관리자/운영 기능" 섹션 기준.' : MISSIN
     if (content && content.trim()) files.push({ name, content });
   }
 
+  // 미완성 표시 경고는 시작 안내 삽입 전(=content 파일 기준)에 집계.
+  const warnings = scanPlaceholders(files);
+
+  // 패키지 맨 앞에 시작 안내 추가(읽는 순서/규칙 인덱스). 복사/다운로드/ZIP은 files[] 순회라 자동 포함.
+  files.unshift({ name: '00-START-HERE.md', content: buildStartHere(project.name, opts.generatedAt, documents) });
+
   return {
     files,
     readiness: {
@@ -288,5 +367,6 @@ ${featureSpec ? 'FEATURE_SPEC "관리자/운영 기능" 섹션 기준.' : MISSIN
       featureSpec: !!featureSpec,
       prototype: !!proto,
     },
+    ...(warnings.length ? { warnings } : {}),
   };
 };

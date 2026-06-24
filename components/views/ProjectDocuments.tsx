@@ -1321,6 +1321,28 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
           )}
         </div>
 
+        {/* 미완성 표시 경고(warning-only). export는 막지 않음 — 전달 전 보완 안내만. */}
+        {handoffPkg && handoffPkg.warnings && handoffPkg.warnings.length > 0 && (
+          <div className="mt-5 rounded-[var(--radius-lg)] border border-[var(--amber-100)] bg-[var(--amber-50)] px-4 py-3">
+            <div className="flex items-start gap-2">
+              <RefreshCw size={15} className="text-[var(--amber-700)] shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-[var(--amber-700)]">전달 패키지에 미완성 표시가 남아 있습니다</div>
+                <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+                  개발 전달 전 아래 문서를 확인하세요. (오탐일 수 있어 안내만 하며, 복사·다운로드는 그대로 가능합니다)
+                </p>
+                <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                  {handoffPkg.warnings.map((w) => (
+                    <li key={w.name} className="text-[11px] font-semibold text-[var(--amber-700)] bg-[var(--surface-card)] border border-[var(--amber-100)] px-2 py-0.5 rounded">
+                      {w.name} · {w.count}건
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         {handoffPkg && (
           <div className="mt-5 border border-[var(--border-default)] rounded-[var(--radius-lg)] bg-[var(--surface-sunken)] overflow-hidden">
             {/* 파일 탭 */}
