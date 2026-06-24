@@ -474,9 +474,12 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                   <div>
                     <h3 className="font-bold text-lg text-[var(--text-strong)] mb-2 truncate">{screen.name}</h3>
                     <div className="flex items-center flex-wrap gap-2">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] bg-[var(--surface-hover)] text-[var(--text-secondary)] text-xs font-semibold">
-                        <MessageSquarePlus size={12} /> 기획/정책 {(screen.annotations || []).length}개
-                      </span>
+                      {/* 기획/정책 주석(annotations) 개수 — 0개일 땐 의미 없는 노이즈라 숨기고, 있을 때만 표시 */}
+                      {(screen.annotations || []).length > 0 && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] bg-[var(--surface-hover)] text-[var(--text-secondary)] text-xs font-semibold">
+                          <MessageSquarePlus size={12} /> 기획/정책 {(screen.annotations || []).length}개
+                        </span>
+                      )}
                       <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
                         <Clock size={12} /> {formatRelative(screen.createdAt)}
                       </span>

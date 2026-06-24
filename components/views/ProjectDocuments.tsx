@@ -822,46 +822,36 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       {/* AI 클릭형 HTML 프로토타입 생성 (로컬 전용). 미리보기 후 확정 시 screen 저장 + prototypeLock. */}
       {section === 'prototype' && (
       <div className="bg-[var(--surface-card)] border border-[var(--brand-200)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
-        <div className="flex items-start justify-between flex-wrap gap-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <span className="shrink-0 w-10 h-10 rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
-              <MonitorPlay size={20} />
-            </span>
-            <div className="min-w-0">
-              <h3 className="font-bold text-[var(--text-strong)] text-lg">AI 프로토타입 생성 (클릭형 HTML)</h3>
-              <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
-                {initialDocsReady
-                  ? '기초 문서와 분석 결과를 기반으로 화면 구조를 설계하고, 클릭 가능한 HTML 프로토타입으로 변환합니다. 미리보기를 확인하고 기준 프로토타입으로 확정할 수 있습니다.'
-                  : hasPrototypeSourceContext
-                    ? '일부 기초 문서 또는 분석 결과를 기반으로 화면 구조를 설계해 클릭형 HTML 프로토타입으로 변환합니다. 부족한 정보는 AI가 합리적으로 보완합니다.'
-                    : '기초 문서와 분석 결과를 기반으로 화면 구조를 설계하고, 클릭 가능한 HTML 프로토타입으로 변환합니다.'}
+        {/* 설명 영역(좌측 정렬, 버튼은 입력 아래로 이동) */}
+        <div className="flex items-start gap-3 min-w-0">
+          <span className="shrink-0 w-10 h-10 rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
+            <MonitorPlay size={20} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="font-bold text-[var(--text-strong)] text-lg">AI 프로토타입 생성 (클릭형 HTML)</h3>
+            <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
+              {initialDocsReady
+                ? '기초 문서와 분석 결과를 기반으로 화면 구조를 설계하고, 클릭 가능한 HTML 프로토타입으로 변환합니다. 미리보기를 확인하고 기준 프로토타입으로 확정할 수 있습니다.'
+                : hasPrototypeSourceContext
+                  ? '일부 기초 문서 또는 분석 결과를 기반으로 화면 구조를 설계해 클릭형 HTML 프로토타입으로 변환합니다. 부족한 정보는 AI가 합리적으로 보완합니다.'
+                  : '기초 문서와 분석 결과를 기반으로 화면 구조를 설계하고, 클릭 가능한 HTML 프로토타입으로 변환합니다.'}
+            </p>
+            {!hasPrototypeSourceContext && (
+              <p className="text-xs text-[var(--amber-700)] mt-1.5">프로토타입 생성을 위해 먼저 프로젝트 활성화 또는 기초 문서 생성이 필요합니다.</p>
+            )}
+            {!AI_ENABLED && (
+              <p className="text-xs font-medium text-[var(--text-secondary)] bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-3 py-2 mt-2">
+                AI 프로토타입 생성은 <b>로컬 전용(베타)</b>입니다. 배포 환경에서는 비활성화됩니다.
               </p>
-              {!hasPrototypeSourceContext && (
-                <p className="text-xs text-[var(--amber-700)] mt-1.5">프로토타입 생성을 위해 먼저 프로젝트 활성화 또는 기초 문서 생성이 필요합니다.</p>
-              )}
-              {!AI_ENABLED && (
-                <p className="text-xs font-medium text-[var(--text-secondary)] bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-3 py-2 mt-2">
-                  AI 프로토타입 생성은 <b>로컬 전용(베타)</b>입니다. 배포 환경에서는 비활성화됩니다.
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="shrink-0">
-            <Button
-              variant={aiProto ? 'outline' : 'primary'}
-              icon={aiProtoLoading ? undefined : aiProto ? RefreshCw : Sparkles}
-              onClick={handleGenerateAiPrototype}
-              disabled={!AI_ENABLED || !isEditor || !hasPrototypeSourceContext || aiProtoLoading}
-            >
-              {aiProtoLoading ? '생성 중…' : aiProto ? '다시 생성' : 'AI 프로토타입 생성'}
-            </Button>
+            )}
           </div>
         </div>
 
-        {/* 디자인 입력: 프로토타입 유형 · 참고 링크 · 디자인 메모 (생성 payload에 전달). 로컬 AI 전용. */}
+        {/* 디자인 입력: 프로토타입 유형(단독 1줄) → 참고 링크 + 디자인 메모(2열) → 안내. 로컬 AI 전용. */}
         {AI_ENABLED && (
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <label className="flex flex-col gap-1.5">
+          <div className="mt-5 space-y-3">
+            {/* 1) 프로토타입 유형: 단독 1줄 (max-width 420px) */}
+            <label className="flex flex-col gap-1.5 w-full max-w-[420px]">
               <span className="text-xs font-bold text-[var(--text-secondary)]">프로토타입 유형</span>
               <select
                 value={protoMode}
@@ -876,33 +866,48 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                 <option value="admin-console">관리자 콘솔</option>
               </select>
             </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-bold text-[var(--text-secondary)]">참고 URL / 이미지 링크 <span className="font-medium text-[var(--text-tertiary)]">(선택 · 줄바꿈·쉼표로 여러 개)</span></span>
-              <textarea
-                value={protoRefs}
-                onChange={(e) => setProtoRefs(e.target.value)}
-                disabled={!isEditor || aiProtoLoading}
-                rows={2}
-                placeholder="https://example.com/reference"
-                className="w-full resize-y rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-card)] px-3 py-2 text-sm text-[var(--text-body)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] disabled:opacity-60"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 sm:col-span-2">
-              <span className="text-xs font-bold text-[var(--text-secondary)]">디자인 메모 <span className="font-medium text-[var(--text-tertiary)]">(선택 · 톤·레이아웃·색감 등)</span></span>
-              <textarea
-                value={protoNotes}
-                onChange={(e) => setProtoNotes(e.target.value)}
-                disabled={!isEditor || aiProtoLoading}
-                rows={2}
-                placeholder="예: 미니멀한 느낌, 보라색 포인트, 카드 위주 구성"
-                className="w-full resize-y rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-card)] px-3 py-2 text-sm text-[var(--text-body)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] disabled:opacity-60"
-              />
-            </label>
-            <p className="text-[11px] text-[var(--text-tertiary)] sm:col-span-2 -mt-1">
+            {/* 2) 참고 링크 + 디자인 메모: 데스크톱 2열(좁으면 1열), 두 textarea 높이 동일 */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1.5 min-w-0">
+                <span className="text-xs font-bold text-[var(--text-secondary)]">참고 URL / 이미지 링크 <span className="font-medium text-[var(--text-tertiary)]">(선택 · 줄바꿈·쉼표로 여러 개)</span></span>
+                <textarea
+                  value={protoRefs}
+                  onChange={(e) => setProtoRefs(e.target.value)}
+                  disabled={!isEditor || aiProtoLoading}
+                  placeholder="https://example.com/reference"
+                  className="w-full min-h-[112px] resize-y rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-card)] px-3 py-2 text-sm text-[var(--text-body)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] disabled:opacity-60"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 min-w-0">
+                <span className="text-xs font-bold text-[var(--text-secondary)]">디자인 메모 <span className="font-medium text-[var(--text-tertiary)]">(선택 · 톤·레이아웃·색감 등)</span></span>
+                <textarea
+                  value={protoNotes}
+                  onChange={(e) => setProtoNotes(e.target.value)}
+                  disabled={!isEditor || aiProtoLoading}
+                  placeholder="예: 미니멀한 느낌, 보라색 포인트, 카드 위주 구성"
+                  className="w-full min-h-[112px] resize-y rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-card)] px-3 py-2 text-sm text-[var(--text-body)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] disabled:opacity-60"
+                />
+              </label>
+            </div>
+            {/* 3) 안내 문구 */}
+            <p className="text-[11px] text-[var(--text-tertiary)]">
               참고 링크는 AI가 직접 열람하지 않고 디자인 힌트로만 사용합니다. 유형을 “자동 추천”으로 두면 문서 내용에 맞는 유형을 AI가 선택합니다.
             </p>
           </div>
         )}
+
+        {/* 4) 생성 버튼: 입력 영역 아래에 배치(입력 → 생성 흐름) */}
+        <div className="mt-5">
+          <Button
+            variant={aiProto ? 'outline' : 'primary'}
+            icon={aiProtoLoading ? undefined : aiProto ? RefreshCw : Sparkles}
+            onClick={handleGenerateAiPrototype}
+            disabled={!AI_ENABLED || !isEditor || !hasPrototypeSourceContext || aiProtoLoading}
+            className="w-full sm:w-auto"
+          >
+            {aiProtoLoading ? '생성 중…' : aiProto ? '다시 생성' : 'AI 프로토타입 생성'}
+          </Button>
+        </div>
 
         {/* 생성 중 안내: 페이지 이동해도 백그라운드로 계속 진행됨. */}
         {aiProtoLoading && !aiProto && (
