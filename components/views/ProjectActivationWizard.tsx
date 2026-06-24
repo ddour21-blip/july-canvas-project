@@ -845,33 +845,34 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
             const isReq = mode === 'requirement_planning';
             return (
             <div className="space-y-3 mb-6">
-              {/* 제목 + 설명 */}
+              {/* 제목 + 설명 (단계 제목 '분석 확인'은 스텝퍼, 본문 섹션 제목은 '기획 초안 생성') */}
               <div>
-                <p className="text-base font-bold text-[var(--text-strong)]">AI 분석 결과 확인</p>
+                <p className="text-base font-bold text-[var(--text-strong)]">기획 초안 생성</p>
                 <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
-                  입력한 아이디어/요구사항과 참고자료를 바탕으로 브리프, 시장조사, 제품화 전략 초안을 정리합니다. 결과를 확인하고 필요한 부분만 수정하세요.
+                  입력한 아이디어와 참고자료를 바탕으로 브리프, 시장조사, 제품화 전략 초안을 정리합니다.
+                  AI 실행이 비활성화된 환경에서는 수동 초안으로 진행할 수 있습니다.
                 </p>
               </div>
 
-              {/* AI 분석 실행 영역 (상태 카드). 로컬 전용(local-cli) — Vercel은 disabled로 비활성/안내. */}
+              {/* 초안 생성 영역 (상태 카드). AI 사용 가능 시 'AI로 초안 생성', 불가 시 '수동 초안 작성'. */}
               <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0 flex items-center gap-2 text-sm font-bold text-[var(--text-strong)]">
-                    <Sparkles size={16} className="text-[var(--color-primary-text)]" /> AI 분석
+                    <Sparkles size={16} className="text-[var(--color-primary-text)]" /> 초안 생성
                   </div>
                   <button
                     type="button"
-                    onClick={startAiAnalysis}
-                    disabled={!AI_ENABLED || aiRunning}
+                    onClick={AI_ENABLED ? startAiAnalysis : startManualAnalysis}
+                    disabled={aiRunning}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-[var(--color-on-primary)] text-sm font-bold shadow-[var(--shadow-brand)] hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
                   >
                     {aiRunning ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                    {aiRunning ? 'AI 분석 중…' : 'AI 분석 실행'}
+                    {aiRunning ? '초안 생성 중…' : AI_ENABLED ? 'AI로 초안 생성' : '수동 초안 작성'}
                   </button>
                 </div>
                 {!AI_ENABLED && (
                   <p className="mt-2 text-xs font-medium text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-3 py-2">
-                    AI 분석은 <b>로컬 전용(베타)</b>입니다. 배포 환경에서는 수동 초안으로 진행할 수 있습니다.
+                    AI 실행이 비활성화된 환경에서는 <b>수동 초안</b>으로 진행할 수 있습니다. (AI 초안 생성은 로컬 전용 베타)
                   </p>
                 )}
               </div>

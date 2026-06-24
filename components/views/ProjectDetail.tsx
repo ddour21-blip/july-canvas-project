@@ -13,6 +13,8 @@ import { Button } from '@/components/common/Button';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
 import { ShareState } from '@/components/modals/ShareModal';
 import ProjectActivationWizard from './ProjectActivationWizard';
+import { derivePipelineStatus, pipelineStatusLabel } from '@/lib/pipeline';
+import type { PipelineStep, PipelineStepStatus } from '@/types';
 import ProjectDocuments from './ProjectDocuments';
 import ProjectReviews from './ProjectReviews';
 import {
@@ -62,7 +64,19 @@ function formatRelative(ts: FirestoreTime): string {
   return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
 }
 
-type Tab = 'overview' | 'documents' | 'screens' | 'handoff';
+// 파이프라인 흐름 탭. 기존 딥링크(documents/screens/handoff)는 normalizeTab으로 매핑해 보존한다.
+type Tab = 'overview' | 'planning' | 'design' | 'structure' | 'build_plan' | 'qa_launch' | 'operate' | 'share_feedback';
+
+const ALL_TABS: Tab[] = ['overview', 'planning', 'design', 'structure', 'build_plan', 'qa_launch', 'operate', 'share_feedback'];
+// 레거시 탭 키 → 신규 파이프라인 탭(딥링크 하위 호환).
+const LEGACY_TAB_MAP: Record<string, Tab> = {
+  overview: 'overview',
+  documents: 'planning',
+  screens: 'design',
+  handoff: 'build_plan',
+};
+const normalizeTab = (t?: string | null): Tab =>
+  (t && (LEGACY_TAB_MAP[t] ?? (ALL_TABS.includes(t as Tab) ? (t as Tab) : undefined))) || 'overview';
 
 interface ProjectDetailProps {
   projectId: string | null;
@@ -71,20 +85,89 @@ interface ProjectDetailProps {
   navigate: (hash: string) => void;
   setShareState: (s: ShareState) => void;
   user: User | null;
-  /** 딥링크로 진입한 초기 탭 (예: project_{id}_documents) */
-  initialTab?: Tab;
+  /** 딥링크로 진입한 초기 탭 (레거시 documents/screens/handoff 포함 — normalizeTab으로 매핑) */
+  initialTab?: string;
   /** 딥링크로 진입한 초기 선택 문서 id (예: project_{id}_document_{docId}) */
   initialDocId?: string | null;
   /** project_{id}_screens_new 진입 시 새 화면 추가 모달 자동 오픈 (문서 탭 '프로토타입 추가하기' CTA 연결) */
   initialScreenNew?: boolean;
 }
 
+// 파이프라인 단계 상태 → 배지 색상(파생, 저장 안 함).
+const PIPELINE_BADGE: Record<PipelineStepStatus, { fg: string; bg: string }> = {
+  not_started: { fg: 'var(--text-tertiary)', bg: 'var(--surface-hover)' },
+  ready: { fg: 'var(--color-primary-text)', bg: 'var(--surface-active)' },
+  in_progress: { fg: 'var(--status-draft-fg)', bg: 'var(--status-draft-bg)' },
+  needs_review: { fg: 'var(--status-review-fg)', bg: 'var(--status-review-bg)' },
+  approved: { fg: 'var(--status-approved-fg)', bg: 'var(--status-approved-bg)' },
+  needs_regen: { fg: 'var(--amber-700)', bg: 'var(--amber-50)' },
+};
+
+/** 개요 탭의 8단계 파이프라인 진행 카드. 단계 클릭 시 해당 탭으로 이동. */
+function PipelineProgressCard({
+  project,
+  documents,
+  screens,
+  onGo,
+}: {
+  project: Project;
+  documents: ProjectDocument[];
+  screens: Screen[];
+  onGo: (tab: string) => void;
+}) {
+  const steps = derivePipelineStatus(project, documents, screens);
+  return (
+    <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
+      <h3 className="font-bold text-[var(--text-strong)] text-lg mb-1">파이프라인 진행 상황</h3>
+      <p className="text-sm text-[var(--text-secondary)] mb-4">아이디어부터 운영까지 단계별 산출물 상태입니다. 각 단계를 눌러 이동하세요.</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {steps.map((s, i) => {
+          const c = PIPELINE_BADGE[s.status];
+          return (
+            <button
+              key={s.step}
+              type="button"
+              onClick={() => onGo(s.tab)}
+              className="text-left rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)] px-3 py-2.5 hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] transition-colors"
+            >
+              <div className="text-[11px] font-bold text-[var(--text-strong)] truncate">
+                <span className="font-mono text-[var(--text-tertiary)]">{i + 1}.</span> {s.label}
+              </div>
+              <span
+                className="inline-block mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-[var(--radius-pill)]"
+                style={{ color: c.fg, backgroundColor: c.bg }}
+              >
+                {pipelineStatusLabel(s.status)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// 디자인/프로토타입 탭의 단계 헤더(번호 배지 + 제목 + 설명). 단계 흐름이 보이도록 정리.
+function StepHeader({ n, title, desc }: { n: number; title: string; desc: string }) {
+  return (
+    <div className="flex items-start gap-3 mb-3">
+      <span className="shrink-0 w-7 h-7 rounded-full bg-[var(--color-primary)] text-[var(--color-on-primary)] flex items-center justify-center font-bold text-sm">
+        {n}
+      </span>
+      <div className="min-w-0">
+        <h3 className="font-bold text-[var(--text-strong)] text-lg leading-tight">{title}</h3>
+        <p className="text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectDetail({ projectId, projects, screens, navigate, setShareState, user, initialTab, initialDocId, initialScreenNew }: ProjectDetailProps) {
-  const [tab, setTab] = useState<Tab>(initialDocId ? 'documents' : (initialTab ?? 'overview'));
+  const [tab, setTab] = useState<Tab>(initialDocId ? 'planning' : normalizeTab(initialTab));
   // 현재 문서 탭에서 선택된 문서 id (공유 '현재 문서 링크'용). ProjectDocuments가 보고.
   const [currentDocId, setCurrentDocId] = useState<string | null>(initialDocId ?? null);
   // 해시(딥링크/뒤로가기/새로고침)로 들어온 탭을 단일 소스로 동기화. 렌더 중 조정 패턴(effect 미사용).
-  const tabFromRoute: Tab = initialDocId ? 'documents' : (initialTab ?? 'overview');
+  const tabFromRoute: Tab = initialDocId ? 'planning' : normalizeTab(initialTab);
   const routeKey = `${tabFromRoute}|${initialDocId ?? ''}`;
   const [appliedRouteKey, setAppliedRouteKey] = useState(routeKey);
   if (routeKey !== appliedRouteKey) {
@@ -198,12 +281,43 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'overview', label: '개요' },
-    { key: 'documents', label: `문서 (${documents.length})` },
-    { key: 'screens', label: `프로토타입 (${projectScreens.length})` },
-    { key: 'handoff', label: '개발 전달' },
+    { key: 'planning', label: '기획' },
+    { key: 'design', label: `디자인/프로토타입 (${projectScreens.length})` },
+    { key: 'structure', label: '구조 설계' },
+    { key: 'build_plan', label: '개발 패키지' },
+    { key: 'qa_launch', label: 'QA/배포' },
+    { key: 'operate', label: '운영' },
+    { key: 'share_feedback', label: '공유/피드백' },
   ];
 
-  const openAddScreen = () => setIsModalOpen(true);
+  // 단계 문서 워크스페이스 / 활성화 게이트 (구조설계·QA/배포·운영 탭 공통 렌더).
+  const activationGate = (desc: string) => (
+    <div className="jca-card">
+      <div className="jca-empty">
+        <span className="jca-empty__icon"><FileText size={22} /></span>
+        <div className="jca-empty__title">먼저 프로젝트를 활성화하세요</div>
+        <p className="jca-empty__desc">{desc}</p>
+        {canEdit && (
+          <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
+            <Rocket size={16} />활성화 시작하기
+          </button>
+        )}
+      </div>
+    </div>
+  );
+  const stageDocs = (stage: PipelineStep) => (
+    <ProjectDocuments
+      project={project}
+      documents={documents}
+      screens={screens}
+      isEditor={canEdit}
+      isOwner={isOwner}
+      section="documents"
+      stage={stage}
+      onCurrentDocChange={setCurrentDocId}
+      navigate={navigate}
+    />
+  );
 
   const STATUS_DOT: Record<ProjectStatus, string> = {
     draft: 'jca-status--muted',
@@ -224,7 +338,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         onCancel={() => setConfirmState({ ...confirmState, isOpen: false })}
       />
       {showWizard && (
-        <ProjectActivationWizard project={project} onClose={() => setShowWizard(false)} onActivated={() => goTab('documents')} />
+        <ProjectActivationWizard project={project} onClose={() => setShowWizard(false)} onActivated={() => goTab('planning')} />
       )}
 
       {/* 브레드크럼 (admin) */}
@@ -260,7 +374,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                   type: 'project',
                   id: project.id,
                   projectId: project.id,
-                  documentId: tab === 'documents' && currentDocId ? currentDocId : undefined,
+                  documentId: tab === 'planning' && currentDocId ? currentDocId : undefined,
                 })
               }
             >
@@ -343,6 +457,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
             documents={documents}
             screenCount={projectScreens.length}
           />
+          {/* 파이프라인 8단계 진행 상황(파생, 저장 안 함) */}
+          <PipelineProgressCard project={project} documents={documents} screens={screens} onGo={(t) => goTab(normalizeTab(t))} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <ActivationSummary project={project} />
             <div className="space-y-5">
@@ -350,13 +466,13 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 <h3 className="font-bold text-[var(--text-strong)] text-lg mb-1">최종 산출물</h3>
                 <p className="text-sm text-[var(--text-secondary)] mb-5">개발 전달에 사용할 PRD·프로토타입 URL과 개발 전달 패키지입니다.</p>
                 <div className="flex flex-col gap-3">
-                  <Button variant="outline" icon={FileText} onClick={() => goTab('documents')} className="justify-start">
+                  <Button variant="outline" icon={FileText} onClick={() => goTab('build_plan')} className="justify-start">
                     PRD 문서 관리로 이동
                   </Button>
                   <Button variant="outline" icon={Link2} onClick={copyPrototypeUrl} className="justify-start">
                     프로토타입 URL 복사
                   </Button>
-                  <Button variant="outline" icon={Package} onClick={() => goTab('handoff')} className="justify-start">
+                  <Button variant="outline" icon={Package} onClick={() => goTab('build_plan')} className="justify-start">
                     개발 전달 패키지로 이동
                   </Button>
                 </div>
@@ -368,13 +484,11 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               )}
             </div>
           </div>
-          {/* 외부 피드백(public_review) — owner/editor만 (S7-2D) */}
-          {canEdit && <ProjectReviews projectId={project.id} user={user} />}
         </div>
       ))}
 
-      {/* 문서 탭 */}
-      {tab === 'documents' && (
+      {/* 기획 탭 (구 documents) — 기획 단계 문서(브리프/시장조사/제품화전략) */}
+      {tab === 'planning' && (
         <>
           {!isActivated ? (
             <div className="jca-card">
@@ -399,6 +513,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               isEditor={canEdit}
               isOwner={isOwner}
               section="documents"
+              stage="planning"
               initialDocId={initialDocId}
               onCurrentDocChange={setCurrentDocId}
               navigate={navigate}
@@ -407,22 +522,84 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         </>
       )}
 
-      {/* 프로토타입 탭 — 1) 제작 패키지  2) 화면 관리 */}
-      {tab === 'screens' && (
-        <div className="space-y-6">
-          {/* 1) 프로토타입 제작 패키지 (먼저) */}
-          <ProjectDocuments
-            project={project}
-            documents={documents}
-            screens={screens}
-            isEditor={canEdit}
-            isOwner={isOwner}
-            section="prototype"
-            navigate={navigate}
-          />
-          {/* 2) 화면 관리 (새 화면 추가는 헤더 primary, empty state는 안내만) */}
-          {/* 카드가 과하게 넓어지지 않도록 auto-fill + 최소폭 기준(데스크톱 2~3열, 모바일 1열). */}
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
+      {/* 디자인/프로토타입 탭 — 하나의 그룹 카드 안에 1·2·3 단계 흐름 */}
+      {tab === 'design' && (
+        <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
+          {/* 상단 안내 */}
+          <div>
+            <h2 className="font-bold text-[var(--text-strong)] text-xl">디자인/프로토타입</h2>
+            <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
+              디자인 기준을 정리한 뒤, 클릭 가능한 HTML 프로토타입을 생성하고 화면을 관리합니다.
+            </p>
+          </div>
+
+          {/* 1. 디자인 기준 정리 — 디자인 컨텍스트 compact card */}
+          <div className="mt-6 pt-6 border-t border-[var(--border-subtle)]">
+            <StepHeader
+              n={1}
+              title="디자인 기준 정리"
+              desc="참고 URL, 이미지, 디자인 메모를 바탕으로 프로토타입에 반영할 디자인 기준을 정리합니다."
+            />
+            {isActivated ? (
+              <ProjectDocuments
+                project={project}
+                documents={documents}
+                screens={screens}
+                isEditor={canEdit}
+                isOwner={isOwner}
+                section="documents"
+                stage="design"
+                variant="compact"
+                embedded
+                navigate={navigate}
+              />
+            ) : (
+              <p className="text-sm text-[var(--text-secondary)] bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-lg)] px-4 py-3">
+                프로젝트를 활성화하면 디자인 기준(디자인 컨텍스트)을 정리할 수 있습니다.
+              </p>
+            )}
+          </div>
+
+          {/* 2. 프로토타입 생성 — AI 프로토타입 생성 compact card */}
+          <div className="mt-6 pt-6 border-t border-[var(--border-subtle)]">
+            <StepHeader
+              n={2}
+              title="프로토타입 생성"
+              desc="클릭 가능한 HTML 프로토타입을 생성합니다. 생성된 화면은 아래 ‘프로토타입 화면’에 추가됩니다."
+            />
+            <ProjectDocuments
+              project={project}
+              documents={documents}
+              screens={screens}
+              isEditor={canEdit}
+              isOwner={isOwner}
+              section="prototype"
+              prototypePart="generate"
+              embedded
+              navigate={navigate}
+            />
+          </div>
+
+          {/* 3. 프로토타입 화면 — 등록 화면 목록(먼저) + 보조 액션 toolbar */}
+          <div className="mt-6 pt-6 border-t border-[var(--border-subtle)]">
+            <StepHeader
+              n={3}
+              title="프로토타입 화면"
+              desc="AI로 생성되었거나 직접 추가한 프로토타입 화면을 확인하고 보완합니다."
+            />
+            <div className="mb-3">
+              <h4 className="font-bold text-[var(--text-strong)]">
+                등록된 프로토타입 화면{projectScreens.length > 0 ? ` (${projectScreens.length})` : ''}
+              </h4>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">
+                {projectScreens.length > 0
+                  ? '생성되었거나 직접 추가한 화면 목록입니다.'
+                  : '등록된 프로토타입 화면이 없습니다. 2단계에서 AI 프로토타입을 생성하거나 아래에서 새 화면을 직접 추가하세요.'}
+              </p>
+            </div>
+            {/* 화면 목록(있을 때만 그리드 노출). 카드가 과하게 넓어지지 않도록 auto-fill + 최소폭. */}
+            {projectScreens.length > 0 && (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
             {projectScreens.map((screen) => (
               <div
                 key={screen.id}
@@ -491,53 +668,69 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 </div>
               </div>
             ))}
-            {projectScreens.length === 0 && (
-              <div className="col-span-full jca-card">
-                <div className="jca-empty">
-                  <span className="jca-empty__icon">
-                    <Layout size={22} />
-                  </span>
-                  <div className="jca-empty__title">등록된 화면이 없습니다</div>
-                  <p className="jca-empty__desc">
-                    {canEdit ? '첫 번째 프로토타입 화면을 등록해 캔버스에서 기획·정책을 정리해보세요.' : '이 프로젝트에는 아직 등록된 화면이 없습니다.'}
-                  </p>
-                  {canEdit && (
-                    <button type="button" className="jca-btn jca-btn--secondary" onClick={openAddScreen} style={{ marginTop: 'var(--space-3)' }}>
-                      <Plus size={16} />추가
-                    </button>
-                  )}
-                </div>
               </div>
             )}
+            {/* 보조 액션: 새 화면 직접 추가 / 프로토타입 프롬프트 생성 (목록 아래 toolbar) */}
+            <div className="mt-4">
+              <ProjectDocuments
+                project={project}
+                documents={documents}
+                screens={screens}
+                isEditor={canEdit}
+                isOwner={isOwner}
+                section="prototype"
+                prototypePart="manual"
+                embedded
+                navigate={navigate}
+              />
+            </div>
           </div>
         </div>
       )}
 
-      {/* 개발 전달 탭 */}
-      {tab === 'handoff' && (
+      {/* 구조 설계 탭 — IA·기능정의서·서비스 구조 설계 (역작성 영역 포함) */}
+      {tab === 'structure' && (
+        isActivated ? stageDocs('structure') : activationGate('활성화 후 프로토타입을 확정하면 IA·기능정의서·서비스 구조 설계를 작성할 수 있습니다.')
+      )}
+
+      {/* 개발 패키지 탭 (구 handoff) — PRD·개발 계획 + 개발 전달 패키지 */}
+      {tab === 'build_plan' && (
         isActivated ? (
-          <ProjectDocuments
-            project={project}
-            documents={documents}
-            screens={screens}
-            isEditor={canEdit}
-            isOwner={isOwner}
-            section="handoff"
-            navigate={navigate}
-          />
+          <div className="space-y-6">
+            {stageDocs('build_plan')}
+            <ProjectDocuments
+              project={project}
+              documents={documents}
+              screens={screens}
+              isEditor={canEdit}
+              isOwner={isOwner}
+              section="handoff"
+              navigate={navigate}
+            />
+          </div>
+        ) : activationGate('활성화 후 문서·프로토타입이 준비되면 PRD·개발 계획과 개발 전달 패키지를 생성할 수 있습니다.')
+      )}
+
+      {/* QA/배포 탭 — QA 기준·배포 준비 체크리스트 */}
+      {tab === 'qa_launch' && (
+        isActivated ? stageDocs('qa') : activationGate('활성화 후 개발 계획이 준비되면 QA 기준·배포 준비 체크리스트를 작성할 수 있습니다.')
+      )}
+
+      {/* 운영 탭 — 운영 개선 리포트 */}
+      {tab === 'operate' && (
+        isActivated ? stageDocs('operate') : activationGate('출시 후 운영 개선 리포트를 작성할 수 있습니다. 먼저 프로젝트를 활성화하세요.')
+      )}
+
+      {/* 공유/피드백 탭 — 외부 공개 리뷰(public_review). owner/editor만. */}
+      {tab === 'share_feedback' && (
+        canEdit ? (
+          <ProjectReviews projectId={project.id} user={user} />
         ) : (
           <div className="jca-card">
             <div className="jca-empty">
-              <span className="jca-empty__icon">
-                <Package size={22} />
-              </span>
-              <div className="jca-empty__title">먼저 프로젝트를 활성화하세요</div>
-              <p className="jca-empty__desc">활성화 후 문서·프로토타입이 준비되면 개발 전달 패키지를 생성할 수 있습니다.</p>
-              {canEdit && (
-                <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
-                  <Rocket size={16} />활성화 시작하기
-                </button>
-              )}
+              <span className="jca-empty__icon"><FileText size={22} /></span>
+              <div className="jca-empty__title">공유/피드백</div>
+              <p className="jca-empty__desc">외부 공개 리뷰 관리는 Owner 또는 Editor 권한이 필요합니다.</p>
             </div>
           </div>
         )

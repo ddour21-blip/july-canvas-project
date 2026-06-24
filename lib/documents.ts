@@ -3,6 +3,7 @@
 import type {
   ActivationAnalysis,
   DocumentType,
+  PipelineStep,
   Project,
   ProjectActivation,
   ProjectDocument,
@@ -14,16 +15,32 @@ interface DocMeta {
   filename: string;
   /** 생성/검수 순서 */
   order: number;
+  /** 필수 진행률(missingRequired/createdCount) 계산 대상 여부. 기존 핵심 6종만 true. */
+  required?: boolean;
+  /** 이 문서가 속한 파이프라인 단계(탭/그룹 매핑·단계 상태 derive용). */
+  stage?: PipelineStep;
 }
 
 export const DOCUMENT_META: Record<DocumentType, DocMeta> = {
-  brief: { title: '프로젝트 브리프', filename: 'PROJECT_BRIEF.md', order: 1 },
-  market_research: { title: '시장조사', filename: 'MARKET_RESEARCH.md', order: 2 },
-  product_strategy: { title: '제품화전략', filename: 'PRODUCT_STRATEGY.md', order: 3 },
-  ia: { title: 'IA (정보구조)', filename: 'IA.md', order: 4 },
-  feature_spec: { title: '기능정의서', filename: 'FEATURE_SPEC.md', order: 5 },
-  prd: { title: 'PRD', filename: 'PRD.md', order: 6 },
+  brief: { title: '프로젝트 브리프', filename: 'PROJECT_BRIEF.md', order: 1, required: true, stage: 'planning' },
+  market_research: { title: '시장조사', filename: 'MARKET_RESEARCH.md', order: 2, required: true, stage: 'planning' },
+  product_strategy: { title: '제품화전략', filename: 'PRODUCT_STRATEGY.md', order: 3, required: true, stage: 'planning' },
+  // --- Pipeline MVP 신규 산출물 (required:false — 기존 필수 진행률 계산에 영향 없음) ---
+  design_context: { title: '디자인 컨텍스트', filename: 'DESIGN_CONTEXT.md', order: 4, required: false, stage: 'design' },
+  ia: { title: 'IA (정보구조)', filename: 'IA.md', order: 5, required: true, stage: 'structure' },
+  feature_spec: { title: '기능정의서', filename: 'FEATURE_SPEC.md', order: 6, required: true, stage: 'structure' },
+  service_structure: { title: '서비스 구조 설계', filename: 'SERVICE_STRUCTURE.md', order: 7, required: false, stage: 'structure' },
+  prd: { title: 'PRD', filename: 'PRD.md', order: 8, required: true, stage: 'build_plan' },
+  development_plan: { title: '개발 계획', filename: 'DEVELOPMENT_PLAN.md', order: 9, required: false, stage: 'build_plan' },
+  qa_criteria: { title: 'QA 기준', filename: 'QA_CRITERIA.md', order: 10, required: false, stage: 'qa' },
+  launch_checklist: { title: '배포 준비 체크리스트', filename: 'LAUNCH_CHECKLIST.md', order: 11, required: false, stage: 'launch' },
+  operation_report: { title: '운영 개선 리포트', filename: 'OPERATION_REPORT.md', order: 12, required: false, stage: 'operate' },
 };
+
+/** 필수 진행률 계산 대상(기존 핵심 문서). 신규 파이프라인 문서는 제외. */
+export const REQUIRED_DOCUMENT_TYPES: DocumentType[] = (Object.keys(DOCUMENT_META) as DocumentType[]).filter(
+  (t) => DOCUMENT_META[t].required,
+);
 
 export const DOCUMENT_ORDER: DocumentType[] = (
   Object.keys(DOCUMENT_META) as DocumentType[]
