@@ -18,18 +18,20 @@ export interface PipelineStepMeta {
   tab: string;
   /** 이 단계 진행을 판단하는 문서 타입(없으면 문서 비연동 단계). */
   docTypes: DocumentType[];
+  /** 필수 단계 여부. next-action 추천에서 필수 단계를 우선한다(qa/launch/operate는 선택). */
+  required: boolean;
 }
 
 /** 단계 정의(순서 = 파이프라인 진행 순서). 탭 키는 ProjectDetail 과 일치. */
 export const PIPELINE_STEPS: PipelineStepMeta[] = [
-  { step: 'idea', label: '아이디어', tab: 'overview', docTypes: [] },
-  { step: 'planning', label: '기획', tab: 'planning', docTypes: ['brief', 'market_research', 'product_strategy'] },
-  { step: 'design', label: '디자인/프로토타입', tab: 'design', docTypes: ['design_context'] },
-  { step: 'structure', label: '구조 설계', tab: 'structure', docTypes: ['ia', 'feature_spec', 'service_structure'] },
-  { step: 'build_plan', label: '개발 패키지', tab: 'build_plan', docTypes: ['prd', 'development_plan'] },
-  { step: 'qa', label: 'QA', tab: 'qa_launch', docTypes: ['qa_criteria'] },
-  { step: 'launch', label: '배포 준비', tab: 'qa_launch', docTypes: ['launch_checklist'] },
-  { step: 'operate', label: '운영', tab: 'operate', docTypes: ['operation_report'] },
+  { step: 'idea', label: '아이디어', tab: 'overview', docTypes: [], required: true },
+  { step: 'planning', label: '기획', tab: 'planning', docTypes: ['brief', 'market_research', 'product_strategy'], required: true },
+  { step: 'design', label: '디자인/프로토타입', tab: 'design', docTypes: ['design_context'], required: true },
+  { step: 'structure', label: '구조 설계', tab: 'structure', docTypes: ['ia', 'feature_spec', 'service_structure'], required: true },
+  { step: 'build_plan', label: '개발 패키지', tab: 'build_plan', docTypes: ['prd', 'development_plan'], required: true },
+  { step: 'qa', label: 'QA', tab: 'qa_launch', docTypes: ['qa_criteria'], required: false },
+  { step: 'launch', label: '배포 준비', tab: 'qa_launch', docTypes: ['launch_checklist'], required: false },
+  { step: 'operate', label: '운영', tab: 'operate', docTypes: ['operation_report'], required: false },
 ];
 
 export interface PipelineStepState {
@@ -129,4 +131,76 @@ export const derivePipelineStatus = (
   };
 
   return PIPELINE_STEPS.map((m) => ({ step: m.step, label: m.label, tab: m.tab, status: statusFor(m.step) }));
+};
+
+export interface NextAction {
+  step: PipelineStep;
+  label: string;
+  /** 이동할 ProjectDetail 탭 키. */
+  tab: string;
+  status: PipelineStepStatus;
+  /** 왜 이 작업을 먼저 해야 하는지(한 줄). */
+  reason: string;
+  /** CTA 버튼 라벨. */
+  cta: string;
+}
+
+// 추천 대상이 되는(=지금 처리 가능한) 상태와 우선순위. 낮을수록 먼저.
+const ACTIONABLE_RANK: Partial<Record<PipelineStepStatus, number>> = {
+  needs_regen: 0,
+  ready: 1,
+  in_progress: 2,
+  needs_review: 3,
+};
+
+const NEXT_REASON: Record<PipelineStepStatus, string> = {
+  needs_regen: '상위 기준이 변경되어 재생성이 필요합니다.',
+  ready: '이제 진행할 수 있는 단계입니다.',
+  in_progress: '작성 중인 산출물을 마무리하세요.',
+  needs_review: '검토가 필요한 산출물이 있습니다.',
+  not_started: '아직 시작 전입니다.',
+  approved: '완료되었습니다.',
+};
+
+/**
+ * 현재 프로젝트 상태에서 "가장 먼저 할 일" 1개를 derive한다(저장 없음).
+ * derivePipelineStatus 결과를 재사용. 우선순위: 필수 단계 → 상태(needs_regen>ready>in_progress>needs_review) → 파이프라인 순서.
+ * 처리 가능한 단계가 없으면(모두 approved/not_started) null.
+ */
+export const deriveNextAction = (
+  project: Project,
+  docs: ProjectDocument[],
+  screens: Screen[],
+): NextAction | null => {
+  const states = derivePipelineStatus(project, docs, screens);
+  const metaOf = (step: PipelineStep) => PIPELINE_STEPS.find((m) => m.step === step)!;
+
+  const candidates = states
+    .map((s, order) => ({ s, order, meta: metaOf(s.step), rank: ACTIONABLE_RANK[s.status] }))
+    .filter((c) => c.rank !== undefined) as Array<{
+    s: PipelineStepState;
+    order: number;
+    meta: PipelineStepMeta;
+    rank: number;
+  }>;
+  if (!candidates.length) return null;
+
+  candidates.sort((a, b) => {
+    // 1) 필수 단계 우선
+    if (a.meta.required !== b.meta.required) return a.meta.required ? -1 : 1;
+    // 2) 상태 우선순위
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    // 3) 파이프라인 순서(앞 단계 먼저)
+    return a.order - b.order;
+  });
+
+  const top = candidates[0];
+  return {
+    step: top.s.step,
+    label: top.s.label,
+    tab: top.s.tab,
+    status: top.s.status,
+    reason: NEXT_REASON[top.s.status],
+    cta: `${top.s.label} 단계로 이동`,
+  };
 };
