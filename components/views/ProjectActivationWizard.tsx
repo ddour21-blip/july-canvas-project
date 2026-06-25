@@ -508,6 +508,8 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
   // 유일 필수 = 아이디어/요구사항(intent). 나머지 단계/필드는 항상 통과.
   const stepValid = current.fields.every((f) => !f.required || data[f.key].trim());
   const ideaFilled = !!data.intent.trim();
+  // 생성 시점(Dashboard/모달)에 이미 아이디어가 입력돼 있었는지 — 중복 입력 안내용(저장된 activation.intent 기준).
+  const prefilledIntent = !!project.activation?.intent?.trim();
   // 입력값이 Google Drive 링크인지 감지 (등록 시 공유 권한 안내용, UI 전용).
   const isDriveLink = /drive\.google\.com|docs\.google\.com/i.test(urlValue);
 
@@ -692,6 +694,12 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
               <p className="text-base font-bold text-[var(--text-strong)]">
                 {mode === 'requirement_planning' ? '요구사항/RFP와 참고자료를 등록하세요' : '아이디어와 참고자료를 입력하세요'}
               </p>
+
+              {prefilledIntent && (
+                <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] border border-[var(--color-blue-100)] rounded-[var(--radius-md)] px-3 py-2">
+                  <CheckCircle2 size={14} /> 이전에 입력한 내용을 불러왔어요. 필요한 부분만 보완하세요.
+                </div>
+              )}
 
               {/* 아이디어/요구사항 입력 (유일 필수) */}
               <div>

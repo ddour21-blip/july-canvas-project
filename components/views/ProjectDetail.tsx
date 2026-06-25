@@ -272,6 +272,22 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialScreenNew, perms.canEdit, projectId]);
 
+  // Dashboard "AI로 시작하기"로 방금 생성된 프로젝트면 AI 기획 위저드를 1회 자동 오픈(중복 입력 제거).
+  // 신호는 sessionStorage(생성 직후 set). 아직 비활성(draft)이고 편집 권한일 때만, 한 번 처리 후 신호 제거.
+  useEffect(() => {
+    if (!projectId || !project || !perms.canEdit) return;
+    if (project.status && project.status !== 'draft') return;
+    let signaled = false;
+    try {
+      if (sessionStorage.getItem('jc:autostart-planning') === projectId) {
+        sessionStorage.removeItem('jc:autostart-planning');
+        signaled = true;
+      }
+    } catch { /* sessionStorage 접근 불가 시 무시 */ }
+    if (signaled) setShowWizard(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, project?.status, perms.canEdit]);
+
   if (!project) return null;
   const { isOwner, canEdit, canDelete, canInvite, role } = perms;
   const status = STATUS_LABEL[project.status ?? 'draft'];
@@ -479,6 +495,11 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
                 서비스의 목적·사용자·참고 자료를 정리하면 July Canvas가 기획 문서 초안을 만들어드립니다. 시작 방식 → 아이디어 입력 → AI 정리 확인 → 기획 문서 생성 순서로 진행됩니다.
               </p>
+              {project.activation?.intent?.trim() && (
+                <p className="mt-3 text-sm text-[var(--text-body)] bg-[var(--surface-active)] border border-[var(--color-blue-100)] rounded-[var(--radius-md)] px-3 py-2 leading-relaxed line-clamp-2">
+                  <span className="font-bold text-[var(--color-primary-text)]">입력한 아이디어</span> · {project.activation.intent.trim()}
+                </p>
+              )}
             </div>
             {canEdit && (
               <button type="button" className="jca-btn jca-btn--primary shrink-0" onClick={() => setShowWizard(true)}>

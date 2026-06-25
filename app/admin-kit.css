@@ -795,6 +795,8 @@
 .jca-np-body { display: flex; align-items: stretch; gap: var(--space-6); }
 .jca-np-form { flex: 1 1 auto; min-width: 0; }
 .jca-np-form .jca-field:last-of-type { margin-bottom: var(--space-4); }
+.jca-np-hint { display: flex; align-items: center; gap: 6px; margin-top: var(--space-4); font: var(--admin-caption); color: var(--admin-text-secondary); }
+.jca-np-hint svg { color: var(--color-accent); flex: none; }
 
 /* right AI guidance panel — pale blue */
 .jca-np-aside { width: 290px; flex: none; align-self: flex-start; padding: var(--space-5); background: var(--color-blue-50); border: 1px solid var(--color-blue-100); border-radius: var(--admin-radius-lg); }

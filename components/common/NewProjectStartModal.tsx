@@ -13,13 +13,8 @@ import { createProjectSource } from '@/lib/projectSources';
 import {
   ChevronDown,
   ClipboardList,
-  FileText,
   Lightbulb,
   Link2,
-  ListChecks,
-  Network,
-  PackageCheck,
-  PanelsTopLeft,
   Plus,
   Upload,
   Wand2,
@@ -37,15 +32,6 @@ interface NewProjectStartModalProps {
   /** 시작 옵션 카드에서 넘어온 모드 prefill */
   initialMode?: ProjectMode;
 }
-
-// 우측 안내: 프로젝트 생성 후(활성화 단계에서) 준비되는 산출물.
-const AI_OUTPUTS: { icon: typeof FileText; label: string }[] = [
-  { icon: FileText, label: '기획 문서 (브리프·시장조사·전략)' },
-  { icon: Network, label: 'IA · 정보 구조' },
-  { icon: ListChecks, label: '기능정의서 · PRD' },
-  { icon: PanelsTopLeft, label: '디자인 컨텍스트 · 프로토타입' },
-  { icon: PackageCheck, label: '개발 계획 · QA · 배포' },
-];
 
 const MODE_OPTIONS: { value: ProjectMode; label: string; desc: string; icon: typeof Lightbulb }[] = [
   { value: 'idea_productization', label: '아이디어 제품화', desc: '아이디어를 시장조사·제품화 전략으로 발전', icon: Lightbulb },
@@ -151,11 +137,11 @@ export function NewProjectStartModal({ isOpen, onClose, user, navigate, initialI
 
   return (
     <div className="jca-overlay" onClick={(e) => { if (e.target === e.currentTarget && !creating) onClose(); }}>
-      <div className="jca-modal jca-modal--xl" role="dialog" aria-modal="true" aria-label="새 프로젝트 시작">
+      <div className="jca-modal jca-modal--lg" role="dialog" aria-modal="true" aria-label="새 프로젝트 만들기">
         <div className="jca-modal__head">
           <div>
-            <h2 className="jca-modal__title">새 프로젝트를 시작해볼까요?</h2>
-            <p className="jca-np__lead">서비스 이름과 한 줄 설명만 입력해 주세요. 기획 정리는 프로젝트 생성 후 AI 기획 시작에서 이어서 진행합니다.</p>
+            <h2 className="jca-modal__title">새 프로젝트 만들기</h2>
+            <p className="jca-np__lead">프로젝트 이름과 간단한 설명만 입력하면 작업 공간이 만들어집니다.</p>
           </div>
           <button className="jca-icon-btn" onClick={onClose} aria-label="닫기" disabled={creating}>
             <X size={18} />
@@ -163,8 +149,8 @@ export function NewProjectStartModal({ isOpen, onClose, user, navigate, initialI
         </div>
 
         <div className="jca-modal__body">
-          <div className="jca-np-body">
-            {/* 좌: 입력 폼 */}
+          <div>
+            {/* 입력 폼 (생성 전용) */}
             <div className="jca-np-form">
               <div className="jca-field">
                 <label className="jca-field__label">서비스 · 프로젝트 이름<span className="jca-field__req">*</span></label>
@@ -252,19 +238,7 @@ export function NewProjectStartModal({ isOpen, onClose, user, navigate, initialI
               )}
             </div>
 
-            {/* 우: AI 자동 생성 안내 */}
-            <aside className="jca-np-aside">
-              <div className="jca-np-aside__t"><Wand2 size={15} /> 프로젝트 생성 후 준비되는 것</div>
-              <ul className="jca-np-aside__list">
-                {AI_OUTPUTS.map((o) => (
-                  <li key={o.label} className="jca-np-aside__item">
-                    <span className="jca-np-aside__ic"><o.icon size={15} /></span>
-                    {o.label}
-                  </li>
-                ))}
-              </ul>
-              <p className="jca-np-aside__note">이름만 입력해도 만들 수 있어요. 기획 문서는 프로젝트 생성 후 AI 기획 시작에서 이어서 만듭니다.</p>
-            </aside>
+            <p className="jca-np-hint"><Wand2 size={14} /> 다음 단계에서 AI 기획을 시작할 수 있어요.</p>
           </div>
         </div>
 

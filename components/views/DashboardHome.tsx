@@ -1,13 +1,15 @@
 'use client';
 
-// Home (시안 light workspace) — AI 기획 시작 hero + 입력 + 이어서 할 작업 + 우측 "자동으로 준비되는 결과".
-// 실제 데이터/상태/라우팅 유지: hero 입력은 실제 프로젝트(draft)를 생성하고 activation.intent 를 prefill 한 뒤
-// ProjectDetail(활성화 위저드)로 이동한다. 통계/이어서 할 작업은 구독 데이터에서 파생하며 더미로 대체하지 않는다.
+// Home (시안 light workspace) — AI 기획 시작의 핵심 진입점.
+// "AI로 시작하기"/시작 옵션 카드 = 입력한 아이디어로 프로젝트를 즉시 생성하고 ProjectDetail 로 이동한 뒤
+// AI 기획 위저드를 자동 오픈(sessionStorage 신호)한다. 같은 내용을 다시 묻지 않도록 activation.intent/mode 로 prefill.
+// 데이터/상태/라우팅 유지, 더미 없음.
 import { useState } from 'react';
 import type { User } from 'firebase/auth';
-import { getTime, nowMs } from '@/lib/utils';
+import { addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { col, docRef } from '@/lib/firestore';
+import { getTime, nowMs, showToast } from '@/lib/utils';
 import { deriveNextAction } from '@/lib/pipeline';
-import { NewProjectStartModal } from '@/components/common/NewProjectStartModal';
 import {
   ArrowRight,
   ClipboardList,
@@ -23,7 +25,7 @@ import {
   Target,
   Wand2,
 } from 'lucide-react';
-import type { Member, Project, ProjectDocument, ProjectMode } from '@/types';
+import { EMPTY_ACTIVATION, type Member, type Project, type ProjectDocument, type ProjectMode } from '@/types';
 
 interface DashboardHomeProps {
   projects: Project[];
@@ -33,6 +35,9 @@ interface DashboardHomeProps {
   navigate: (hash: string) => void;
   onOpenMembers: () => void;
 }
+
+// ProjectDetail이 마운트 시 읽어 AI 기획 위저드를 자동 오픈하는 1회성 신호(같은 리터럴을 ProjectDetail에서도 사용).
+const AUTOSTART_PLANNING_KEY = 'jc:autostart-planning';
 
 const HERO_STEPS = [
   { icon: FileText, t: '서비스 한 줄 설명', d: '만들고 싶은 서비스를 한 줄로 적어요' },
@@ -65,8 +70,7 @@ function relative(ts: Project['updatedAt']): string {
 
 export default function DashboardHome({ projects, documents, globalMembers, user, navigate, onOpenMembers }: DashboardHomeProps) {
   const [idea, setIdea] = useState('');
-  const [startOpen, setStartOpen] = useState(false);
-  const [startMode, setStartMode] = useState<ProjectMode>('idea_productization');
+  const [creating, setCreating] = useState(false);
 
   const canCreate = !!user && !user.isAnonymous;
   const name = user?.displayName || user?.email?.split('@')[0] || '게스트';
@@ -78,10 +82,55 @@ export default function DashboardHome({ projects, documents, globalMembers, user
     .sort((a, b) => getTime(b.updatedAt ?? b.createdAt) - getTime(a.updatedAt ?? a.createdAt))
     .slice(0, 2);
 
-  // 모든 시작 진입점은 공용 NewProjectStartModal 을 연다(hero 입력/모드 prefill).
-  const openStart = (mode: ProjectMode) => {
-    setStartMode(mode);
-    setStartOpen(true);
+  // AI로 시작하기 / 시작 옵션 카드: 입력한 아이디어로 프로젝트를 즉시 생성하고 상세로 이동 →
+  // AI 기획 위저드를 자동 오픈(중복 입력 제거). 모달을 다시 띄우지 않는다.
+  const createAndStart = async (mode: ProjectMode) => {
+    if (!canCreate || !user) {
+      showToast('Google 로그인 후 시작할 수 있습니다.', 'error');
+      return;
+    }
+    if (creating) return;
+    const text = idea.trim();
+    setCreating(true);
+    try {
+      const uid = user.uid;
+      const ref = await addDoc(col('projects'), {
+        name: text ? text.slice(0, 40) : '새 프로젝트',
+        organizationId: null,
+        ownerId: uid,
+        roleByUid: { [uid]: 'owner' as const },
+        memberUids: [uid],
+        status: 'draft' as const,
+        activation: { ...EMPTY_ACTIVATION, mode, intent: text },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await setDoc(docRef('projectMembers', `${ref.id}_${uid}`), {
+        projectId: ref.id,
+        uid,
+        email: user.email || null,
+        displayName: user.displayName || null,
+        photoURL: user.photoURL || null,
+        role: 'owner' as const,
+        status: 'active' as const,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      try { sessionStorage.setItem(AUTOSTART_PLANNING_KEY, ref.id); } catch { /* 신호 저장 실패해도 생성/이동은 진행 */ }
+      navigate(`#project_${ref.id}`);
+    } catch (err) {
+      console.error(err);
+      showToast('프로젝트 생성에 실패했습니다.', 'error');
+      setCreating(false);
+    }
+  };
+
+  const handleHeroStart = () => {
+    if (!idea.trim()) {
+      showToast('먼저 아이디어를 한 줄로 입력해주세요.', 'error');
+      return;
+    }
+    createAndStart('idea_productization');
   };
 
   return (
@@ -113,16 +162,17 @@ export default function DashboardHome({ projects, documents, globalMembers, user
               placeholder="예: 여행 장소와 일정을 자동으로 정리해주는 앱을 만들고 싶어요. 저장한 장소나 참고 URL을 넣으면 AI가 일정·예산까지 정리해줍니다."
               value={idea}
               onChange={(e) => setIdea(e.target.value)}
-              disabled={!canCreate}
+              disabled={!canCreate || creating}
             />
 
             <div className="jca-hero-foot">
-              <span className="jca-meta">참고 자료(URL·문서)는 다음 단계에서 추가할 수 있어요.</span>
+              <span className="jca-meta">입력한 아이디어로 프로젝트를 만들고 바로 AI 기획을 시작해요.</span>
               <button
                 type="button"
                 className="jca-btn jca-btn--primary jca-btn--lg"
-                onClick={() => openStart('idea_productization')}
-                disabled={!canCreate}
+                onClick={handleHeroStart}
+                disabled={!canCreate || creating}
+                data-loading={creating ? 'true' : undefined}
               >
                 <ArrowRight size={16} /> AI로 시작하기
               </button>
@@ -168,8 +218,8 @@ export default function DashboardHome({ projects, documents, globalMembers, user
             <button
               type="button"
               className="jca-tile text-left"
-              onClick={() => openStart('idea_productization')}
-              disabled={!canCreate}
+              onClick={() => createAndStart('idea_productization')}
+              disabled={!canCreate || creating}
             >
               <span className="jca-hero-step__ic mb-3"><Lightbulb size={18} /></span>
               <div className="jca-tile__title">아이디어 제품화</div>
@@ -178,8 +228,8 @@ export default function DashboardHome({ projects, documents, globalMembers, user
             <button
               type="button"
               className="jca-tile text-left"
-              onClick={() => openStart('requirement_planning')}
-              disabled={!canCreate}
+              onClick={() => createAndStart('requirement_planning')}
+              disabled={!canCreate || creating}
             >
               <span className="jca-hero-step__ic mb-3"><ClipboardList size={18} /></span>
               <div className="jca-tile__title">요구사항 · RFP 기반</div>
@@ -223,15 +273,6 @@ export default function DashboardHome({ projects, documents, globalMembers, user
           </div>
         </aside>
       </div>
-
-      <NewProjectStartModal
-        isOpen={startOpen}
-        onClose={() => setStartOpen(false)}
-        user={user}
-        navigate={navigate}
-        initialIntent={idea}
-        initialMode={startMode}
-      />
     </section>
   );
 }
