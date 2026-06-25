@@ -8,20 +8,21 @@
    - clean cool-neutral background, white surface, soft border, subtle shadow
    =============================================================== */
 
-/* --- Tailwind 팔레트 리매핑 → green-first (유틸 클래스 자동 그린화, 컴포넌트 미수정) ---
-   blue → 브랜드 그린 / purple → slate / gray·green·amber·red → 디자인 쿨뉴트럴·상태색.
-   blue 유틸은 LINE green(#06C755) 계열로 매핑(전역 primary 단일 통일). */
+/* --- Tailwind 팔레트 리매핑 (유틸 클래스 자동 보정, 컴포넌트 미수정) ---
+   accent = blue(#2563EB, 시안 액센트) / purple → 중립 slate / gray·green·amber·red = 쿨뉴트럴·상태색.
+   primary CTA는 ink(near-black)이며 blue는 액센트(active/link/rail)에만 사용. */
 @theme {
-  --color-blue-50: #e9fbef;
-  --color-blue-100: #cff8dd;
-  --color-blue-200: #a7f0c4;
-  --color-blue-300: #6fe49f;
-  --color-blue-400: #06c755;
-  --color-blue-500: #06c755;
-  --color-blue-600: #06c755;
-  --color-blue-700: #05b34c;
-  --color-blue-800: #049b42;
-  --color-blue-900: #037a34;
+  /* 시안 액센트 blue (Tailwind blue 계열, 600=#2563EB) */
+  --color-blue-50: #eff6ff;
+  --color-blue-100: #dbeafe;
+  --color-blue-200: #bfdbfe;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  --color-blue-700: #1d4ed8;
+  --color-blue-800: #1e40af;
+  --color-blue-900: #1e3a8a;
 
   --color-purple-50: #eef1ef;
   --color-purple-100: #dde2de;
@@ -45,16 +46,17 @@
   --color-gray-800: #232a33;
   --color-gray-900: #141a22;
 
-  --color-green-50: #e9f8ee;
-  --color-green-100: #cdeed8;
-  --color-green-200: #a9e0bc;
-  --color-green-300: #79cd97;
-  --color-green-400: #45b673;
-  --color-green-500: #1f9d52;
-  --color-green-600: #178344;
-  --color-green-700: #136d39;
-  --color-green-800: #0f562e;
-  --color-green-900: #0b3f22;
+  /* success green — 시안 success #15B66B 기준(로고/완료/승인/positive 전용) */
+  --color-green-50: #e7f6ee;
+  --color-green-100: #c6ecd6;
+  --color-green-200: #9fdcb8;
+  --color-green-300: #67c891;
+  --color-green-400: #2eb670;
+  --color-green-500: #15b66b;
+  --color-green-600: #0fa15d;
+  --color-green-700: #0c7d49;
+  --color-green-800: #0a6038;
+  --color-green-900: #074628;
 
   --color-amber-50: #fdf3e3;
   --color-amber-100: #fbe5c2;
@@ -85,19 +87,21 @@
 }
 
 :root {
-  /* ===== Brand: LINE green (anchor #06C755) — 전역 primary 단일 통일 ===== */
-  --brand-25: #f3fdf7;
-  --brand-50: #e9fbef;   /* primary-soft */
-  --brand-100: #cff8dd;  /* primary-light */
-  --brand-200: #a7f0c4;
-  --brand-300: #6fe49f;
-  --brand-400: #06c755;  /* accent — rail/underline */
-  --brand-500: #06c755;
-  --brand-600: #06c755;  /* primary fill */
-  --brand-700: #05b34c;  /* primary hover */
-  --brand-800: #049b42;  /* primary active */
-  --brand-900: #037a34;
-  --on-brand-ink: #033f1d;
+  /* ===== Brand/accent scale — 시안 accent blue(#2563EB).
+     (과거 LINE green 프리미티브였으나 primary=ink/accent=blue 확정에 따라 blue로 통일.
+      기존 컴포넌트의 var(--brand-*) 보더/호버가 green 누수 없이 blue accent로 표시됨.) ===== */
+  --brand-25: #f5f9ff;
+  --brand-50: #eff6ff;   /* accent-soft (active/hover well) */
+  --brand-100: #dbeafe;  /* accent-light */
+  --brand-200: #bfdbfe;
+  --brand-300: #93c5fd;
+  --brand-400: #60a5fa;  /* accent — rail/underline */
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;  /* accent fill */
+  --brand-700: #1d4ed8;  /* accent hover */
+  --brand-800: #1e40af;
+  --brand-900: #1e3a8a;
+  --on-brand-ink: #ffffff;
 
   /* ===== Neutrals: clean cool-mist gray ===== */
   --gray-25: #fcfcfd;
@@ -111,15 +115,15 @@
   --gray-700: #343c47;
   --gray-800: #232a33;
   --gray-900: #141a22;
-  --ink: #141a22;
-  --ink-soft: #1d2530;
+  --ink: #16181d;       /* 시안 primary ink (CTA fill / text-strong 계열) */
+  --ink-soft: #23262e;  /* 시안 hover ink */
 
-  /* ===== Status palette ===== */
-  --green-50: #e9f8ee;
-  --green-100: #cdeed8;
-  --green-500: #1f9d52;
-  --green-600: #178344;
-  --green-700: #136d39;
+  /* ===== Status palette (green = success/완료/승인 전용, 시안 #15B66B) ===== */
+  --green-50: #e7f6ee;
+  --green-100: #c6ecd6;
+  --green-500: #15b66b;
+  --green-600: #0fa15d;
+  --green-700: #0c7d49;
   --amber-50: #fdf3e3;
   --amber-100: #fbe5c2;
   --amber-500: #e08a0a;
@@ -141,16 +145,17 @@
      - accent  = 밝은 emerald(#10B981) — rail/underline 강조에만
      - primary-text = #047857 (링크/active 라벨 등 '글자' 강조)
      - focus-ring = brand-400 22% (얇고 차분) */
-  --color-primary: var(--brand-600);
-  --color-primary-hover: var(--brand-700);
-  --color-primary-active: var(--brand-800);
-  --color-primary-text: #049b42;
-  --color-primary-soft: var(--brand-50);
-  --color-primary-softer: var(--brand-25);
-  --color-accent: var(--brand-400);
+  /* primary = ink/near-black 필 (강한 CTA), accent/soft/text = blue. green은 success로만. */
+  --color-primary: var(--ink);
+  --color-primary-hover: var(--ink-soft);
+  --color-primary-active: #0a0f15;
+  --color-primary-text: var(--color-blue-700);
+  --color-primary-soft: var(--color-blue-50);
+  --color-primary-softer: #f4f8ff;
+  --color-accent: var(--color-blue-600);
   --color-on-primary: #ffffff;
-  --color-focus-ring: color-mix(in srgb, var(--brand-400) 22%, transparent);
-  --color-link: var(--color-primary-text);
+  --color-focus-ring: color-mix(in srgb, var(--color-blue-500) 32%, transparent);
+  --color-link: var(--color-blue-700);
 
   --text-strong: var(--gray-900);
   --text-body: var(--gray-700);
@@ -159,12 +164,12 @@
   --text-on-ink: #eaeef3;
   --text-on-ink-dim: #8a93a1;
 
-  --surface-page: var(--gray-50);
+  --surface-page: #eef2f9;   /* 시안 캔버스 — pale blue-gray (흰 카드가 부유) */
   --surface-card: #ffffff;
   --surface-raised: #ffffff;
   --surface-sunken: var(--gray-50);
   --surface-hover: var(--gray-100);
-  --surface-active: var(--brand-50);   /* selected/active = subtle emerald (rail가 강조) */
+  --surface-active: var(--color-blue-50);   /* selected/active = subtle blue (accent) */
   --surface-ink: var(--ink);
 
   /* Glass — 은은하게, 절제해서 사용 (과한 glassmorphism 금지) */
@@ -179,7 +184,7 @@
 
   /* status fg/bg pairs — active=emerald, approved=calm green(역할 분리), 나머지 채도 낮춤 */
   --status-draft-fg: var(--gray-600);    --status-draft-bg: var(--gray-100);
-  --status-active-fg: var(--brand-800);  --status-active-bg: var(--brand-100);
+  --status-active-fg: var(--color-blue-700);  --status-active-bg: var(--color-blue-50);
   --status-review-fg: var(--amber-700);  --status-review-bg: var(--amber-50);
   --status-approved-fg: var(--green-700);--status-approved-bg: var(--green-50);
   --status-archived-fg: var(--gray-600); --status-archived-bg: var(--gray-100);
@@ -188,8 +193,8 @@
   --color-success: var(--green-600);
   --color-warning: var(--amber-600);
   --color-danger: var(--red-600);
-  --color-info: var(--color-primary-text);   /* info = emerald text (중립 그레이 아님) */
-  --color-live: var(--brand-400);            /* 동기화 점: 밝은 emerald accent */
+  --color-info: var(--color-blue-700);       /* info = blue accent text */
+  --color-live: var(--color-blue-500);       /* 동기화 점: blue accent */
 
   /* ===== Spacing (4px base) ===== */
   --space-0: 0;
@@ -220,7 +225,7 @@
   --control-md: 40px;
   --control-lg: 44px;
   --layout-max: 1600px;
-  --sidebar-width: 248px;
+  --sidebar-width: 264px;
   --panel-width: 420px;
   --header-height: 61px;
 
@@ -236,12 +241,12 @@
   --shadow-brand-lg: 0 2px 6px rgba(18, 26, 38, 0.08);
   --shadow-inset: inset 0 1px 2px rgba(18, 26, 38, 0.04);
 
-  /* ===== Signature backgrounds ===== */
+  /* ===== Signature backgrounds (green 제거 → 시안 blue-gray 캔버스 + 옅은 blue) ===== */
   --gradient-aurora:
-    radial-gradient(900px 520px at 0% -12%, rgba(6, 199, 85, 0.05), transparent 55%),
-    radial-gradient(760px 520px at 100% -6%, rgba(6, 199, 85, 0.03), transparent 52%),
-    var(--gray-50);
-  --gradient-brand: linear-gradient(135deg, #06c755 0%, #05b34c 100%);
+    radial-gradient(900px 520px at 0% -12%, rgba(37, 99, 235, 0.05), transparent 55%),
+    radial-gradient(760px 520px at 100% -6%, rgba(37, 99, 235, 0.03), transparent 52%),
+    var(--surface-page);
+  --gradient-brand: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   --gradient-brand-soft: linear-gradient(135deg, var(--brand-50), var(--brand-100));
 
   /* ===== Motion ===== */
@@ -306,21 +311,13 @@ body {
 }
 
 ::selection {
-  background: var(--brand-100);
-  color: var(--brand-900);
+  background: var(--color-blue-100);
+  color: var(--color-blue-900);
 }
 
 /* ===============================================================
-   UI-5 — blue→green 유틸 remap 중화 (chrome 한정)
-   @theme의 blue 매핑은 유지하되, 제품 크롬에서 직접 쓰인 blue 유틸을
-   중립 그레이로 덮어써 헤더/스피너/백업 모달의 그린을 제거한다.
-   (컴포넌트 클래스는 그대로 두고 색만 중립화 — 로직/구조 변경 없음)
+   UI-6 — blue 유틸은 이제 실제 blue accent(@theme).
+   과거 'blue=green' 누수 중화 오버라이드는 제거 — 스피너/백업 모달 등
+   chrome의 blue 유틸이 의도대로 blue accent로 표시된다.
+   green은 success/완료/로고에만 사용(상태 토큰/--color-success).
    =============================================================== */
-.text-blue-600 { color: var(--gray-500) !important; }
-.bg-blue-100 { background-color: var(--gray-100) !important; }
-.text-blue-200 { color: var(--gray-200) !important; }
-.border-blue-200 { border-color: var(--gray-200) !important; }
-.border-t-blue-600 { border-top-color: var(--gray-500) !important; }
-.border-blue-100 { border-color: var(--gray-200) !important; }
-.border-blue-300 { border-color: var(--gray-300) !important; }
-.hover\:bg-blue-50:hover { background-color: var(--gray-100) !important; }

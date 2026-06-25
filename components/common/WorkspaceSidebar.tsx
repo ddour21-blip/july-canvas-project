@@ -56,7 +56,7 @@ export function WorkspaceSidebar({ navigate, currentRoute, collapsed, adminTools
       aria-expanded={collapsed ? undefined : expanded}
       onClick={collapsed ? () => navigate(primary) : onToggle}
     >
-      <Icon size={19} />
+      <Icon size={18} />
       <span className="jca-nav-item__label">{label}</span>
       <ChevronDown size={16} className="jca-nav-item__chev" />
     </button>
@@ -75,7 +75,7 @@ export function WorkspaceSidebar({ navigate, currentRoute, collapsed, adminTools
     onClick: () => void;
   }) => (
     <button type="button" title={label} aria-label={label} className={`jca-nav-item${active ? ' jca-nav-item--active' : ''}`} onClick={onClick}>
-      <Icon size={19} />
+      <Icon size={18} />
       <span className="jca-nav-item__label">{label}</span>
     </button>
   );

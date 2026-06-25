@@ -22,38 +22,37 @@
   /* ============================================================
      COLORS — surfaces & lines (neutral-first)
      ============================================================ */
-  --admin-background:    #ffffff;
+  /* 시안 캔버스: pale blue-gray 위에 흰 카드가 부유 (LNB·topbar·card = 흰색) */
+  --admin-background:    var(--surface-page);
   --admin-surface:       #ffffff;
   --admin-surface-muted: var(--gray-50);     /* table head, wells, page sections */
   --admin-surface-hover: var(--gray-50);     /* row / item hover */
   --admin-surface-sunken:var(--gray-100);
-  /* selected/active = NEUTRAL gray well (not green tint) — green tint
-     is reserved for the rare "선택+브랜드 강조" moment only. */
-  --admin-surface-selected: var(--gray-100);
+  /* selected/active = pale blue well (시안 #EAF1FE) — accent=blue 규칙 */
+  --admin-surface-selected: var(--color-blue-50);
 
-  --admin-border:        var(--gray-200);    /* hairline default */
+  --admin-border:        #eceff4;            /* hairline default (시안 border) */
   --admin-border-strong: var(--gray-300);    /* inputs, header dividers */
-  --admin-border-subtle: var(--gray-100);    /* inner row dividers */
+  --admin-border-subtle: #f0f2f6;            /* inner row dividers */
 
   --admin-text-primary:   var(--gray-900);
   --admin-text-secondary: var(--gray-500);
   --admin-text-muted:     var(--gray-400);
-  --admin-text-on-nav:    #e7ebf1;
-  --admin-text-on-nav-dim:#8d9bad;
+  --admin-text-on-nav:    var(--gray-700);   /* light topbar — dark ink text */
+  --admin-text-on-nav-dim:var(--gray-500);
 
   /* ---- Primary — a single, calm, solid green. CTA / active / key
      success ONLY. Deep enough for white text; not neon. ---------- */
-  --admin-primary:        var(--brand-600);  /* #008f68 solid emerald fill */
-  --admin-primary-hover:  var(--brand-700);  /* #007a59 */
-  --admin-primary-text:   var(--color-primary-text); /* #047857 readable emerald text */
-  --admin-accent:         var(--brand-400);  /* #10b981 — rails / underlines only */
-  /* primary-soft kept but MINIMIZED — only soft buttons & the green
-     accent rail. Never as a page/card/icon-box wash. */
-  --admin-primary-soft:   var(--brand-50);
-  --admin-primary-softer: var(--brand-25);
+  --admin-primary:        var(--color-primary);       /* ink/near-black solid fill */
+  --admin-primary-hover:  var(--color-primary-hover);
+  --admin-primary-text:   var(--color-primary-text);  /* blue accent text (links/active label) */
+  --admin-accent:         var(--color-accent);         /* blue — rails / underlines only */
+  /* primary-soft kept but MINIMIZED — soft buttons & accent rail (blue). */
+  --admin-primary-soft:   var(--color-primary-soft);
+  --admin-primary-softer: var(--color-primary-softer);
   --admin-on-primary:     #ffffff;
-  /* focus ring — thin & restrained */
-  --admin-focus-ring:     color-mix(in srgb, var(--brand-600) 22%, transparent);
+  /* focus ring — thin & restrained (blue) */
+  --admin-focus-ring:     var(--color-focus-ring);
   --admin-focus-ring-w:   2px;
 
   /* ---- Status / feedback — MUTED service tones (not candy) ----- */
@@ -74,8 +73,8 @@
      ============================================================ */
   --admin-icon:        var(--gray-400);   /* default decorative / meta icon */
   --admin-icon-strong: var(--gray-500);   /* interactive / nav resting */
-  --admin-icon-active: var(--brand-700);  /* active nav / selected only */
-  --admin-icon-on-nav: #b7c2d0;           /* topbar icons (neutral) */
+  --admin-icon-active: var(--color-accent);  /* active nav / selected only — blue */
+  --admin-icon-on-nav: var(--gray-500);      /* light topbar icons (neutral dark) */
   --admin-icon-danger: var(--red-600);
 
   /* Icon-box (when truly needed): small, near-neutral, soft. */
@@ -89,7 +88,7 @@
      Low chroma backgrounds, strong-enough text. No bright mint.
      ============================================================ */
   --admin-badge-neutral-bg: var(--gray-100); --admin-badge-neutral-fg: var(--gray-600);
-  --admin-badge-primary-bg: var(--green-50); --admin-badge-primary-fg: var(--green-700);
+  --admin-badge-primary-bg: var(--color-blue-50); --admin-badge-primary-fg: var(--color-blue-700);
   --admin-badge-success-bg: var(--green-50); --admin-badge-success-fg: var(--green-700);
   --admin-badge-warning-bg: var(--amber-50); --admin-badge-warning-fg: var(--amber-700);
   --admin-badge-danger-bg:  var(--red-50);   --admin-badge-danger-fg:  var(--red-700);
@@ -100,19 +99,19 @@
   /* ============================================================
      BUTTON TOKENS (brief §3 / §11)
      ============================================================ */
-  --admin-btn-h:        38px;   /* primary/secondary default */
+  --admin-btn-h:        40px;   /* primary/secondary default (시안 — 큰 컴포넌트) */
   --admin-btn-h-sm:     32px;
   --admin-btn-h-lg:     44px;
-  --admin-btn-radius:   8px;
-  --admin-btn-pad-x:    14px;
+  --admin-btn-radius:   10px;   /* 시안 버튼 라운드(11~12) 근사 */
+  --admin-btn-pad-x:    16px;
   --admin-btn-shadow:   none;   /* flat — no candy shadow */
 
-  /* ---- Navy top bar (딥 네이비 차콜) ---- */
-  --admin-topbar:        #16202e;   /* slightly softer than pure ink */
-  --admin-topbar-2:      #1d2937;   /* hover / hairline */
-  --admin-topbar-border: #243245;
-  --admin-topbar-search: rgba(255, 255, 255, 0.08);
-  --admin-topbar-search-focus: rgba(255, 255, 255, 0.14);
+  /* ---- Light workspace top bar ---- */
+  --admin-topbar:        #ffffff;            /* light surface */
+  --admin-topbar-2:      var(--gray-100);    /* hover / hairline */
+  --admin-topbar-border: var(--gray-200);
+  --admin-topbar-search: var(--gray-100);
+  --admin-topbar-search-focus: var(--gray-200);
 
   /* ============================================================
      TYPOGRAPHY — admin roles
@@ -127,10 +126,10 @@
   /* ============================================================
      RADIUS — tightened (explicit px so it's self-contained)
      ============================================================ */
-  --admin-radius-sm: 5px;    /* chips, checkboxes */
-  --admin-radius-md: 8px;    /* buttons, inputs, menus */
-  --admin-radius-lg: 12px;   /* cards, panels */
-  --admin-radius-xl: 14px;   /* modals (not too round) */
+  --admin-radius-sm: 6px;    /* chips, checkboxes */
+  --admin-radius-md: 10px;   /* buttons, inputs, menus (시안) */
+  --admin-radius-lg: 14px;   /* cards, panels (시안 — 부드러운 워크스페이스) */
+  --admin-radius-xl: 16px;   /* modals */
 
   /* ============================================================
      SHADOW — weakened. Border-led elevation; shadows only float.
@@ -144,20 +143,20 @@
   /* ============================================================
      LAYOUT
      ============================================================ */
-  --admin-topbar-h:        56px;
-  --admin-sidebar-w:       248px;
+  --admin-topbar-h:        60px;
+  --admin-sidebar-w:       264px;   /* 시안 LNB 폭 */
   --admin-sidebar-w-min:   64px;
   --admin-content-max:     1280px;
   --admin-content-pad:     var(--space-8);   /* 32px */
   --admin-row-h:           48px;             /* tighter, service-like */
-  --admin-form-h:          38px;             /* input/select */
+  --admin-form-h:          40px;             /* input/select (버튼과 정렬) */
 
   --admin-modal-sm: 440px;
   --admin-modal-md: 600px;
   --admin-modal-lg: 880px;
 
-  /* icon sizing guidance (used inline in markup) */
-  --admin-icon-nav:  19px;
+  /* icon sizing guidance (used inline in markup) — 시안: nav 18 / btn 16 */
+  --admin-icon-nav:  18px;
   --admin-icon-btn:  16px;
   --admin-icon-meta: 15px;
 }
@@ -207,6 +206,7 @@
   padding: 0 var(--space-5);
   background: var(--admin-topbar);
   color: var(--admin-text-on-nav);
+  border-bottom: 1px solid var(--admin-topbar-border);
 }
 .jca-topbar__lead { display: flex; align-items: center; gap: var(--space-3); flex: none; }
 .jca-topbar__menu {
@@ -216,7 +216,7 @@
   transition: background var(--dur-fast) var(--ease-standard);
 }
 .jca-topbar__menu:hover { background: var(--admin-topbar-2); }
-.jca-topbar__brand { display: flex; align-items: center; gap: var(--space-2); font: var(--fw-extrabold) var(--text-md)/1 var(--font-sans); letter-spacing: var(--tracking-snug); color: #fff; }
+.jca-topbar__brand { display: flex; align-items: center; gap: var(--space-2); font: var(--fw-extrabold) var(--text-md)/1 var(--font-sans); letter-spacing: var(--tracking-snug); color: var(--text-strong); }
 .jca-topbar__brand img, .jca-topbar__brand svg { height: 24px; width: auto; display: block; }
 
 .jca-topbar__search {
@@ -234,7 +234,7 @@
 .jca-topbar__search svg { color: var(--admin-text-on-nav-dim); flex: none; }
 .jca-topbar__search input {
   flex: 1; border: 0; background: transparent; outline: none;
-  color: #fff; font: var(--admin-body);
+  color: var(--text-strong); font: var(--admin-body);
 }
 .jca-topbar__search input::placeholder { color: var(--admin-text-on-nav-dim); }
 
@@ -248,7 +248,7 @@
   background: transparent; color: var(--admin-icon-on-nav); cursor: pointer;
   transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 }
-.jca-topbar__icon:hover { background: var(--admin-topbar-2); color: #fff; }
+.jca-topbar__icon:hover { background: var(--admin-topbar-2); color: var(--text-strong); }
 /* notification dot — the ONLY red on the bar */
 .jca-topbar__icon[data-badge="true"]::after {
   content: ""; position: absolute; top: 7px; right: 7px;
@@ -308,12 +308,11 @@
 .jca-nav-item__chev { flex: none; color: var(--admin-text-muted); transition: transform var(--dur-normal) var(--ease-standard); }
 .jca-nav-item[aria-expanded="true"] .jca-nav-item__chev { transform: rotate(180deg); }
 .jca-nav-item:hover { background: var(--admin-surface-hover); }
-/* active = neutral well + a thin green accent rail + green label.
-   Restrained: green appears only as the rail + text/icon, not a wash. */
+/* active = 시안 스타일 pale-blue 필 + blue 라벨/아이콘 (좌측 rail 없음, 가벼운 워크스페이스). */
 .jca-nav-item--active {
   background: var(--admin-surface-selected);
   color: var(--admin-primary-text);
-  box-shadow: inset 3px 0 0 var(--admin-accent);
+  font-weight: var(--fw-bold);
 }
 .jca-nav-item--active > svg:first-child { color: var(--admin-icon-active); }
 .jca-nav-item:disabled, .jca-nav-item[aria-disabled="true"] {
@@ -334,7 +333,7 @@
   transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 }
 .jca-nav-subitem:hover { background: var(--admin-surface-hover); color: var(--admin-text-primary); }
-.jca-nav-subitem--active { color: var(--admin-primary-text); background: var(--admin-surface-selected); font-weight: var(--fw-bold); box-shadow: inset 3px 0 0 var(--admin-accent); }
+.jca-nav-subitem--active { color: var(--admin-primary-text); background: var(--admin-surface-selected); font-weight: var(--fw-bold); }
 
 /* collapsed: icons only, labels/chevrons/subs hidden */
 .jca-shell[data-collapsed="true"] .jca-nav-item { justify-content: center; padding: 0; }
@@ -642,7 +641,7 @@
 .jca-toast-region { position: fixed; bottom: var(--space-6); left: 50%; transform: translateX(-50%); z-index: var(--z-toast); display: flex; flex-direction: column; gap: var(--space-2); align-items: center; pointer-events: none; }
 .jca-toast { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-radius: var(--admin-radius-md); background: var(--gray-900); color: #fff; font: var(--fw-medium) var(--text-base)/1.2 var(--font-sans); box-shadow: var(--shadow-xl); animation: jca-pop var(--dur-normal) var(--ease-out); pointer-events: auto; }
 .jca-toast > svg { flex: none; }
-.jca-toast--success svg { color: var(--brand-500); }
+.jca-toast--success svg { color: var(--green-500); }
 .jca-toast--danger svg { color: #f87171; }
 
 /* ========================= EMPTY STATE ========================= */

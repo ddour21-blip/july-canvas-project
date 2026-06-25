@@ -37,7 +37,7 @@ export function AdminTopbar({
       <div className="jca-topbar__lead">
         {isGoogleUser && (
           <button className="jca-topbar__menu" onClick={onToggleSidebar} aria-label="메뉴 접기/펼치기">
-            <Menu size={22} />
+            <Menu size={20} />
           </button>
         )}
         <button className="jca-topbar__brand" onClick={onHome} type="button" style={{ gap: '9px', fontSize: '18px', fontWeight: 800 }}>
