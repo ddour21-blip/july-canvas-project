@@ -116,7 +116,7 @@
   /* ============================================================
      TYPOGRAPHY — admin roles
      ============================================================ */
-  --admin-page-title:    var(--fw-extrabold) 1.5rem/1.3 var(--font-sans);     /* 24px */
+  --admin-page-title:    var(--fw-extrabold) 1.625rem/1.25 var(--font-sans);  /* 26px — 시안 hero 타이틀 */
   --admin-section-title: var(--fw-bold) var(--text-lg)/1.3 var(--font-sans);  /* 18px */
   --admin-card-title:    var(--fw-bold) var(--text-md)/1.35 var(--font-sans); /* 16px */
   --admin-body:          var(--fw-medium) var(--text-base)/1.55 var(--font-sans); /* 14px */
@@ -128,15 +128,16 @@
      ============================================================ */
   --admin-radius-sm: 6px;    /* chips, checkboxes */
   --admin-radius-md: 10px;   /* buttons, inputs, menus (시안) */
-  --admin-radius-lg: 14px;   /* cards, panels (시안 — 부드러운 워크스페이스) */
-  --admin-radius-xl: 16px;   /* modals */
+  --admin-radius-lg: 16px;   /* cards, panels (시안 — 부드러운 워크스페이스) */
+  --admin-radius-xl: 18px;   /* modals */
 
   /* ============================================================
-     SHADOW — weakened. Border-led elevation; shadows only float.
+     SHADOW — 시안: blue-gray 캔버스 위 흰 카드가 '부유'하는 soft shadow.
+     (border + 옅은 그림자 = light workspace 인상의 핵심)
      ============================================================ */
   --admin-shadow-none: none;
-  --admin-shadow-sm:   none;                                   /* cards rely on border */
-  --admin-shadow-card-hover: 0 1px 2px rgba(16,24,34,.06);     /* whisper on hover */
+  --admin-shadow-sm:   0 1px 2px rgba(16,24,40,.04), 0 6px 16px rgba(16,24,40,.06);  /* 카드 기본 — 부유 */
+  --admin-shadow-card-hover: 0 2px 4px rgba(16,24,40,.05), 0 12px 28px rgba(16,24,40,.10);  /* hover lift */
   --admin-shadow-pop:  0 4px 14px rgba(16,24,34,.10), 0 1px 3px rgba(16,24,34,.06);  /* menus/dropdowns */
   --admin-shadow-modal:0 16px 40px rgba(16,24,34,.16), 0 2px 8px rgba(16,24,34,.08);
 
@@ -147,7 +148,7 @@
   --admin-sidebar-w:       264px;   /* 시안 LNB 폭 */
   --admin-sidebar-w-min:   64px;
   --admin-content-max:     1280px;
-  --admin-content-pad:     var(--space-8);   /* 32px */
+  --admin-content-pad:     var(--space-10);  /* 40px — 시안의 넉넉한 캔버스 여백 */
   --admin-row-h:           48px;             /* tighter, service-like */
   --admin-form-h:          40px;             /* input/select (버튼과 정렬) */
 
@@ -280,9 +281,9 @@
   position: sticky; top: var(--admin-topbar-h);
   background: var(--admin-surface);
   border-right: 1px solid var(--admin-border);
-  padding: var(--space-4) 0;
+  padding: var(--space-5) 0;
   overflow-y: auto;
-  display: flex; flex-direction: column; gap: var(--space-2);
+  display: flex; flex-direction: column; gap: var(--space-1);
 }
 .jca-nav-section { padding: var(--space-3) var(--space-5) var(--space-2); }
 .jca-nav-section__label {
@@ -295,8 +296,8 @@
 
 .jca-nav-item {
   display: flex; align-items: center; gap: var(--space-3);
-  width: calc(100% - var(--space-4)); margin: 1px var(--space-2);
-  padding: 0 var(--space-3); height: 40px;
+  width: calc(100% - var(--space-4)); margin: 2px var(--space-2);
+  padding: 0 var(--space-3); height: 44px;
   border: 0; border-radius: var(--admin-radius-md);
   background: transparent; color: var(--admin-text-primary);
   font: var(--fw-semibold) var(--text-base)/1 var(--font-sans);
@@ -349,7 +350,7 @@
 .jca-breadcrumb__current { color: var(--admin-text-primary); font-weight: var(--fw-bold); }
 
 /* ========================= PAGE HEADER ========================= */
-.jca-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin: var(--space-4) 0 var(--space-6); }
+.jca-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin: var(--space-5) 0 var(--space-8); }
 .jca-page-head__title { display: flex; align-items: center; gap: var(--space-2); font: var(--admin-page-title); color: var(--admin-text-primary); }
 .jca-page-head__title .jca-help { color: var(--admin-text-muted); }
 .jca-page-head__desc { margin-top: var(--space-2); font: var(--admin-body); color: var(--admin-text-secondary); }
@@ -414,7 +415,7 @@
 
 /* ============================ CARD ============================= */
 .jca-card { background: var(--admin-surface); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-lg); box-shadow: var(--admin-shadow-sm); }
-.jca-card--pad { padding: var(--space-6); }
+.jca-card--pad { padding: var(--space-7); }
 .jca-card--flat { box-shadow: none; }
 .jca-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--admin-border); }
 .jca-card__title { font: var(--admin-card-title); color: var(--admin-text-primary); }
@@ -423,8 +424,8 @@
 .jca-card--interactive:hover { border-color: var(--admin-border-strong); box-shadow: var(--admin-shadow-card-hover); }
 
 /* nav-style entry card (dashboard tiles) — border-led, no green wash */
-.jca-tile { display: block; padding: var(--space-5); background: var(--admin-surface); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-lg); cursor: pointer; transition: border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard); }
-.jca-tile:hover { background: var(--admin-surface-hover); border-color: var(--admin-border-strong); }
+.jca-tile { display: block; padding: var(--space-6); background: var(--admin-surface); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-lg); box-shadow: var(--admin-shadow-sm); cursor: pointer; transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard); }
+.jca-tile:hover { border-color: var(--admin-border-strong); box-shadow: var(--admin-shadow-card-hover); transform: translateY(-1px); }
 .jca-tile__title { font: var(--admin-card-title); color: var(--admin-text-primary); margin-bottom: var(--space-1); }
 .jca-tile__desc { font: var(--admin-caption); color: var(--admin-text-secondary); line-height: var(--leading-normal); }
 
@@ -697,9 +698,9 @@
 .jca-meta-group { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
 
 /* ===================== PROJECT CARD (grid) ===================== */
-.jca-proj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-4); }
-.jca-proj-card { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5); background: var(--admin-surface); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-lg); cursor: pointer; transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard); }
-.jca-proj-card:hover { border-color: var(--admin-border-strong); box-shadow: var(--admin-shadow-card-hover); }
+.jca-proj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-5); }
+.jca-proj-card { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); background: var(--admin-surface); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-lg); box-shadow: var(--admin-shadow-sm); cursor: pointer; transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard); }
+.jca-proj-card:hover { border-color: var(--admin-border-strong); box-shadow: var(--admin-shadow-card-hover); transform: translateY(-1px); }
 .jca-proj-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .jca-proj-card__title { font: var(--admin-card-title); color: var(--admin-text-primary); }
 .jca-proj-card__sub { margin-top: 2px; font: var(--admin-caption); color: var(--admin-text-secondary); }
@@ -710,6 +711,126 @@
 .jca-viewswitch__btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 var(--space-3); border: 0; border-radius: 6px; background: transparent; color: var(--admin-text-secondary); font: var(--fw-semibold) var(--text-sm)/1 var(--font-sans); cursor: pointer; transition: var(--transition-base); }
 .jca-viewswitch__btn[aria-pressed="true"] { background: var(--admin-surface); color: var(--admin-text-primary); box-shadow: var(--admin-shadow-card-hover); }
 
+/* =================================================================
+   WORKSPACE — Home hero · wide project list · summary rails
+   (시안의 light workspace 화면 전용. 모두 토큰 구동, 더미 없음.)
+   ================================================================= */
+
+/* 2-column workspace split: main + right rail */
+.jca-ws-split { display: flex; align-items: flex-start; gap: var(--space-6); }
+.jca-ws-main { flex: 1 1 auto; min-width: 0; }
+.jca-ws-rail { width: 320px; flex: none; }
+@media (max-width: 1200px) { .jca-ws-rail { display: none; } }
+
+/* ---- Home hero ---- */
+.jca-hero__eyebrow { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 var(--space-3); border-radius: var(--radius-pill); background: var(--color-blue-50); color: var(--color-blue-700); font: var(--fw-bold) var(--text-xs)/1 var(--font-sans); }
+.jca-hero__title { margin: var(--space-4) 0 var(--space-2); font: var(--fw-extrabold) 2rem/1.25 var(--font-sans); letter-spacing: var(--tracking-tight); color: var(--admin-text-primary); }
+.jca-hero__sub { font: var(--fw-medium) var(--text-lg)/1.5 var(--font-sans); color: var(--admin-text-secondary); }
+
+/* big AI input card */
+.jca-hero-card { margin-top: var(--space-6); padding: var(--space-6); background: var(--admin-surface); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-lg); box-shadow: var(--admin-shadow-sm); }
+.jca-hero-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+.jca-hero-step { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-md); background: var(--gray-50); }
+.jca-hero-step__ic { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px; background: var(--color-blue-50); color: var(--color-accent); flex: none; }
+.jca-hero-step__t { font: var(--fw-bold) var(--text-sm)/1.2 var(--font-sans); color: var(--admin-text-primary); }
+.jca-hero-step__d { margin-top: 2px; font: var(--text-xs)/1.3 var(--font-sans); color: var(--admin-text-secondary); }
+.jca-hero-input { width: 100%; min-height: 104px; padding: var(--space-4); border: 1px solid var(--admin-border-strong); border-radius: var(--admin-radius-md); background: var(--admin-surface); color: var(--admin-text-primary); font: var(--admin-body); line-height: var(--leading-relaxed); resize: vertical; outline: none; transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard); }
+.jca-hero-input::placeholder { color: var(--admin-text-muted); }
+.jca-hero-input:focus { border-color: var(--admin-primary); box-shadow: 0 0 0 var(--admin-focus-ring-w) var(--admin-focus-ring); }
+.jca-hero-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-4); }
+
+/* section heading */
+.jca-ws-h { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin: var(--space-8) 0 var(--space-4); }
+.jca-ws-h__t { font: var(--admin-section-title); color: var(--admin-text-primary); }
+.jca-ws-h__a { font: var(--fw-semibold) var(--text-sm)/1 var(--font-sans); color: var(--color-primary-text); cursor: pointer; }
+
+/* continue / option tiles */
+.jca-ws-2col { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-4); }
+.jca-ws-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
+
+/* ---- right rail: artifact result list ---- */
+.jca-rail-card { padding: var(--space-5) var(--space-5) var(--space-4); background: var(--admin-surface); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-lg); box-shadow: var(--admin-shadow-sm); }
+.jca-rail-card__t { font: var(--fw-bold) var(--text-xs)/1 var(--font-sans); letter-spacing: var(--tracking-wide); color: var(--admin-text-muted); margin-bottom: var(--space-3); }
+.jca-artifact { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
+.jca-artifact__ic { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; flex: none; background: var(--gray-100); color: var(--admin-text-secondary); }
+.jca-artifact__t { flex: 1; min-width: 0; font: var(--fw-semibold) var(--text-sm)/1.3 var(--font-sans); color: var(--admin-text-primary); }
+.jca-artifact__s { font: var(--fw-bold) var(--text-2xs)/1 var(--font-sans); color: var(--admin-text-muted); }
+.jca-artifact--done .jca-artifact__ic { background: var(--green-50); color: var(--green-600); }
+.jca-artifact--done .jca-artifact__s { color: var(--green-700); }
+
+/* ---- wide project list card (시안 Projects 행형 카드) ---- */
+.jca-plist { display: flex; flex-direction: column; gap: var(--space-4); }
+.jca-pcard { display: flex; align-items: stretch; gap: var(--space-5); padding: var(--space-5) var(--space-6); background: var(--admin-surface); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-lg); box-shadow: var(--admin-shadow-sm); cursor: pointer; transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard); }
+.jca-pcard:hover { border-color: var(--admin-border-strong); box-shadow: var(--admin-shadow-card-hover); transform: translateY(-1px); }
+.jca-pcard__tile { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 12px; flex: none; background: var(--color-blue-50); color: var(--color-accent); font: var(--fw-extrabold) var(--text-lg)/1 var(--font-sans); }
+.jca-pcard__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.jca-pcard__head { display: flex; align-items: center; gap: var(--space-3); }
+.jca-pcard__name { font: var(--admin-card-title); color: var(--admin-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jca-pcard__next { display: inline-flex; align-items: center; gap: 6px; font: var(--fw-bold) var(--text-sm)/1 var(--font-sans); color: var(--color-primary-text); }
+.jca-pcard__next svg { flex: none; }
+.jca-pcard__aside { width: 168px; flex: none; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: var(--space-3); border-left: 1px solid var(--admin-border-subtle); padding-left: var(--space-5); }
+@media (max-width: 1100px) { .jca-pcard__aside { display: none; } }
+
+/* pipeline progress segments */
+.jca-pipe { display: flex; align-items: center; gap: 5px; }
+.jca-pipe__seg { height: 6px; flex: 1; border-radius: var(--radius-pill); background: var(--gray-200); }
+.jca-pipe__seg[data-st="approved"] { background: var(--green-500); }
+.jca-pipe__seg[data-st="in_progress"] { background: var(--color-accent); }
+.jca-pipe__seg[data-st="needs_review"] { background: var(--amber-500); }
+.jca-pipe__seg[data-st="needs_regen"] { background: var(--amber-500); }
+.jca-pipe__seg[data-st="ready"] { background: var(--color-blue-200); }
+
+/* status summary rows (right rail) */
+.jca-sumrow { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) 0; font: var(--admin-body); }
+.jca-sumrow + .jca-sumrow { border-top: 1px solid var(--admin-border-subtle); }
+.jca-sumrow__dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+/* =================================================================
+   NEW PROJECT START MODAL — 시안 "새 프로젝트를 시작해볼까요?"
+   큰 모달(좌 form + 우 AI 안내) · 상단 step indicator. 전부 토큰 구동.
+   ================================================================= */
+.jca-modal--xl { max-width: 920px; }
+.jca-np__lead { margin-top: var(--space-2); font: var(--admin-body); color: var(--admin-text-secondary); }
+.jca-np-steps { margin: var(--space-2) 0 var(--space-6); }
+.jca-np-body { display: flex; align-items: stretch; gap: var(--space-6); }
+.jca-np-form { flex: 1 1 auto; min-width: 0; }
+.jca-np-form .jca-field:last-of-type { margin-bottom: var(--space-4); }
+
+/* right AI guidance panel — pale blue */
+.jca-np-aside { width: 290px; flex: none; align-self: flex-start; padding: var(--space-5); background: var(--color-blue-50); border: 1px solid var(--color-blue-100); border-radius: var(--admin-radius-lg); }
+.jca-np-aside__t { display: flex; align-items: center; gap: 6px; font: var(--fw-bold) var(--text-sm)/1 var(--font-sans); color: var(--color-blue-700); margin-bottom: var(--space-4); }
+.jca-np-aside__list { display: flex; flex-direction: column; gap: var(--space-3); }
+.jca-np-aside__item { display: flex; align-items: center; gap: var(--space-3); font: var(--fw-semibold) var(--text-sm)/1.35 var(--font-sans); color: var(--admin-text-primary); }
+.jca-np-aside__ic { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; flex: none; background: var(--admin-surface); color: var(--color-accent); }
+.jca-np-aside__note { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-blue-100); font: var(--text-xs)/1.5 var(--font-sans); color: var(--color-blue-700); }
+
+/* reference link row + chips + upload(future) */
+.jca-np-linkrow { display: flex; align-items: center; gap: var(--space-2); }
+.jca-np-linkrow__ic { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 40px; flex: none; color: var(--admin-text-muted); }
+.jca-np-linkrow .jca-input { flex: 1; }
+.jca-np-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+.jca-np-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 26px; padding: 0 var(--space-2); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-sm); background: var(--gray-50); font: var(--fw-semibold) var(--text-xs)/1 var(--font-sans); color: var(--admin-text-secondary); }
+.jca-np-chip__t { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jca-np-chip button { display: inline-flex; border: 0; background: transparent; color: var(--admin-text-muted); cursor: pointer; padding: 0; }
+.jca-np-chip button:hover { color: var(--admin-text-primary); }
+.jca-np-upload { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); padding: var(--space-4); border: 1px dashed var(--admin-border-strong); border-radius: var(--admin-radius-md); background: var(--gray-50); color: var(--admin-text-muted); font: var(--admin-caption); }
+
+/* advanced settings */
+.jca-np-advanced__toggle { display: inline-flex; align-items: center; gap: 6px; margin-top: var(--space-2); padding: var(--space-2) 0; border: 0; background: transparent; color: var(--admin-text-secondary); font: var(--fw-semibold) var(--text-sm)/1 var(--font-sans); cursor: pointer; }
+.jca-np-advanced__toggle:hover { color: var(--admin-text-primary); }
+.jca-np-advanced { margin-top: var(--space-3); padding: var(--space-4); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-md); background: var(--gray-50); }
+.jca-np-modes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.jca-np-mode { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--admin-border-strong); border-radius: var(--admin-radius-md); background: var(--admin-surface); cursor: pointer; text-align: left; transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard); }
+.jca-np-mode--on { border-color: var(--admin-primary); box-shadow: 0 0 0 1px var(--admin-primary); }
+.jca-np-mode__ic { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; flex: none; background: var(--color-blue-50); color: var(--color-accent); }
+.jca-np-mode__t { display: block; font: var(--fw-bold) var(--text-sm)/1.2 var(--font-sans); color: var(--admin-text-primary); }
+.jca-np-mode__d { display: block; margin-top: 2px; font: var(--text-xs)/1.35 var(--font-sans); color: var(--admin-text-secondary); }
+
+@media (max-width: 760px) {
+  .jca-np-body { flex-direction: column; }
+  .jca-np-aside { width: 100%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .jca-skeleton, .jca-spinner, .jca-btn[data-loading="true"]::after { animation: none; }
+  .jca-skeleton, .jca-spinner, .jca-btn[data-loading="true"]::after, .jca-pcard, .jca-tile, .jca-proj-card { animation: none; }
 }

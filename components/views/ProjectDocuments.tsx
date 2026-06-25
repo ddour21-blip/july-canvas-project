@@ -24,7 +24,7 @@ import { useAuth } from '@/lib/auth';
 import { downloadTextFile } from '@/lib/export/exportMarkdown';
 import { Button } from '@/components/common/Button';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
-import { Copy, CheckCircle2, ChevronRight, Circle, Clock, Download, ExternalLink, Eye, FileText, Link2, Lock, MonitorPlay, Package, Plus, RefreshCw, Save, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { Copy, CheckCircle2, ChevronRight, Circle, Clock, Download, ExternalLink, Eye, FileText, Link2, Lock, MonitorPlay, Package, Plus, RefreshCw, Save, Trash2, Wand2, X } from 'lucide-react';
 import { EMPTY_ACTIVATION } from '@/types';
 import type {
   DocumentStatus,
@@ -177,7 +177,7 @@ const PROTOTYPE_FAIL_MESSAGES: Record<string, string> = {
   TIMEOUT: '프로토타입 생성 시간이 초과되었습니다. 다시 시도하거나 수동 생성 옵션을 사용해주세요.',
   CLI_ERROR: 'Claude CLI 실행 중 문제가 발생했습니다. 터미널에서 Claude 로그인 상태 또는 실행 시간을 확인해주세요.',
   PARSE_ERROR: 'AI가 프로토타입 HTML을 올바른 JSON 형식으로 반환하지 못했습니다. 다시 생성하거나 수동 생성 옵션을 사용해주세요.',
-  BAD_REQUEST: '프로토타입 생성에 필요한 입력값이 부족합니다. 프로젝트 활성화 또는 문서 생성을 먼저 확인해주세요.',
+  BAD_REQUEST: '프로토타입 생성에 필요한 입력값이 부족합니다. AI 기획 시작 또는 문서 생성을 먼저 확인해주세요.',
   JOB_NOT_FOUND: '진행 중이던 프로토타입 생성 작업을 찾을 수 없습니다(서버 재시작 등). 다시 생성해주세요.',
   UNKNOWN: '프로토타입 생성 중 알 수 없는 오류가 발생했습니다.',
 };
@@ -918,11 +918,11 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             </p>
             {/* embedded에서는 비활성 사유를 버튼 아래에서 한 번만 노출(중복 방지). */}
             {!embedded && !hasPrototypeSourceContext && (
-              <p className="text-xs text-[var(--amber-700)] mt-1.5">프로토타입 생성을 위해 먼저 프로젝트 활성화 또는 기초 문서 생성이 필요합니다.</p>
+              <p className="text-xs text-[var(--amber-700)] mt-1.5">프로토타입 생성을 위해 먼저 AI 기획 시작 또는 기초 문서 생성이 필요합니다.</p>
             )}
             {!embedded && !AI_ENABLED && (
               <p className="text-xs font-medium text-[var(--text-secondary)] bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-3 py-2 mt-2">
-                AI 프로토타입 생성은 <b>로컬 전용(베타)</b>입니다. 배포 환경에서는 비활성화됩니다.
+                AI 프로토타입 생성은 <b>로컬 전용(베타)</b>입니다. 배포 환경에서는 사용할 수 없습니다.
               </p>
             )}
           </div>
@@ -981,7 +981,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
         <div className="mt-5">
           <Button
             variant={aiProto ? 'outline' : 'primary'}
-            icon={aiProtoLoading ? undefined : aiProto ? RefreshCw : Sparkles}
+            icon={aiProtoLoading ? undefined : aiProto ? RefreshCw : Wand2}
             onClick={handleGenerateAiPrototype}
             disabled={!AI_ENABLED || !isEditor || !hasPrototypeSourceContext || aiProtoLoading}
             className="w-full sm:w-auto"
@@ -994,8 +994,8 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
               {!isEditor
                 ? '프로토타입 생성에는 Owner 또는 Editor 권한이 필요합니다.'
                 : !hasPrototypeSourceContext
-                  ? '프로토타입 생성을 위해 프로젝트 활성화 또는 기초 문서 생성이 필요합니다.'
-                  : 'AI 프로토타입 생성은 로컬 전용(베타)입니다. 배포 환경에서는 비활성화됩니다.'}
+                  ? '프로토타입 생성을 위해 AI 기획 시작 또는 기초 문서 생성이 필요합니다.'
+                  : 'AI 프로토타입 생성은 로컬 전용(베타)입니다. 배포 환경에서는 사용할 수 없습니다.'}
             </p>
           )}
         </div>
@@ -1069,7 +1069,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
               )}
               <Button
                 variant={prototypePkg ? 'outline' : 'secondary'}
-                icon={prototypePkg ? RefreshCw : Sparkles}
+                icon={prototypePkg ? RefreshCw : Wand2}
                 onClick={handleBuildPrototypePackage}
                 disabled={!initialDocsReady}
               >
@@ -1240,13 +1240,13 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
               {/* 현재 단계의 '다음 액션' 1개만 primary. 병렬 경쟁 금지. 비활성 사유는 버튼이 아닌 helper text로 분리. */}
               {!hasIA ? (
                 <>
-                  <Button icon={Sparkles} onClick={handleGenerateIA}>IA 생성</Button>
+                  <Button icon={Wand2} onClick={handleGenerateIA}>IA 생성</Button>
                   <p className="mt-2 text-[11px] text-[var(--text-tertiary)]">IA를 생성한 뒤 기능정의서를 작성할 수 있습니다.</p>
                 </>
               ) : !hasFeatureSpec ? (
                 <>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button icon={Sparkles} onClick={handleGenerateFeatureSpec}>기능정의서 생성</Button>
+                    <Button icon={Wand2} onClick={handleGenerateFeatureSpec}>기능정의서 생성</Button>
                     <Button variant="outline" icon={RefreshCw} onClick={handleGenerateIA}>IA 다시 생성</Button>
                   </div>
                   <p className="mt-2 text-[11px] text-[var(--text-tertiary)]">기능정의서까지 작성하면 아래 문서 목록의 PRD에서 PRD를 생성할 수 있습니다.</p>
@@ -1311,7 +1311,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             <div className="flex flex-col items-end gap-1 shrink-0">
               <Button
                 variant={handoffPkg ? 'outline' : 'primary'}
-                icon={handoffPkg ? RefreshCw : Sparkles}
+                icon={handoffPkg ? RefreshCw : Wand2}
                 onClick={handleBuildHandoff}
               >
                 {handoffPkg ? '다시 생성' : '개발 전달 패키지 생성'}
