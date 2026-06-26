@@ -226,7 +226,7 @@ const buildSteps = (mode: WizardMode): { id: StepId; title: string; desc: string
     fields: [{ key: 'intent', label: IDEA_FIELD[mode].label, placeholder: IDEA_FIELD[mode].placeholder, required: true, big: true }],
   },
   // 분석 확인: 입력 필드 없음(AI 분석 결과를 activationAnalysis로 확인/편집).
-  { id: 'detail', title: 'AI 정리 확인', desc: '', fields: [] },
+  { id: 'detail', title: '핵심 요약 보완', desc: '', fields: [] },
   { id: 'confirm', title: '기획 문서 생성', desc: '', fields: [] },
 ];
 
@@ -238,10 +238,12 @@ interface Props {
   project: Project;
   onClose: () => void;
   onActivated: () => void;
+  /** 진입 시 시작할 step (0=시작 방식, 1=아이디어/핵심 항목 입력, 2=AI 정리 확인, 3=문서 생성). 기본 0. */
+  initialStep?: number;
 }
 
-export default function ProjectActivationWizard({ project, onClose, onActivated }: Props) {
-  const [step, setStep] = useState(0);
+export default function ProjectActivationWizard({ project, onClose, onActivated, initialStep = 0 }: Props) {
+  const [step, setStep] = useState(initialStep);
   const [data, setData] = useState<ProjectActivation>(project.activation ?? EMPTY_ACTIVATION);
   // 시작 방식. 기존 프로젝트(legacy 포함)는 아이디어 제품화로 폴백.
   const [mode, setMode] = useState<WizardMode>(
@@ -542,44 +544,48 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
         const refSummary = summarizeReferences(analysis);
         const problemFallback =
           analysis.brief.problem || (analysis.mode === 'requirements' ? summarizeRequirements(analysis) : '');
-        activation.intent = analysis.brief.summary || data.intent;
-        activation.problem = problemFallback || data.problem;
-        activation.customer = analysis.brief.customer || data.customer;
-        activation.value = analysis.brief.value || data.value;
-        activation.differentiator = analysis.brief.differentiation || data.differentiator;
+        // 사용자가 '핵심 요약 보완' 단계에서 직접 입력한 값(data.*)을 우선한다. 비워둔 항목만 AI 분석으로 채움.
+        activation.intent = data.intent?.trim() || analysis.brief.summary || '';
+        activation.problem = data.problem?.trim() || problemFallback;
+        activation.customer = data.customer?.trim() || analysis.brief.customer;
+        activation.value = data.value?.trim() || analysis.brief.value;
+        activation.differentiator = data.differentiator?.trim() || analysis.brief.differentiation;
         activation.market = analysis.marketResearch.entryMarket || analysis.marketResearch.targetMarket || data.market;
         activation.revenue = analysis.productStrategy.revenueModel || data.revenue;
-        activation.mvpScope = mvpIncluded || data.mvpScope;
+        activation.mvpScope = data.mvpScope?.trim() || mvpIncluded;
         activation.laterScope = mvpLater || data.laterScope;
         activation.references = refSummary || data.references;
       }
 
-      // 1) 프로젝트 활성화 (draft → active). 분석 산출물이 있으면 함께 저장(최신본).
+      // 이미 활성화된 프로젝트(재수정)면 문서 재생성 없이 입력값만 갱신한다(중복 문서 방지).
+      const alreadyActive = !!project.status && project.status !== 'draft';
+
+      // 1) 프로젝트 활성화/갱신. 분석 산출물이 있으면 함께 저장(최신본).
       await updateDoc(docRef('projects', project.id), {
         activation,
         ...(analysis ? { activationAnalysis: sanitizeActivationAnalysis(analysis) } : {}),
         status: 'active',
-        activatedAt: serverTimestamp(),
+        ...(alreadyActive ? {} : { activatedAt: serverTimestamp() }),
         updatedAt: serverTimestamp(),
       });
 
-      // 2) 기본 문서 3종 자동 생성 (brief / market_research / product_strategy)
-      //    mode에 따라 제목·content 프레이밍이 달라진다(DocumentType은 동일).
-      //    분석/매핑된 activation 입력값으로 템플릿 문서를 생성하고,
-      //    analysis가 있으면 보조 인자로 전달해 문서에 직접 반영한다(없으면 기존 동작 유지).
-      const docs = buildActivationDocuments({ ...project, activation }, activation, undefined, analysis ?? undefined);
-      await Promise.all(
-        docs.map((d) =>
-          addDoc(col('documents'), {
-            projectId: project.id,
-            ...d,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          }),
-        ),
-      );
+      // 2) 최초 활성화에서만 기본 문서 3종 자동 생성(brief / market_research / product_strategy).
+      //    재수정(이미 active)에서는 입력/요약만 갱신하고 문서를 다시 만들지 않는다(중복 방지).
+      if (!alreadyActive) {
+        const docs = buildActivationDocuments({ ...project, activation }, activation, undefined, analysis ?? undefined);
+        await Promise.all(
+          docs.map((d) =>
+            addDoc(col('documents'), {
+              projectId: project.id,
+              ...d,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            }),
+          ),
+        );
+      }
 
-      showToast('AI 기획을 시작했어요. 기본 기획 문서가 만들어졌습니다.');
+      showToast(alreadyActive ? 'AI 기획이 업데이트되었습니다.' : 'AI 기획을 시작했어요. 기본 기획 문서가 만들어졌습니다.');
       onActivated();
       onClose();
     } catch (err) {
@@ -856,9 +862,37 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
             const isReq = mode === 'requirement_planning';
             return (
             <div className="space-y-3 mb-6">
-              {/* 제목 + 설명 (단계 제목 '분석 확인'은 스텝퍼, 본문 섹션 제목은 '기획 초안 생성') */}
+              {/* 핵심 요약 보완 — 기획 핵심 요약 필드(직접 입력/수정). 비우면 AI 분석/기존값 보존. */}
+              <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
+                <p className="text-base font-bold text-[var(--text-strong)]">핵심 요약 보완</p>
+                <p className="text-xs text-[var(--text-secondary)] mt-1 mb-3 leading-relaxed">
+                  입력한 아이디어와 요구사항을 바탕으로 기획의 기준이 되는 항목을 정리합니다. 부족한 항목은 직접 보완할 수 있습니다.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {([
+                    { key: 'intent', label: '서비스 목적', ph: '예: 흩어진 운동 기록을 한곳에 모아 성취를 시각화' },
+                    { key: 'customer', label: '주요 사용자', ph: '예: 자기 기록을 즐기는 20–30대 러너' },
+                    { key: 'problem', label: '해결하려는 문제', ph: '예: 기록이 흩어져 동기부여가 어렵다' },
+                    { key: 'value', label: '핵심 가치', ph: '예: 한 흐름으로 기록·통계·공유' },
+                    { key: 'mvpScope', label: 'MVP 방향', ph: '예: 운동 기록·통계·간단 공유' },
+                    { key: 'differentiator', label: '차별점', ph: '예: 기획-디자인-개발이 한 흐름으로 연결' },
+                  ] as { key: ActivationTextKey; label: string; ph: string }[]).map((f) => (
+                    <label key={f.key} className="block">
+                      <span className="block text-xs font-bold text-[var(--text-tertiary)] mb-1">{f.label}</span>
+                      <input
+                        value={data[f.key]}
+                        onChange={(e) => set(f.key, e.target.value)}
+                        placeholder={f.ph}
+                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-sm bg-[var(--surface-card)] text-[var(--text-body)] transition-colors"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* 제목 + 설명 — AI가 정리한 초안을 확인/보완하는 영역 */}
               <div>
-                <p className="text-base font-bold text-[var(--text-strong)]">기획 초안 생성</p>
+                <p className="text-base font-bold text-[var(--text-strong)]">AI 정리 확인 · 기획 초안</p>
                 <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
                   입력한 아이디어와 참고자료를 바탕으로 브리프, 시장조사, 제품화 전략 초안을 정리합니다.
                   AI 실행을 사용할 수 없는 환경에서는 수동 초안으로 진행할 수 있습니다.
