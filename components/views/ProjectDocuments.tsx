@@ -158,6 +158,8 @@ interface Props {
   variant?: 'full' | 'compact';
   /** 상위 그룹 카드 안에 끼워 넣는 모드 — 자체 카드 chrome를 낮추고(인셋) 보조 액션처럼 렌더. 디자인 탭 단계용. */
   embedded?: boolean;
+  /** 좌측 문서 목록 nav + 상단 '문서 파이프라인' 배너를 숨기고, 선택된 단일 문서 에디터만 노출(상위에서 문서 선택 UI를 제공할 때). */
+  hideDocList?: boolean;
   /** 문서 워크스페이스를 특정 파이프라인 단계로 한정(좌측 그룹/기본 선택/보조 패널 노출). 미지정 시 전체. */
   stage?: PipelineStep;
   /** 딥링크로 진입한 초기 선택 문서 id (해당 문서 타입을 선택 상태로) */
@@ -184,7 +186,7 @@ const PROTOTYPE_FAIL_MESSAGES: Record<string, string> = {
 const prototypeFailMessage = (reason?: string): string =>
   PROTOTYPE_FAIL_MESSAGES[reason ?? 'UNKNOWN'] ?? PROTOTYPE_FAIL_MESSAGES.UNKNOWN;
 
-export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, section = 'documents', stage, prototypePart, variant = 'full', embedded = false, initialDocId, onCurrentDocChange, navigate }: Props) {
+export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, section = 'documents', stage, prototypePart, variant = 'full', embedded = false, hideDocList = false, initialDocId, onCurrentDocChange, navigate }: Props) {
   const { user } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -854,7 +856,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
         </div>
       )}
 
-      {section === 'documents' && (stage === undefined || stage === 'planning') && (
+      {section === 'documents' && !hideDocList && (stage === undefined || stage === 'planning') && (
       <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -1464,7 +1466,8 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       {/* 문서 워크스페이스: 좌측 목록 + 중앙 에디터 */}
       {section === 'documents' && variant !== 'compact' && (
       <div className="flex flex-col lg:flex-row gap-5 items-start">
-        {/* 문서 목록 */}
+        {/* 문서 목록 (hideDocList면 숨김 — 상위에서 문서 선택 UI 제공) */}
+        {!hideDocList && (
         <nav className="w-full lg:w-[300px] shrink-0 space-y-4">
           {visibleGroups.map((group) => (
             <div key={group.label} className="space-y-2">
@@ -1521,6 +1524,7 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             </div>
           ))}
         </nav>
+        )}
 
         {/* 문서 에디터 */}
         <section className="flex-1 min-w-0 w-full bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] shadow-[var(--shadow-xs)] overflow-hidden">

@@ -164,6 +164,20 @@ const HERO_START: HeroCopy = {
   why: ['웹에서 한 줄로 바로 시작', '기획부터 운영까지 한 흐름', '단계마다 다음 할 일 안내'],
 };
 
+// 기획 단계 산출물 정의(기획 탭 Workspace). 상태는 기존 documents에서 derive.
+const PLANNING_DOCS: { type: DocumentType; label: string; why: string }[] = [
+  { type: 'brief', label: '프로젝트 브리프', why: '서비스 목적·사용자·문제·핵심 가치를 한 문서로 정리합니다.' },
+  { type: 'market_research', label: '시장조사', why: '시장 상황·경쟁 서비스·사용자 니즈를 정리합니다.' },
+  { type: 'product_strategy', label: '제품화 전략', why: 'MVP 범위·차별점·수익화 가능성·우선순위를 정리합니다.' },
+];
+type DocState = 'none' | 'draft' | 'review' | 'approved';
+const DOC_STATE_BADGE: Record<DocState, { label: string; fg: string; bg: string }> = {
+  none: { label: '아직 없음', fg: 'var(--text-tertiary)', bg: 'var(--surface-hover)' },
+  draft: { label: '초안', fg: 'var(--color-blue-700)', bg: 'var(--color-blue-50)' },
+  review: { label: '보완 필요', fg: 'var(--amber-700)', bg: 'var(--amber-50)' },
+  approved: { label: '승인됨', fg: 'var(--green-700)', bg: 'var(--green-50)' },
+};
+
 // 디자인/프로토타입 탭의 단계 헤더(번호 배지 + 제목 + 설명). 단계 흐름이 보이도록 정리.
 function StepHeader({ n, title, desc }: { n: number; title: string; desc: string }) {
   return (
@@ -199,6 +213,9 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
   };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+  // 위저드 진입 step (0=시작 방식, 1=아이디어/핵심 항목 입력 — 수정·요약 보완, 2=AI 정리 확인). 열기 전에 항상 설정.
+  const [wizardStep, setWizardStep] = useState(0);
+  const openWizard = (step = 0) => { setWizardStep(step); setShowWizard(true); };
   const [screenName, setScreenName] = useState('');
   const [screenCode, setScreenCode] = useState('');
   const [confirmState, setConfirmState] = useState<ConfirmState>({ isOpen: false, title: '', msg: '', action: null });
@@ -206,6 +223,11 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [sources, setSources] = useState<ProjectSource[]>([]);
   const [showAllArtifacts, setShowAllArtifacts] = useState(false);
+  // 기획 탭: 카드에서 선택한 산출물 타입(인라인 상세). 딥링크로 들어온 타입이 있으면 그걸로 시작.
+  const PLANNING_TYPES: DocumentType[] = ['brief', 'market_research', 'product_strategy'];
+  const [selectedPlanningType, setSelectedPlanningType] = useState<DocumentType | null>(
+    initialDocId && (PLANNING_TYPES as string[]).includes(initialDocId) ? (initialDocId as DocumentType) : null,
+  );
 
   const project = projects.find((p) => p.id === projectId);
   const projectScreens = useMemo(() => screens.filter((s) => s.projectId === projectId), [screens, projectId]);
@@ -264,7 +286,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         signaled = true;
       }
     } catch { /* sessionStorage 접근 불가 시 무시 */ }
-    if (signaled) setShowWizard(true);
+    if (signaled) openWizard(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, project?.status, perms.canEdit]);
 
@@ -343,7 +365,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         <div className="jca-empty__title">먼저 AI 기획을 시작하세요</div>
         <p className="jca-empty__desc">{desc}</p>
         {canEdit && (
-          <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
+          <button type="button" className="jca-btn jca-btn--primary" onClick={() => openWizard(0)}>
             <PlayCircle size={16} />AI 기획 시작하기
           </button>
         )}
@@ -383,7 +405,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         onCancel={() => setConfirmState({ ...confirmState, isOpen: false })}
       />
       {showWizard && (
-        <ProjectActivationWizard project={project} onClose={() => setShowWizard(false)} onActivated={() => goTab('planning')} />
+        <ProjectActivationWizard project={project} onClose={() => setShowWizard(false)} onActivated={() => goTab('planning')} initialStep={wizardStep} />
       )}
 
       {/* 브레드크럼 (admin) */}
@@ -429,12 +451,12 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
           {/* primary CTA: 비활성→활성화 시작하기. (프로토타입 탭의 '새 화면 추가'는 AI 생성이 기본 플로우가 되어 */}
           {/*  상단 공통 액션에서 제거 — 수동 코드 추가는 프로토타입 탭의 '수동 생성 옵션' 아코디언에서 진입한다.) */}
           {canEdit && !isActivated && (
-            <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
+            <button type="button" className="jca-btn jca-btn--primary" onClick={() => openWizard(0)}>
               <PlayCircle size={16} />AI 기획 시작하기
             </button>
           )}
           {canEdit && isActivated && (
-            <button type="button" className="jca-btn jca-btn--secondary" onClick={() => setShowWizard(true)} title="기획 정보 수정">
+            <button type="button" className="jca-btn jca-btn--secondary" onClick={() => openWizard(1)} title="기획 정보 수정">
               <Settings size={16} />설정
             </button>
           )}
@@ -490,7 +512,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
           : next
             ? (HERO_COPY[next.step] ?? { title: next.label, desc: next.reason, cta: next.cta, why: [] })
             : { title: '필수 단계를 모두 마쳤어요', desc: '개발 전달 패키지를 생성하거나 결과물을 공유해 피드백을 받아보세요.', cta: '개발 전달 패키지 생성', why: ['핵심 산출물 준비 완료', '개발 착수 가능 상태', '공유·피드백으로 개선'] };
-        const onHero = () => { if (!isActivated) setShowWizard(true); else if (next) goTab(next.tab as Tab); else goTab('build_plan'); };
+        const onHero = () => { if (!isActivated) openWizard(0); else if (next) goTab(next.tab as Tab); else goTab('build_plan'); };
 
         // 산출물 그룹 준비 현황(그룹별 N/M — 전체 나열 금지, 펼치면 항목 표시)
         const itemPrepared = (it: ArtifactItem): boolean => {
@@ -564,7 +586,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                     <span className="font-bold text-[var(--color-primary-text)]">만들어질 산출물</span> · {currentStage.output}
                   </p>
                   {canEdit && (
-                    <button type="button" className="jca-btn jca-btn--secondary shrink-0" onClick={() => (isActivated ? goTab(currentStage.tab) : setShowWizard(true))}>
+                    <button type="button" className="jca-btn jca-btn--secondary shrink-0" onClick={() => (isActivated ? goTab(currentStage.tab) : openWizard(0))}>
                       {isActivated ? `${currentStage.label}(으)로 이동` : 'AI 기획 시작하기'}<ArrowRight size={16} />
                     </button>
                   )}
@@ -672,40 +694,190 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         );
       })()}
 
-      {/* 기획 탭 (구 documents) — 기획 단계 문서(브리프/시장조사/제품화전략) */}
-      {tab === 'planning' && (
-        <>
-          {!isActivated ? (
-            <div className="jca-card">
-              <div className="jca-empty">
-                <span className="jca-empty__icon">
-                  <FileText size={22} />
-                </span>
-                <div className="jca-empty__title">먼저 AI 기획을 시작하세요</div>
-                <p className="jca-empty__desc">AI 기획을 시작하면 기본 기획 문서(브리프·시장조사·제품화 전략)가 만들어집니다.</p>
+      {/* 기획 탭 — 기획 단계 Workspace (문서 리스트가 아니라 단계 작업 화면) */}
+      {tab === 'planning' && (() => {
+        const docStateOf = (type: DocumentType): DocState => {
+          const d = documents.find((x) => x.type === type);
+          if (!d || !d.content?.trim()) return 'none';
+          return d.status === 'approved' ? 'approved' : d.status === 'review' ? 'review' : 'draft';
+        };
+        const planDocs = PLANNING_DOCS.map((d) => ({ ...d, state: docStateOf(d.type) }));
+        const readyCount = planDocs.filter((d) => d.state !== 'none').length;
+        const approvedCount = planDocs.filter((d) => d.state === 'approved').length;
+        const firstReadyType = planDocs.find((d) => d.state !== 'none')?.type ?? null;
+        const selected = planDocs.find((d) => d.type === selectedPlanningType) ?? null;
+
+        const a = project.activation;
+        const intent = a?.intent?.trim() || project.description?.trim() || '';
+        const summary: { label: string; value?: string }[] = [
+          { label: '서비스 목적', value: a?.intent?.trim() },
+          { label: '주요 사용자', value: a?.customer?.trim() },
+          { label: '해결하려는 문제', value: a?.problem?.trim() },
+          { label: '핵심 가치', value: a?.value?.trim() },
+          { label: 'MVP 방향', value: a?.mvpScope?.trim() },
+          { label: '차별점', value: a?.differentiator?.trim() },
+        ];
+
+        // Hero 상태: 없음 → 시작 / 일부 → 확인 / 전부 → 다음 단계
+        const heroNone = !isActivated || readyCount === 0;
+        const heroAll = readyCount === PLANNING_DOCS.length;
+        const hero: HeroCopy = heroNone
+          ? { title: '기획을 시작해볼까요?', desc: '서비스 목적·사용자·문제·제품화 방향을 정리하면 July Canvas가 기획 산출물 초안을 만들어드립니다.', cta: 'AI 기획 시작하기', why: ['무엇을·왜 만들지 기준 확립', '시장·사용자 근거 정리', '디자인·개발의 출발점'] }
+          : heroAll
+            ? { title: '기획 단계가 준비되었습니다', desc: '프로젝트 브리프·시장조사·제품화 전략을 바탕으로 다음 단계에서 화면 방향과 프로토타입 기준을 정리할 수 있습니다.', cta: '디자인/프로토타입으로 이동', why: [] }
+            : { title: '기획 초안이 준비되어 있습니다', desc: '생성된 기획 내용을 확인하고 부족한 부분을 보완한 뒤 디자인/프로토타입 단계로 넘어갈 수 있습니다.', cta: '기획 산출물 확인하기', why: [] };
+        const onHero = () => { if (heroNone) openWizard(isActivated ? 1 : 0); else if (heroAll) goTab('design'); else setSelectedPlanningType(firstReadyType); };
+
+        return (
+          <div className="jca-ws-main space-y-5">
+            {/* 1) 기획 단계 Hero */}
+            <div className="jca-wsx-hero">
+              <div>
+                <span className="jca-wsx-hero__eyebrow"><ArrowRight size={13} /> 기획 단계</span>
+                <h2 className="jca-wsx-hero__title">{hero.title}</h2>
+                <p className="jca-wsx-hero__desc">{hero.desc}</p>
                 {canEdit && (
-                  <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
-                    <PlayCircle size={16} />AI 기획 시작하기
+                  <div className="jca-wsx-hero__cta">
+                    <button type="button" className="jca-btn jca-btn--primary jca-btn--lg" onClick={onHero}>
+                      {heroNone ? <PlayCircle size={16} /> : null}{hero.cta}<ArrowRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+              {hero.why.length > 0 && (
+                <div className="jca-wsx-hero__why">
+                  <span className="jca-wsx-hero__why-t">기획이 중요한 이유</span>
+                  <ul style={{ display: 'contents' }}>
+                    {hero.why.map((w) => (<li key={w}><CheckCircle2 size={15} /> {w}</li>))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* 2) 기획에 사용할 입력 — label/value/action 정렬 row. 수정은 모두 기존 AI 기획 모달(위저드) 재사용 */}
+            <div className="jca-card jca-card--pad">
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <h3 className="font-bold text-[var(--text-strong)] text-lg">기획에 사용할 입력</h3>
+                {canEdit && (
+                  <button type="button" className="jca-btn jca-btn--secondary jca-btn--sm" onClick={() => openWizard(1)}>
+                    <PlayCircle size={14} />AI 기획 수정
                   </button>
                 )}
               </div>
+              <p className="text-sm text-[var(--text-secondary)] mb-3">July Canvas는 아래 정보를 바탕으로 기획 산출물을 생성합니다. 부족한 내용은 “AI 기획 수정”에서 바로 보완할 수 있습니다.</p>
+              <div>
+                <div className="grid grid-cols-[110px_1fr_auto] items-center gap-3 py-3 border-t border-[var(--admin-border-subtle)]">
+                  <span className="text-xs font-bold text-[var(--text-tertiary)]">시작 방식</span>
+                  <span className="text-sm text-[var(--text-body)] truncate">{MODE_LABEL[a?.mode ?? 'legacy'] ?? '아이디어 제품화'}</span>
+                  {canEdit && <button type="button" className="jca-btn jca-btn--ghost jca-btn--sm" onClick={() => openWizard(1)}>수정</button>}
+                </div>
+                <div className="grid grid-cols-[110px_1fr_auto] items-center gap-3 py-3 border-t border-[var(--admin-border-subtle)]">
+                  <span className="text-xs font-bold text-[var(--text-tertiary)]">입력한 아이디어</span>
+                  <span className={`text-sm truncate ${intent ? 'text-[var(--text-body)]' : 'text-[var(--text-tertiary)]'}`}>{intent || '아직 입력한 아이디어가 없습니다'}</span>
+                  {canEdit && <button type="button" className="jca-btn jca-btn--ghost jca-btn--sm" onClick={() => openWizard(1)}>수정</button>}
+                </div>
+                <div className="grid grid-cols-[110px_1fr_auto] items-center gap-3 py-3 border-t border-[var(--admin-border-subtle)]">
+                  <span className="text-xs font-bold text-[var(--text-tertiary)]">참고자료</span>
+                  <span className="text-sm text-[var(--text-body)]">{sources.length}개</span>
+                  {canEdit && <button type="button" className="jca-btn jca-btn--ghost jca-btn--sm" onClick={() => openWizard(1)}>추가·관리</button>}
+                </div>
+              </div>
             </div>
-          ) : (
-            <ProjectDocuments
-              project={project}
-              documents={documents}
-              screens={screens}
-              isEditor={canEdit}
-              isOwner={isOwner}
-              section="documents"
-              stage="planning"
-              initialDocId={initialDocId}
-              onCurrentDocChange={setCurrentDocId}
-              navigate={navigate}
-            />
-          )}
-        </>
-      )}
+
+            {/* 3) 기획 핵심 요약 (산출물을 이해하기 위한 근거 → 산출물보다 먼저) */}
+            <div className="jca-card jca-card--pad">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="font-bold text-[var(--text-strong)] text-lg">기획 핵심 요약</h3>
+                {canEdit && (
+                  <button type="button" className="jca-btn jca-btn--secondary jca-btn--sm" onClick={() => openWizard(1)}>
+                    <PlayCircle size={14} />요약 보완
+                  </button>
+                )}
+              </div>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+                {summary.map((s) => (
+                  <div key={s.label} className="grid grid-cols-[88px_1fr] gap-3">
+                    <dt className="text-xs font-bold text-[var(--text-tertiary)] pt-0.5">{s.label}</dt>
+                    <dd className="text-sm text-[var(--text-body)] leading-relaxed line-clamp-2">{s.value || <span className="text-[var(--text-tertiary)]">미입력</span>}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            {/* 4+5) 기획 산출물 카드 + 선택된 산출물 인라인 상세 */}
+            <div className="jca-card jca-card--pad">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="font-bold text-[var(--text-strong)] text-lg">기획 산출물</h3>
+                <span className="jca-meta">{readyCount}/{PLANNING_DOCS.length} 준비 · 승인 {approvedCount}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {planDocs.map((d) => {
+                  const b = DOC_STATE_BADGE[d.state];
+                  const active = selectedPlanningType === d.type;
+                  return (
+                    <div key={d.type} className="flex flex-col rounded-[var(--radius-lg)] border bg-[var(--surface-card)] p-4 shadow-[var(--admin-shadow-sm)] transition-colors" style={{ borderColor: active ? 'var(--color-accent)' : 'var(--admin-border)' }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-bold text-[var(--text-strong)]">{d.label}</span>
+                        <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-[var(--radius-pill)]" style={{ color: b.fg, backgroundColor: b.bg }}>{b.label}</span>
+                      </div>
+                      <p className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed flex-1">{d.why}</p>
+                      {canEdit && d.state === 'none' ? (
+                        <button type="button" className="jca-btn jca-btn--secondary jca-btn--sm mt-3" onClick={() => (isActivated ? setSelectedPlanningType(d.type) : openWizard(0))}>
+                          <PlayCircle size={14} />{isActivated ? '문서 생성' : 'AI 기획 시작'}
+                        </button>
+                      ) : (
+                        <button type="button" className={`jca-btn jca-btn--sm mt-3 ${active ? 'jca-btn--primary' : 'jca-btn--secondary'}`} onClick={() => setSelectedPlanningType(active ? null : d.type)} disabled={d.state === 'none'}>
+                          <FileText size={14} />{active ? '닫기' : '보기'}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 선택된 산출물 상세 — 카드 바로 아래에서 해당 문서만 인라인 표시(전문/다운로드/승인/편집/다시 생성) */}
+              <div className="mt-5 pt-5 border-t border-[var(--admin-border-subtle)]">
+                {!isActivated ? (
+                  <p className="text-sm text-[var(--admin-text-muted)]">AI 기획을 시작하면 기획 산출물이 생성됩니다.</p>
+                ) : selected ? (
+                  <ProjectDocuments
+                    key={selected.type}
+                    project={project}
+                    documents={documents}
+                    screens={screens}
+                    isEditor={canEdit}
+                    isOwner={isOwner}
+                    section="documents"
+                    stage="planning"
+                    embedded
+                    hideDocList
+                    initialDocId={selected.type}
+                    onCurrentDocChange={setCurrentDocId}
+                    navigate={navigate}
+                  />
+                ) : (
+                  <p className="text-sm text-[var(--admin-text-muted)]">확인할 기획 산출물을 선택해주세요. 위 카드에서 “보기”를 누르면 여기에서 바로 열립니다.</p>
+                )}
+              </div>
+            </div>
+
+            {/* 6) 다음 단계 — Hero에서 이미 다음 단계 CTA/설명을 제공하는 heroAll 상태에선 완전히 숨김(중복 제거).
+                일부만 준비된 상태(부분)에서만 노출하며, 이때 이동 버튼은 Hero에 없으므로 여기서 1개 제공. */}
+            {readyCount > 0 && !heroAll && (
+              <div className="jca-card jca-card--pad flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-primary-text)]"><ArrowRight size={13} /> 다음 단계</div>
+                  <h3 className="font-bold text-[var(--text-strong)] text-base mt-1">디자인/프로토타입</h3>
+                  <p className="text-sm text-[var(--text-secondary)] mt-0.5">기획 내용을 바탕으로 화면 방향과 프로토타입 기준을 정리합니다.</p>
+                </div>
+                <button type="button" className="shrink-0 jca-btn jca-btn--secondary" onClick={() => goTab('design')}>
+                  디자인/프로토타입으로 이동<ArrowRight size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* 디자인/프로토타입 탭 — 하나의 그룹 카드 안에 1·2·3 단계 흐름 */}
       {tab === 'design' && (

@@ -238,10 +238,12 @@ interface Props {
   project: Project;
   onClose: () => void;
   onActivated: () => void;
+  /** 진입 시 시작할 step (0=시작 방식, 1=아이디어/핵심 항목 입력, 2=AI 정리 확인, 3=문서 생성). 기본 0. */
+  initialStep?: number;
 }
 
-export default function ProjectActivationWizard({ project, onClose, onActivated }: Props) {
-  const [step, setStep] = useState(0);
+export default function ProjectActivationWizard({ project, onClose, onActivated, initialStep = 0 }: Props) {
+  const [step, setStep] = useState(initialStep);
   const [data, setData] = useState<ProjectActivation>(project.activation ?? EMPTY_ACTIVATION);
   // 시작 방식. 기존 프로젝트(legacy 포함)는 아이디어 제품화로 폴백.
   const [mode, setMode] = useState<WizardMode>(
@@ -554,32 +556,35 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
         activation.references = refSummary || data.references;
       }
 
-      // 1) 프로젝트 활성화 (draft → active). 분석 산출물이 있으면 함께 저장(최신본).
+      // 이미 활성화된 프로젝트(재수정)면 문서 재생성 없이 입력값만 갱신한다(중복 문서 방지).
+      const alreadyActive = !!project.status && project.status !== 'draft';
+
+      // 1) 프로젝트 활성화/갱신. 분석 산출물이 있으면 함께 저장(최신본).
       await updateDoc(docRef('projects', project.id), {
         activation,
         ...(analysis ? { activationAnalysis: sanitizeActivationAnalysis(analysis) } : {}),
         status: 'active',
-        activatedAt: serverTimestamp(),
+        ...(alreadyActive ? {} : { activatedAt: serverTimestamp() }),
         updatedAt: serverTimestamp(),
       });
 
-      // 2) 기본 문서 3종 자동 생성 (brief / market_research / product_strategy)
-      //    mode에 따라 제목·content 프레이밍이 달라진다(DocumentType은 동일).
-      //    분석/매핑된 activation 입력값으로 템플릿 문서를 생성하고,
-      //    analysis가 있으면 보조 인자로 전달해 문서에 직접 반영한다(없으면 기존 동작 유지).
-      const docs = buildActivationDocuments({ ...project, activation }, activation, undefined, analysis ?? undefined);
-      await Promise.all(
-        docs.map((d) =>
-          addDoc(col('documents'), {
-            projectId: project.id,
-            ...d,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          }),
-        ),
-      );
+      // 2) 최초 활성화에서만 기본 문서 3종 자동 생성(brief / market_research / product_strategy).
+      //    재수정(이미 active)에서는 입력/요약만 갱신하고 문서를 다시 만들지 않는다(중복 방지).
+      if (!alreadyActive) {
+        const docs = buildActivationDocuments({ ...project, activation }, activation, undefined, analysis ?? undefined);
+        await Promise.all(
+          docs.map((d) =>
+            addDoc(col('documents'), {
+              projectId: project.id,
+              ...d,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            }),
+          ),
+        );
+      }
 
-      showToast('AI 기획을 시작했어요. 기본 기획 문서가 만들어졌습니다.');
+      showToast(alreadyActive ? 'AI 기획이 업데이트되었습니다.' : 'AI 기획을 시작했어요. 기본 기획 문서가 만들어졌습니다.');
       onActivated();
       onClose();
     } catch (err) {
@@ -714,6 +719,30 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                   rows={6}
                   className="w-full px-4 py-3 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-sm resize-y bg-[var(--surface-sunken)] focus:bg-[var(--surface-card)] text-[var(--text-body)] transition-colors"
                 />
+              </div>
+
+              {/* 기획 핵심 항목 — 기획 핵심 요약(주요 사용자/문제/가치/MVP/차별점)에 그대로 반영. 모두 선택, 비우면 AI 분석/기존값 보존. */}
+              <div>
+                <div className="text-xs font-bold text-[var(--text-body)] mb-2">기획 핵심 항목 <span className="font-medium text-[var(--text-tertiary)]">선택 · 비워두면 AI가 정리합니다</span></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {([
+                    { key: 'customer', label: '주요 사용자', ph: '예: 자기 기록을 즐기는 20–30대 러너' },
+                    { key: 'problem', label: '해결하려는 문제', ph: '예: 기록이 흩어져 동기부여가 어렵다' },
+                    { key: 'value', label: '핵심 가치', ph: '예: 기록을 한곳에 모아 성취를 시각화' },
+                    { key: 'mvpScope', label: 'MVP 방향', ph: '예: 운동 기록·통계·간단 공유' },
+                    { key: 'differentiator', label: '차별점', ph: '예: 기획-디자인-개발이 한 흐름으로 연결' },
+                  ] as { key: ActivationTextKey; label: string; ph: string }[]).map((f) => (
+                    <label key={f.key} className="block">
+                      <span className="block text-xs font-bold text-[var(--text-tertiary)] mb-1">{f.label}</span>
+                      <input
+                        value={data[f.key]}
+                        onChange={(e) => set(f.key, e.target.value)}
+                        placeholder={f.ph}
+                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-sm bg-[var(--surface-sunken)] focus:bg-[var(--surface-card)] text-[var(--text-body)] transition-colors"
+                      />
+                    </label>
+                  ))}
+                </div>
               </div>
 
               {/* 참고자료 (파일/URL/Drive) — 기존 projectSources 로직 재사용 */}
