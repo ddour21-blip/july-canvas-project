@@ -789,7 +789,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               <div className="flex items-center justify-between gap-3 mb-4">
                 <h3 className="font-bold text-[var(--text-strong)] text-lg">기획 핵심 요약</h3>
                 {canEdit && (
-                  <button type="button" className="jca-btn jca-btn--secondary jca-btn--sm" onClick={() => openWizard(1)}>
+                  <button type="button" className="jca-btn jca-btn--secondary jca-btn--sm" onClick={() => openWizard(2)}>
                     <PlayCircle size={14} />요약 보완
                   </button>
                 )}
