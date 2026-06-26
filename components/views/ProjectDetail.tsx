@@ -8,18 +8,19 @@ import { useRole, roleLabel } from '@/lib/auth';
 import { deleteProjectCascade } from '@/lib/projects';
 import { unlockPrototype } from '@/lib/prototypes';
 import { copyToClipboard, getTime, nowMs, showToast } from '@/lib/utils';
-import { DOCUMENT_ORDER } from '@/lib/documents';
+import { subscribeProjectSources } from '@/lib/projectSources';
 import { Button } from '@/components/common/Button';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
 import { ShareState } from '@/components/modals/ShareModal';
 import ProjectActivationWizard from './ProjectActivationWizard';
-import { derivePipelineStatus, deriveNextAction, pipelineStatusLabel } from '@/lib/pipeline';
-import type { PipelineStep, PipelineStepStatus } from '@/types';
+import { derivePipelineStatus, deriveNextAction } from '@/lib/pipeline';
+import type { DocumentType, PipelineStep, PipelineStepStatus, ProjectSource } from '@/types';
 import ProjectDocuments from './ProjectDocuments';
 import ProjectReviews from './ProjectReviews';
 import {
   ArrowLeft,
   ArrowRight,
+  Check,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -32,9 +33,9 @@ import {
   Link2,
   MessageSquarePlus,
   Package,
-  Pencil,
   PlayCircle,
   Plus,
+  Settings,
   Trash2,
   X,
 } from 'lucide-react';
@@ -96,105 +97,72 @@ interface ProjectDetailProps {
   initialScreenNew?: boolean;
 }
 
-// 파이프라인 단계 상태 → 배지 색상(파생, 저장 안 함).
-const PIPELINE_BADGE: Record<PipelineStepStatus, { fg: string; bg: string }> = {
-  not_started: { fg: 'var(--text-tertiary)', bg: 'var(--surface-hover)' },
-  ready: { fg: 'var(--color-primary-text)', bg: 'var(--surface-active)' },
-  in_progress: { fg: 'var(--status-draft-fg)', bg: 'var(--status-draft-bg)' },
-  needs_review: { fg: 'var(--status-review-fg)', bg: 'var(--status-review-bg)' },
-  approved: { fg: 'var(--status-approved-fg)', bg: 'var(--status-approved-bg)' },
-  needs_regen: { fg: 'var(--amber-700)', bg: 'var(--amber-50)' },
+// 시작 방식(activation.mode) 사용자 표기.
+const MODE_LABEL: Record<string, string> = {
+  idea_productization: '아이디어 제품화',
+  requirement_planning: '요구사항·RFP 기반',
+  legacy: '기존 프로젝트',
 };
 
-/** 개요 탭의 8단계 파이프라인 진행 카드. 단계 클릭 시 해당 탭으로 이동. */
-function PipelineProgressCard({
-  project,
-  documents,
-  screens,
-  onGo,
-}: {
-  project: Project;
-  documents: ProjectDocument[];
-  screens: Screen[];
-  onGo: (tab: string) => void;
-}) {
-  const steps = derivePipelineStatus(project, documents, screens);
-  return (
-    <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
-      <h3 className="font-bold text-[var(--text-strong)] text-lg mb-1">파이프라인 진행 상황</h3>
-      <p className="text-sm text-[var(--text-secondary)] mb-4">아이디어부터 운영까지 단계별 산출물 상태입니다. 각 단계를 눌러 이동하세요.</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {steps.map((s, i) => {
-          const c = PIPELINE_BADGE[s.status];
-          return (
-            <button
-              key={s.step}
-              type="button"
-              onClick={() => onGo(s.tab)}
-              className="text-left rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)] px-3 py-2.5 hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] transition-colors"
-            >
-              <div className="text-[11px] font-bold text-[var(--text-strong)] truncate">
-                <span className="font-mono text-[var(--text-tertiary)]">{i + 1}.</span> {s.label}
-              </div>
-              <span
-                className="inline-block mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-[var(--radius-pill)]"
-                style={{ color: c.fg, backgroundColor: c.bg }}
-              >
-                {pipelineStatusLabel(s.status)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+// 제품 제작 파이프라인 — 사용자 노출 단계명은 July Canvas 핵심 용어를 유지(순화하지 않음).
+type StageState = 'done' | 'doing' | 'next' | 'wait' | 'na';
+const STAGE_FLOW: {
+  key: string; label: string; doing: string; output: string; tab: Tab; steps: PipelineStep[];
+}[] = [
+  { key: 'plan', label: '기획', doing: '서비스 목적·사용자·문제·제품화 방향을 정리합니다.', output: '프로젝트 브리프, 시장조사, 제품화 전략', tab: 'planning', steps: ['planning'] },
+  { key: 'design', label: '디자인/프로토타입', doing: '기획을 바탕으로 화면 흐름과 디자인 기준을 정리합니다.', output: '디자인 컨텍스트, 프로토타입 초안', tab: 'design', steps: ['design'] },
+  { key: 'structure', label: '구조 설계', doing: '화면과 기능을 서비스 구조·IA·기능정의서로 연결합니다.', output: 'IA, 기능정의서, 서비스 구조', tab: 'structure', steps: ['structure'] },
+  { key: 'build', label: '개발 패키지', doing: '개발자가 바로 참고할 전달 문서와 작업 계획을 묶습니다.', output: 'PRD, 개발 계획, 전달 패키지', tab: 'build_plan', steps: ['build_plan'] },
+  { key: 'qa', label: 'QA/배포', doing: '출시 전 확인 기준과 배포 체크리스트를 정리합니다.', output: 'QA 기준, 배포 체크리스트', tab: 'qa_launch', steps: ['qa', 'launch'] },
+  { key: 'operate', label: '운영', doing: '출시 후 확인할 지표와 개선 리포트를 정리합니다.', output: '운영 리포트, 개선 기준', tab: 'operate', steps: ['operate'] },
+  { key: 'share', label: '공유/피드백', doing: '외부에 공유하고 피드백을 받아 다음 개선으로 연결합니다.', output: '공유 링크, 피드백 기록', tab: 'share_feedback', steps: [] },
+];
 
-// 개요 탭 상단 '다음 할 일' 카드. 파이프라인 상태에서 가장 먼저 할 작업을 추천(파생, 저장 안 함).
-function NextActionCard({
-  project,
-  documents,
-  screens,
-  onGo,
-}: {
-  project: Project;
-  documents: ProjectDocument[];
-  screens: Screen[];
-  onGo: (tab: string) => void;
-}) {
-  const next = deriveNextAction(project, documents, screens);
-  if (!next) {
-    return (
-      <div className="bg-[var(--green-50)] border border-[var(--green-100)] rounded-[var(--radius-xl)] p-6 shadow-[var(--admin-shadow-sm)]">
-        <div className="flex items-center gap-2 text-[var(--green-700)] font-bold">
-          <CheckCircle2 size={18} /> 모든 필수 단계를 완료했습니다
-        </div>
-        <p className="text-sm text-[var(--text-secondary)] mt-1">필요하면 QA/배포·운영 단계를 이어서 진행하세요.</p>
-      </div>
-    );
-  }
-  return (
-    <div className="bg-[var(--color-primary-softer)] border border-[var(--color-blue-200)] rounded-[var(--radius-xl)] p-6 shadow-[var(--admin-shadow-sm)]">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[var(--color-primary-text)] font-bold">
-            <ArrowRight size={16} /> 다음 할 일
-          </div>
-          <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
-            현재 프로젝트 상태 기준으로 가장 먼저 확인할 작업입니다.
-          </p>
-          <div className="mt-2 text-[var(--text-strong)] font-bold">
-            {next.label} <span className="text-xs font-medium text-[var(--text-tertiary)]">· {pipelineStatusLabel(next.status)}</span>
-          </div>
-          <p className="text-xs text-[var(--text-secondary)] mt-0.5">{next.reason}</p>
-        </div>
-        <Button onClick={() => onGo(next.tab)} className="shrink-0">
-          {next.cta}
-        </Button>
-      </div>
-    </div>
-  );
-}
+const STAGE_STATE_LABEL: Record<StageState, string> = {
+  done: '완료', doing: '진행 중', next: '다음', wait: '대기', na: '예정',
+};
+
+const stageStateOf = (steps: PipelineStep[], byStep: Record<string, PipelineStepStatus>): StageState => {
+  if (!steps.length) return 'na';
+  const sts = steps.map((s) => byStep[s]);
+  if (sts.every((s) => s === 'approved')) return 'done';
+  if (sts.some((s) => s === 'in_progress' || s === 'needs_review' || s === 'needs_regen')) return 'doing';
+  if (sts.some((s) => s === 'ready')) return 'next';
+  return 'wait';
+};
+
+// 산출물 그룹 — Overview에선 그룹별 준비 상태만(전체 나열 금지). 펼치면 항목 표시.
+type ArtifactItem = { label: string; type?: DocumentType; proto?: boolean; pkg?: boolean };
+const ARTIFACT_GROUPS: { label: string; tab: Tab; items: ArtifactItem[] }[] = [
+  { label: '기획 산출물', tab: 'planning', items: [{ label: '프로젝트 브리프', type: 'brief' }, { label: '시장조사', type: 'market_research' }, { label: '제품화 전략', type: 'product_strategy' }] },
+  { label: '디자인/프로토타입', tab: 'design', items: [{ label: '디자인 컨텍스트', type: 'design_context' }, { label: '프로토타입 초안', proto: true }] },
+  { label: '구조 설계', tab: 'structure', items: [{ label: 'IA', type: 'ia' }, { label: '기능정의서', type: 'feature_spec' }, { label: '서비스 구조', type: 'service_structure' }] },
+  { label: '개발 패키지', tab: 'build_plan', items: [{ label: 'PRD', type: 'prd' }, { label: '개발 계획', type: 'development_plan' }, { label: '전달 패키지', pkg: true }] },
+  { label: 'QA/운영', tab: 'qa_launch', items: [{ label: 'QA 기준', type: 'qa_criteria' }, { label: '배포 체크리스트', type: 'launch_checklist' }, { label: '운영 리포트', type: 'operation_report' }] },
+];
+
+// 미완성 표시(placeholder) 토큰 — handoff 준비도 경고용(문서 content 스캔, UI 전용).
+const PLACEHOLDER_RE = /_\([^)]*\)_|확인 필요|미입력|추후 정의|적절히 처리|\bTBD\b|\bTODO\b/g;
+
+// '다음 할 일' Hero 문구 — deriveNextAction의 step에 매핑(없으면 next.label/reason/cta 폴백).
+// why = '왜 이 단계가 필요한지' 3가지. 사용자 노출 단계명은 유지하되 보조 설명을 쉽게.
+type HeroCopy = { title: string; desc: string; cta: string; why: string[] };
+const HERO_COPY: Partial<Record<PipelineStep, HeroCopy>> = {
+  planning: { title: '기획을 마무리할 차례입니다', desc: '생성된 기획 문서를 검토하고 부족한 부분을 보완하면 다음 단계로 이어집니다.', cta: '기획 문서 보기', why: ['무엇을·왜 만들지 기준 확립', '시장·사용자 근거 정리', '이후 디자인·개발의 출발점'] },
+  design: { title: '디자인/프로토타입을 정리하세요', desc: '기획을 바탕으로 주요 화면 흐름과 디자인 기준을 정리하면 구조 설계가 수월해집니다.', cta: '디자인/프로토타입 정리하기', why: ['사용자 흐름 정렬', '개발 리스크 사전 제거', '구조 설계 속도 향상'] },
+  structure: { title: '구조 설계를 확인하세요', desc: '화면과 기능을 서비스 구조·IA·기능정의서로 연결하면 개발 전달 준비가 갖춰집니다.', cta: '구조 설계 확인하기', why: ['화면-기능 연결 명확화', '누락 없는 범위 정의', '개발 패키지 기반 마련'] },
+  build_plan: { title: '개발 패키지를 준비하세요', desc: '개발자가 바로 참고할 PRD·개발 계획·전달 패키지를 묶어 정리합니다.', cta: '개발 패키지 준비하기', why: ['개발 착수 즉시 가능', '의사결정 근거 동봉', '재작업·누락 최소화'] },
+  qa: { title: 'QA/배포를 점검하세요', desc: '출시 전 확인 기준과 배포 체크리스트를 정리해 안정적으로 출시하세요.', cta: 'QA/배포 점검하기', why: ['출시 전 결함 예방', '배포 절차 표준화', '운영 인계 준비'] },
+  launch: { title: 'QA/배포를 점검하세요', desc: '배포 전 점검 항목과 체크리스트를 확인해 안정적으로 출시하세요.', cta: 'QA/배포 점검하기', why: ['출시 전 결함 예방', '배포 절차 표준화', '운영 인계 준비'] },
+  operate: { title: '운영 기준을 정리하세요', desc: '출시 후 확인할 지표와 개선 리포트를 정리해 다음 개선으로 이어가세요.', cta: '운영 기준 정리하기', why: ['지표 기반 개선', '운영 이슈 추적', '다음 버전 근거 축적'] },
+};
+// 초안(미시작) 상태 Hero — July Canvas가 무엇을 해주는지 + 첫 단계 안내.
+const HERO_START: HeroCopy = {
+  title: '아이디어를 제품 제작 파이프라인으로 정리합니다',
+  desc: '한 줄 아이디어나 요구사항을 바탕으로 기획 · 디자인/프로토타입 · 구조 설계 · 개발 패키지 · QA/배포 · 운영까지 하나의 흐름으로 이어드립니다.',
+  cta: 'AI 기획 시작하기',
+  why: ['웹에서 한 줄로 바로 시작', '기획부터 운영까지 한 흐름', '단계마다 다음 할 일 안내'],
+};
 
 // 디자인/프로토타입 탭의 단계 헤더(번호 배지 + 제목 + 설명). 단계 흐름이 보이도록 정리.
 function StepHeader({ n, title, desc }: { n: number; title: string; desc: string }) {
@@ -236,6 +204,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
   const [confirmState, setConfirmState] = useState<ConfirmState>({ isOpen: false, title: '', msg: '', action: null });
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [sources, setSources] = useState<ProjectSource[]>([]);
+  const [showAllArtifacts, setShowAllArtifacts] = useState(false);
 
   const project = projects.find((p) => p.id === projectId);
   const projectScreens = useMemo(() => screens.filter((s) => s.projectId === projectId), [screens, projectId]);
@@ -257,6 +227,16 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ProjectMember[];
       setMembers(data.filter((m) => m.projectId === projectId && m.status !== 'removed'));
     });
+    return () => unsub();
+  }, [projectId]);
+
+  // 참고자료(projectSources) 실시간 구독 — 우측 context rail '참고자료 수' / handoff 맥락용.
+  useEffect(() => {
+    if (!projectId) {
+      setSources([]);
+      return;
+    }
+    const unsub = subscribeProjectSources(projectId, setSources);
     return () => unsub();
   }, [projectId]);
 
@@ -424,8 +404,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
             </span>
           </div>
           <p className="jca-page-head__desc">
-            {project.description?.trim() || '기획 문서와 프로토타입을 한 곳에서 관리합니다.'}
-            <span className="text-[var(--admin-text-muted)]"> · 내 권한 {roleLabel(role)}{!canEdit && ' · 보기 전용'}</span>
+            {project.description?.trim() || 'AI 서비스 제작 작업 공간 — 기획부터 개발 전달까지 한 곳에서 진행합니다.'}
+            <span className="text-[var(--admin-text-muted)]"> · {formatRelative(project.updatedAt ?? project.createdAt)} 수정 · 내 권한 {roleLabel(role)}{!canEdit && ' · 보기 전용'}</span>
           </p>
         </div>
         <div className="jca-page-head__actions">
@@ -451,6 +431,11 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
           {canEdit && !isActivated && (
             <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
               <PlayCircle size={16} />AI 기획 시작하기
+            </button>
+          )}
+          {canEdit && isActivated && (
+            <button type="button" className="jca-btn jca-btn--secondary" onClick={() => setShowWizard(true)} title="기획 정보 수정">
+              <Settings size={16} />설정
             </button>
           )}
           {canDelete && (
@@ -482,82 +467,210 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         ))}
       </div>
 
-      {/* 개요 탭 — 비활성: 시작 안내 / 활성: 상태 대시보드 */}
-      {tab === 'overview' && (!isActivated ? (
-        <div className="space-y-5">
-          {/* 1) 활성화 유도 카드 (가장 중요한 행동) */}
-          <div className="jca-card jca-card--pad flex flex-col sm:flex-row sm:items-center gap-5">
-            <span className="shrink-0 w-12 h-12 rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
-              <PlayCircle size={24} />
-            </span>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-bold text-[var(--text-strong)]">첫 기획을 시작해볼까요?</h3>
-              <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
-                서비스의 목적·사용자·참고 자료를 정리하면 July Canvas가 기획 문서 초안을 만들어드립니다. 시작 방식 → 아이디어 입력 → AI 정리 확인 → 기획 문서 생성 순서로 진행됩니다.
-              </p>
-              {project.activation?.intent?.trim() && (
-                <p className="mt-3 text-sm text-[var(--text-body)] bg-[var(--surface-active)] border border-[var(--color-blue-100)] rounded-[var(--radius-md)] px-3 py-2 leading-relaxed line-clamp-2">
-                  <span className="font-bold text-[var(--color-primary-text)]">입력한 아이디어</span> · {project.activation.intent.trim()}
-                </p>
-              )}
-            </div>
-            {canEdit && (
-              <button type="button" className="jca-btn jca-btn--primary shrink-0" onClick={() => setShowWizard(true)}>
-                <PlayCircle size={16} />AI 기획 시작하기
-              </button>
-            )}
-          </div>
-          {/* 2) 프로젝트 정보 (참고, 2순위) */}
-          <ProjectInfoCard
-            project={project}
-            status={status}
-            roleText={roleLabel(role)}
-            members={members}
-            documents={documents}
-            screenCount={projectScreens.length}
-          />
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {/* 다음 할 일(파생, 저장 안 함) — 가장 먼저 확인할 작업: hero 위치 */}
-          <NextActionCard project={project} documents={documents} screens={screens} onGo={(t) => goTab(normalizeTab(t))} />
-          <ProjectInfoCard
-            project={project}
-            status={status}
-            roleText={roleLabel(role)}
-            members={members}
-            documents={documents}
-            screenCount={projectScreens.length}
-          />
-          {/* 파이프라인 8단계 진행 상황(파생, 저장 안 함) */}
-          <PipelineProgressCard project={project} documents={documents} screens={screens} onGo={(t) => goTab(normalizeTab(t))} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <ActivationSummary project={project} />
-            <div className="space-y-5">
-              <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
-                <h3 className="font-bold text-[var(--text-strong)] text-lg mb-1">최종 산출물</h3>
-                <p className="text-sm text-[var(--text-secondary)] mb-5">개발 전달에 사용할 PRD·프로토타입 URL과 개발 전달 패키지입니다.</p>
-                <div className="flex flex-col gap-3">
-                  <Button variant="outline" icon={FileText} onClick={() => goTab('build_plan')} className="justify-start">
-                    PRD 문서 관리로 이동
-                  </Button>
-                  <Button variant="outline" icon={Link2} onClick={copyPrototypeUrl} className="justify-start">
-                    프로토타입 URL 복사
-                  </Button>
-                  <Button variant="outline" icon={Package} onClick={() => goTab('build_plan')} className="justify-start">
-                    개발 전달 패키지로 이동
-                  </Button>
+      {/* 개요 탭 — AI 서비스 제작 작업 공간 (파생만 사용, 저장/더미 없음) */}
+      {tab === 'overview' && (() => {
+        const pipe = derivePipelineStatus(project, documents, screens);
+        const byStep = Object.fromEntries(pipe.map((s) => [s.step, s.status])) as Record<string, PipelineStepStatus>;
+        const next = isActivated ? deriveNextAction(project, documents, screens) : null;
+        const intent = project.activation?.intent?.trim() || project.description?.trim() || '';
+        const modeLabel = MODE_LABEL[project.activation?.mode ?? 'legacy'] ?? '아이디어 제품화';
+        const memberCount = Math.max(members.length, project.memberUids?.length ?? 0, project.ownerId ? 1 : 0);
+
+        // 단계 상태 + 현재 단계
+        const stageStates = STAGE_FLOW.map((stg) => ({ ...stg, state: stageStateOf(stg.steps, byStep) }));
+        const currentStage =
+          stageStates.find((s) => s.state === 'doing') ??
+          stageStates.find((s) => s.state === 'next') ??
+          stageStates.find((s) => s.state !== 'done') ??
+          stageStates[stageStates.length - 1];
+
+        // Hero: 초안 → 제품 소개 + 첫 단계 / 진행 중 → 다음 할 일 / 완료 → 전달·공유
+        const hero: HeroCopy = !isActivated
+          ? HERO_START
+          : next
+            ? (HERO_COPY[next.step] ?? { title: next.label, desc: next.reason, cta: next.cta, why: [] })
+            : { title: '필수 단계를 모두 마쳤어요', desc: '개발 전달 패키지를 생성하거나 결과물을 공유해 피드백을 받아보세요.', cta: '개발 전달 패키지 생성', why: ['핵심 산출물 준비 완료', '개발 착수 가능 상태', '공유·피드백으로 개선'] };
+        const onHero = () => { if (!isActivated) setShowWizard(true); else if (next) goTab(next.tab as Tab); else goTab('build_plan'); };
+
+        // 산출물 그룹 준비 현황(그룹별 N/M — 전체 나열 금지, 펼치면 항목 표시)
+        const itemPrepared = (it: ArtifactItem): boolean => {
+          if (it.proto) return !!project.prototypeLock || projectScreens.length > 0;
+          const has = (t?: DocumentType) => !!t && !!documents.find((x) => x.type === t)?.content?.trim();
+          if (it.pkg) return has('prd') && has('development_plan') && (!!project.prototypeLock || projectScreens.length > 0);
+          return has(it.type);
+        };
+        const groupStats = ARTIFACT_GROUPS.map((g) => ({ ...g, ready: g.items.filter(itemPrepared).length, total: g.items.length }));
+        const buildState = stageStateOf(['build_plan'], byStep);
+        const placeholderCount = documents.reduce((n, d) => n + ((d.content || '').match(PLACEHOLDER_RE)?.length || 0), 0);
+        const recentDocs = [...documents].sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt)).slice(0, 3);
+
+        return (
+          <div className="jca-ws-split">
+            <div className="jca-ws-main space-y-5">
+              {/* ── 1) Workspace Hero — July Canvas가 무엇을 해주는지 + 지금 할 일 ── */}
+              <div className="jca-wsx-hero">
+                <div>
+                  <span className="jca-wsx-hero__eyebrow"><ArrowRight size={13} /> NEXT ACTION · 지금 할 일</span>
+                  <h2 className="jca-wsx-hero__title">{hero.title}</h2>
+                  <p className="jca-wsx-hero__desc">{hero.desc}</p>
+                  {canEdit && (
+                    <div className="jca-wsx-hero__cta">
+                      <button type="button" className="jca-btn jca-btn--primary jca-btn--lg" onClick={onHero}>
+                        {!isActivated ? <PlayCircle size={16} /> : null}{hero.cta}<ArrowRight size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {hero.why.length > 0 && (
+                  <div className="jca-wsx-hero__why">
+                    <span className="jca-wsx-hero__why-t">이 단계가 중요한 이유</span>
+                    <ul style={{ display: 'contents' }}>
+                      {hero.why.map((w) => (
+                        <li key={w}><CheckCircle2 size={15} /> {w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* ── 2) 제품 제작 파이프라인 — 화면 중심의 큰 가로형 흐름 ── */}
+              <div className="jca-card" style={{ padding: 'var(--space-8)' }}>
+                <h3 className="font-bold text-[var(--text-strong)] text-lg mb-1">제품 제작 파이프라인</h3>
+                <p className="text-sm text-[var(--text-secondary)] mb-2">한 줄 아이디어가 기획부터 운영까지 하나의 흐름으로 이어집니다. 단계를 눌러 이동하세요.</p>
+                <div className="jca-wsx-pipe">
+                  {stageStates.map((s, i) => {
+                    const isCurrent = s.state !== 'done' && s.key === currentStage.key;
+                    const cls = s.state === 'done' ? ' jca-wsx-node--done' : isCurrent ? ' jca-wsx-node--current' : '';
+                    return (
+                      <button key={s.key} type="button" className={`jca-wsx-node${cls}`} onClick={() => goTab(s.tab)} aria-label={`${s.label} · ${STAGE_STATE_LABEL[s.state]}`}>
+                        <span className="jca-wsx-node__circle">
+                          {s.state === 'done' ? <Check size={26} /> : isCurrent ? i + 1 : <span className="jca-wsx-node__dot" />}
+                        </span>
+                        <span className="jca-wsx-node__label">{s.label}</span>
+                        <span className="jca-wsx-node__state">{STAGE_STATE_LABEL[s.state]}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              {canEdit && (
-                <Button variant="secondary" icon={Pencil} onClick={() => setShowWizard(true)} className="w-full">
-                  기획 정보 수정
-                </Button>
-              )}
+
+              {/* ── 3) 현재 단계 상세 ── */}
+              <div className="jca-card jca-card--pad">
+                <span className="jca-wsx-hero__eyebrow"><ArrowRight size={13} /> 현재 단계</span>
+                <h3 className="text-xl font-extrabold text-[var(--text-strong)] mt-1.5">{currentStage.label}</h3>
+                <p className="text-sm text-[var(--text-secondary)] mt-1.5 leading-relaxed">{currentStage.doing}</p>
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+                  <p className="text-sm text-[var(--text-body)]">
+                    <span className="font-bold text-[var(--color-primary-text)]">만들어질 산출물</span> · {currentStage.output}
+                  </p>
+                  {canEdit && (
+                    <button type="button" className="jca-btn jca-btn--secondary shrink-0" onClick={() => (isActivated ? goTab(currentStage.tab) : setShowWizard(true))}>
+                      {isActivated ? `${currentStage.label}(으)로 이동` : 'AI 기획 시작하기'}<ArrowRight size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* ── 4) 산출물 요약 — 그룹별 준비 상태(전체는 펼쳐서) ── */}
+              <div className="jca-card jca-card--pad">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h3 className="font-bold text-[var(--text-strong)] text-lg">산출물 준비 현황</h3>
+                  <button type="button" className="jca-ws-h__a" onClick={() => setShowAllArtifacts((v) => !v)}>
+                    {showAllArtifacts ? '간단히 보기' : '전체 산출물 보기'}
+                  </button>
+                </div>
+                {groupStats.map((g) => (
+                  <div key={g.label}>
+                    <div className={`jca-wsx-group${g.ready === g.total ? ' jca-wsx-group--done' : ''}`} onClick={() => goTab(g.tab)} role="button" tabIndex={0}>
+                      <span className="jca-wsx-group__name">{g.label}</span>
+                      <span className="jca-wsx-group__bar"><span style={{ width: `${Math.round((g.ready / g.total) * 100)}%` }} /></span>
+                      <span className="jca-wsx-group__count">{g.ready}/{g.total} 준비</span>
+                    </div>
+                    {showAllArtifacts && (
+                      <div className="jca-wsx-group__items">
+                        {g.items.map((it) => {
+                          const ok = itemPrepared(it);
+                          return (
+                            <div key={it.label} className="jca-wsx-item">
+                              <span className="inline-flex items-center gap-2"><span className="jca-wsx-item__dot" style={{ background: ok ? 'var(--green-500)' : 'var(--gray-300)' }} />{it.label}</span>
+                              <span className="jca-meta">{ok ? '준비' : '없음'}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
+
+            {/* ── 5) 우측 Context Rail — 맥락 중심 ── */}
+            <aside className="jca-ws-rail space-y-4">
+              {/* 프로젝트 맥락 */}
+              <div className="jca-rail-card">
+                <div className="jca-rail-card__t">프로젝트 맥락</div>
+                <div className="jca-sumrow"><span className="text-[var(--admin-text-secondary)]">시작 방식</span><b className="text-[var(--admin-text-primary)]">{modeLabel}</b></div>
+                <div className="jca-sumrow"><span className="text-[var(--admin-text-secondary)]">참고자료</span><b className="text-[var(--admin-text-primary)]">{sources.length}개</b></div>
+                <div className="jca-sumrow"><span className="text-[var(--admin-text-secondary)]">멤버</span><b className="text-[var(--admin-text-primary)]">{memberCount}명</b></div>
+                {intent ? (
+                  <p className="mt-3 pt-3 border-t border-[var(--admin-border-subtle)] text-sm text-[var(--text-body)] leading-relaxed line-clamp-4">
+                    <span className="block text-xs font-bold text-[var(--color-primary-text)] mb-1">입력한 아이디어</span>{intent}
+                  </p>
+                ) : (
+                  <p className="mt-3 pt-3 border-t border-[var(--admin-border-subtle)] text-xs text-[var(--admin-text-muted)]">아직 입력한 아이디어가 없습니다. AI 기획 시작에서 추가하세요.</p>
+                )}
+              </div>
+
+              {/* AI가 이어서 정리하는 것 */}
+              <div className="jca-rail-card">
+                <div className="jca-rail-card__t">AI가 이어서 정리하는 것</div>
+                <ul className="flex flex-col gap-2.5">
+                  {stageStates.map((s) => (
+                    <li key={s.key} className="flex items-center gap-2.5 text-sm text-[var(--text-body)]">
+                      <span className="jca-sumrow__dot" style={{ background: s.state === 'done' ? 'var(--green-500)' : s.key === currentStage.key ? 'var(--color-accent)' : 'var(--gray-300)' }} />
+                      <span className="flex-1">{s.label}</span>
+                      <span className="jca-meta">{STAGE_STATE_LABEL[s.state]}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* 현재 진행 상태 */}
+              <div className="jca-rail-card">
+                <div className="jca-rail-card__t">현재 진행 상태</div>
+                <div className="jca-sumrow"><span className="text-[var(--admin-text-secondary)]">현재 단계</span><b className="text-[var(--color-primary-text)]">{currentStage.label}</b></div>
+                <div className="jca-sumrow"><span className="text-[var(--admin-text-secondary)]">다음 할 일</span><b className="text-[var(--admin-text-primary)]">{isActivated ? (next ? next.label : '전달/공유') : 'AI 기획 시작'}</b></div>
+                <div className="jca-sumrow">
+                  <span className="text-[var(--admin-text-secondary)]">개발 패키지 준비도</span>
+                  <b style={{ color: buildState === 'done' ? 'var(--green-700)' : buildState === 'wait' || buildState === 'na' ? 'var(--text-tertiary)' : 'var(--color-blue-700)' }}>{STAGE_STATE_LABEL[buildState]}</b>
+                </div>
+                {placeholderCount > 0 && (
+                  <div className="jca-sumrow"><span className="text-[var(--admin-text-secondary)]">미완성 표시</span><b className="text-[var(--amber-700)]">{placeholderCount}곳</b></div>
+                )}
+              </div>
+
+              {/* 최근 활동 (보조) */}
+              <div className="jca-rail-card">
+                <div className="jca-rail-card__t">최근 활동</div>
+                <div className="jca-sumrow"><span className="text-[var(--admin-text-secondary)]">최근 수정</span><b className="text-[var(--admin-text-primary)]">{formatRelative(project.updatedAt ?? project.createdAt)}</b></div>
+                {recentDocs.length > 0 ? (
+                  <ul className="mt-2 pt-2 border-t border-[var(--admin-border-subtle)] flex flex-col gap-2">
+                    {recentDocs.map((d) => (
+                      <li key={d.id} className="flex items-center gap-2 text-sm text-[var(--text-body)]">
+                        <FileText size={14} className="text-[var(--admin-text-muted)] shrink-0" />
+                        <span className="truncate flex-1">{d.title?.trim() || d.type}</span>
+                        <span className="jca-meta shrink-0">{formatRelative(d.createdAt)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 pt-2 border-t border-[var(--admin-border-subtle)] text-xs text-[var(--admin-text-muted)]">아직 생성된 문서가 없습니다.</p>
+                )}
+              </div>
+            </aside>
           </div>
-        </div>
-      ))}
+        );
+      })()}
 
       {/* 기획 탭 (구 documents) — 기획 단계 문서(브리프/시장조사/제품화전략) */}
       {tab === 'planning' && (
@@ -851,91 +964,6 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
           </form>
         </div>
       )}
-    </div>
-  );
-}
-
-function ProjectInfoCard({
-  project,
-  status,
-  roleText,
-  members,
-  documents,
-  screenCount,
-}: {
-  project: Project;
-  status: { label: string; fg: string; bg: string };
-  roleText: string;
-  members: ProjectMember[];
-  documents: ProjectDocument[];
-  screenCount: number;
-}) {
-  const owner = members.find((m) => m.role === 'owner');
-  const ownerLabel = owner?.displayName || owner?.email || (project.ownerId ? '소유자(레거시)' : '—');
-  const prd = documents.find((d) => d.type === 'prd');
-  const prdStatus = prd ? (prd.status === 'approved' ? '승인 완료' : '작성 중') : '미생성';
-  const docProgress = `${documents.length} / ${DOCUMENT_ORDER.length}`;
-
-  const items: { label: string; value: React.ReactNode }[] = [
-    {
-      label: '프로젝트 상태',
-      value: (
-        <span className="text-xs font-bold px-2 py-0.5 rounded-[var(--radius-pill)]" style={{ color: status.fg, backgroundColor: status.bg }}>
-          {status.label}
-        </span>
-      ),
-    },
-    { label: 'Owner', value: ownerLabel },
-    { label: '내 권한', value: roleText },
-    { label: '참여 멤버', value: `${members.length}명` },
-    { label: '문서 진행', value: docProgress },
-    { label: '프로토타입 화면', value: `${screenCount}개` },
-    { label: 'PRD 승인', value: prdStatus },
-  ];
-
-  return (
-    <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
-      <h3 className="font-bold text-[var(--text-strong)] text-lg mb-4">{project.name}</h3>
-      <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
-        {items.map((it) => (
-          <div key={it.label} className="flex flex-col gap-1">
-            <dt className="text-xs font-bold text-[var(--text-tertiary)]">{it.label}</dt>
-            <dd className="text-sm font-medium text-[var(--text-body)]">{it.value}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
-function ActivationSummary({ project }: { project: Project }) {
-  const a = project.activation;
-  if (!a) return null;
-  const rows: { label: string; value: string }[] = [
-    { label: '기획 의도', value: a.intent },
-    { label: '해결하려는 문제', value: a.problem },
-    { label: '핵심 고객', value: a.customer },
-    { label: '핵심 가치', value: a.value },
-    { label: '핵심 차별점', value: a.differentiator },
-    { label: '수익 구조', value: a.revenue },
-    { label: '최초 진입 시장', value: a.market },
-    { label: 'MVP 범위', value: a.mvpScope },
-    { label: '나중에 추가할 기능', value: a.laterScope },
-    { label: '참고 레퍼런스', value: a.references },
-  ];
-  return (
-    <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
-      <h3 className="font-bold text-[var(--text-strong)] text-lg mb-4">기획 정보</h3>
-      <dl className="space-y-3">
-        {rows.map((r) => (
-          <div key={r.label} className="grid grid-cols-[120px_1fr] gap-3">
-            <dt className="text-xs font-bold text-[var(--text-tertiary)] pt-0.5">{r.label}</dt>
-            <dd className="text-sm text-[var(--text-body)] whitespace-pre-wrap">
-              {r.value?.trim() || <span className="text-[var(--text-tertiary)]">미입력</span>}
-            </dd>
-          </div>
-        ))}
-      </dl>
     </div>
   );
 }
