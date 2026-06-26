@@ -15,7 +15,7 @@ import {
 } from '@/lib/projectSources';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/common/Button';
-import { Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, FileText, Lightbulb, Link2, Loader2, Paperclip, Plus, Rocket, Save, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, FileText, Lightbulb, Link2, Loader2, Paperclip, PlayCircle, Plus, Save, Trash2, Upload, Wand2, X } from 'lucide-react';
 import {
   EMPTY_ACTIVATION,
   type ActivationAnalysis,
@@ -80,9 +80,9 @@ const IDEA_STEP_DESC: Record<WizardMode, string> = {
 // 모드별 마지막 단계(문서 생성 안내) 문구.
 const CONFIRM_DESC: Record<WizardMode, string> = {
   idea_productization:
-    '활성화하면 브리프, 시장조사, 제품화전략 초안이 생성됩니다. IA와 기능정의서는 프로토타입 등록 후 생성할 수 있습니다.',
+    'AI 기획을 시작하면 브리프, 시장조사, 제품화전략 초안이 만들어집니다. IA와 기능정의서는 프로토타입 등록 후 생성할 수 있습니다.',
   requirement_planning:
-    '활성화하면 요구사항 분석, 레퍼런스 조사, 구현 전략 초안이 생성됩니다. IA와 기능정의서는 확정된 프로토타입 코드와 화면 플로우를 기반으로 역작성합니다.',
+    'AI 기획을 시작하면 요구사항 분석, 레퍼런스 조사, 구현 전략 초안이 만들어집니다. IA와 기능정의서는 확정된 프로토타입 코드와 화면 플로우를 기반으로 역작성합니다.',
 };
 
 // URL 등록 유형 → projectSources의 type/urlType 매핑.
@@ -221,13 +221,13 @@ const buildSteps = (mode: WizardMode): { id: StepId; title: string; desc: string
   { id: 'mode', title: '시작 방식', desc: '', fields: [] },
   {
     id: 'idea',
-    title: mode === 'requirement_planning' ? '요구사항' : '아이디어',
+    title: mode === 'requirement_planning' ? '요구사항 입력' : '아이디어 입력',
     desc: IDEA_STEP_DESC[mode],
     fields: [{ key: 'intent', label: IDEA_FIELD[mode].label, placeholder: IDEA_FIELD[mode].placeholder, required: true, big: true }],
   },
   // 분석 확인: 입력 필드 없음(AI 분석 결과를 activationAnalysis로 확인/편집).
-  { id: 'detail', title: '분석 확인', desc: '', fields: [] },
-  { id: 'confirm', title: '문서 생성', desc: '', fields: [] },
+  { id: 'detail', title: 'AI 정리 확인', desc: '', fields: [] },
+  { id: 'confirm', title: '기획 문서 생성', desc: '', fields: [] },
 ];
 
 // AI 실행 노출 스위치(클라이언트). Vercel=false(로컬 전용 베타), 로컬=true.
@@ -508,6 +508,8 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
   // 유일 필수 = 아이디어/요구사항(intent). 나머지 단계/필드는 항상 통과.
   const stepValid = current.fields.every((f) => !f.required || data[f.key].trim());
   const ideaFilled = !!data.intent.trim();
+  // 생성 시점(Dashboard/모달)에 이미 아이디어가 입력돼 있었는지 — 중복 입력 안내용(저장된 activation.intent 기준).
+  const prefilledIntent = !!project.activation?.intent?.trim();
   // 입력값이 Google Drive 링크인지 감지 (등록 시 공유 권한 안내용, UI 전용).
   const isDriveLink = /drive\.google\.com|docs\.google\.com/i.test(urlValue);
 
@@ -577,12 +579,12 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
         ),
       );
 
-      showToast('프로젝트가 활성화되었습니다. 기본 문서가 생성되었습니다.');
+      showToast('AI 기획을 시작했어요. 기본 기획 문서가 만들어졌습니다.');
       onActivated();
       onClose();
     } catch (err) {
       console.error(err);
-      showToast('활성화 중 오류가 발생했습니다.', 'error');
+      showToast('AI 기획 시작 중 오류가 발생했습니다.', 'error');
     } finally {
       setSaving(false);
     }
@@ -590,16 +592,19 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
 
   return (
     <div className="fixed inset-0 z-[var(--z-modal)] bg-[color:rgba(20,26,34,0.55)] flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-[var(--surface-card)] rounded-[var(--radius-3xl)] shadow-[var(--shadow-2xl)] w-full max-w-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95">
+      <div className="bg-[var(--surface-card)] rounded-[var(--radius-2xl)] shadow-[var(--shadow-2xl)] w-full max-w-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95">
         {/* 헤더 */}
         <div className="p-7 border-b border-[var(--border-subtle)] flex justify-between items-start shrink-0">
           <div className="flex items-start gap-4">
-            <div className="w-11 h-11 bg-[var(--color-primary)] rounded-[var(--radius-xl)] flex items-center justify-center text-[var(--color-on-primary)] shadow-[var(--shadow-brand)] shrink-0">
-              <Rocket size={22} />
+            <div className="w-11 h-11 bg-[var(--color-blue-50)] rounded-[var(--radius-xl)] flex items-center justify-center text-[var(--color-accent)] shrink-0">
+              <PlayCircle size={22} />
             </div>
             <div>
-              <h2 className="text-2xl font-extrabold text-[var(--text-strong)] tracking-tight">프로젝트 활성화</h2>
-              <p className="text-sm text-[var(--text-secondary)] mt-1">{project.name} · 시작 방식을 선택하고 내용을 입력하면 기획 문서 초안이 생성됩니다.</p>
+              <span className="inline-flex items-center h-[22px] px-2.5 rounded-full bg-[var(--color-blue-50)] text-[var(--color-blue-700)] text-[11px] font-bold">
+                기획 시작 단계 · AI 기획 {step + 1}/{STEPS.length}
+              </span>
+              <h2 className="text-2xl font-extrabold text-[var(--text-strong)] tracking-tight mt-1.5">AI 기획 시작</h2>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">{project.name} · 시작 방식을 선택하고 아이디어를 입력하면 기획 문서 초안이 만들어집니다.</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 bg-[var(--surface-sunken)] rounded-full hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] transition-colors">
@@ -617,9 +622,9 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                 <span
                   className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
                     done
-                      ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]'
+                      ? 'bg-[var(--color-accent)] text-[var(--color-on-primary)]'
                       : cur
-                        ? 'bg-[var(--surface-active)] text-[var(--color-primary-text)] ring-2 ring-[var(--color-primary)]'
+                        ? 'bg-[var(--surface-active)] text-[var(--color-primary-text)] ring-1 ring-[var(--color-accent)]'
                         : 'bg-[var(--surface-hover)] text-[var(--text-tertiary)]'
                   }`}
                 >
@@ -629,7 +634,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                   {s.title}
                 </span>
                 {i < STEPS.length - 1 && (
-                  <span className={`mx-1 h-0.5 w-6 rounded-full ${done ? 'bg-[var(--color-primary)]' : 'bg-[var(--border-default)]'}`} />
+                  <span className={`mx-1 h-0.5 w-6 rounded-full ${done ? 'bg-[var(--color-accent)]' : 'bg-[var(--border-default)]'}`} />
                 )}
               </div>
             );
@@ -656,14 +661,14 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                       aria-pressed={selected}
                       className={`w-full text-left flex items-start gap-3.5 p-4 rounded-[var(--radius-xl)] border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] ${
                         selected
-                          ? 'border-[var(--color-primary)] bg-[var(--surface-active)] ring-2 ring-[var(--color-primary)]'
+                          ? 'border-[var(--color-accent)] bg-[var(--surface-active)] ring-1 ring-[var(--color-accent)]'
                           : 'border-[var(--border-default)] bg-[var(--surface-card)] hover:bg-[var(--surface-hover)]'
                       }`}
                     >
                       <span
                         className={`shrink-0 w-10 h-10 rounded-[var(--radius-lg)] flex items-center justify-center ${
                           selected
-                            ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]'
+                            ? 'bg-[var(--color-accent)] text-[var(--color-on-primary)]'
                             : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)]'
                         }`}
                       >
@@ -689,6 +694,12 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
               <p className="text-base font-bold text-[var(--text-strong)]">
                 {mode === 'requirement_planning' ? '요구사항/RFP와 참고자료를 등록하세요' : '아이디어와 참고자료를 입력하세요'}
               </p>
+
+              {prefilledIntent && (
+                <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-primary-text)] bg-[var(--surface-active)] border border-[var(--color-blue-100)] rounded-[var(--radius-md)] px-3 py-2">
+                  <CheckCircle2 size={14} /> 이전에 입력한 내용을 불러왔어요. 필요한 부분만 보완하세요.
+                </div>
+              )}
 
               {/* 아이디어/요구사항 입력 (유일 필수) */}
               <div>
@@ -850,7 +861,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                 <p className="text-base font-bold text-[var(--text-strong)]">기획 초안 생성</p>
                 <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
                   입력한 아이디어와 참고자료를 바탕으로 브리프, 시장조사, 제품화 전략 초안을 정리합니다.
-                  AI 실행이 비활성화된 환경에서는 수동 초안으로 진행할 수 있습니다.
+                  AI 실행을 사용할 수 없는 환경에서는 수동 초안으로 진행할 수 있습니다.
                 </p>
               </div>
 
@@ -858,7 +869,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
               <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0 flex items-center gap-2 text-sm font-bold text-[var(--text-strong)]">
-                    <Sparkles size={16} className="text-[var(--color-primary-text)]" /> 초안 생성
+                    <Wand2 size={16} className="text-[var(--color-primary-text)]" /> 초안 생성
                   </div>
                   <button
                     type="button"
@@ -866,13 +877,13 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                     disabled={aiRunning}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-[var(--color-on-primary)] text-sm font-bold shadow-[var(--shadow-brand)] hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
                   >
-                    {aiRunning ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {aiRunning ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
                     {aiRunning ? '초안 생성 중…' : AI_ENABLED ? 'AI로 초안 생성' : '수동 초안 작성'}
                   </button>
                 </div>
                 {!AI_ENABLED && (
                   <p className="mt-2 text-xs font-medium text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-3 py-2">
-                    AI 실행이 비활성화된 환경에서는 <b>수동 초안</b>으로 진행할 수 있습니다. (AI 초안 생성은 로컬 전용 베타)
+                    AI 실행을 사용할 수 없는 환경에서는 <b>수동 초안</b>으로 진행할 수 있습니다. (AI 초안 생성은 로컬 전용 베타)
                   </p>
                 )}
               </div>
@@ -881,7 +892,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
                 <>
                   {/* 전체 activationAnalysis 저장(상단 1개) — 개별 섹션 저장 없음. primary CTA는 하단 '다음' 유지. */}
                   <div className="flex flex-wrap items-center justify-end gap-3">
-                    <span className="text-[11px] text-[var(--text-tertiary)]">활성화 완료 시 자동 저장됩니다.</span>
+                    <span className="text-[11px] text-[var(--text-tertiary)]">기획 문서 생성 완료 시 자동 저장됩니다.</span>
                     <Button variant="secondary" icon={Save} onClick={handleSaveAnalysis} disabled={analysisSaving}>
                       {analysisSaving ? '저장 중…' : '분석 초안 저장'}
                     </Button>
@@ -1109,7 +1120,7 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
 
               <div className="rounded-[var(--radius-lg)] border border-[var(--brand-200)] bg-[var(--color-primary-softer)] p-4">
                 <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-strong)]">
-                  <Rocket size={15} className="text-[var(--color-primary-text)]" /> 완료하면 프로젝트가 <span className="text-[var(--color-primary-text)]">draft → active</span>로 전환됩니다.
+                  <PlayCircle size={15} className="text-[var(--color-primary-text)]" /> 완료하면 프로젝트가 <span className="text-[var(--color-primary-text)]">draft → active</span>로 전환됩니다.
                 </div>
                 <p className="text-xs text-[var(--text-secondary)] mt-1.5 mb-2.5">다음 기획 문서 초안이 자동 생성됩니다.</p>
                 <ul className="flex flex-wrap gap-2 mb-3">
@@ -1138,8 +1149,8 @@ export default function ProjectActivationWizard({ project, onClose, onActivated 
             이전
           </Button>
           {isLast ? (
-            <Button icon={Rocket} onClick={handleActivate} disabled={!ideaFilled || saving} className="px-7">
-              {saving ? '활성화 중...' : '활성화 완료'}
+            <Button icon={PlayCircle} onClick={handleActivate} disabled={!ideaFilled || saving} className="px-7">
+              {saving ? '기획 문서 생성 중...' : '기획 문서 생성'}
             </Button>
           ) : (
             <Button onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))} disabled={!stepValid}>

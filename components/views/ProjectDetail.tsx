@@ -19,6 +19,7 @@ import ProjectDocuments from './ProjectDocuments';
 import ProjectReviews from './ProjectReviews';
 import {
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -31,9 +32,9 @@ import {
   Link2,
   MessageSquarePlus,
   Package,
+  Pencil,
+  PlayCircle,
   Plus,
-  Rocket,
-  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -164,7 +165,7 @@ function NextActionCard({
   const next = deriveNextAction(project, documents, screens);
   if (!next) {
     return (
-      <div className="bg-[var(--green-50)] border border-[var(--green-100)] rounded-[var(--radius-2xl)] p-5 shadow-[var(--shadow-xs)]">
+      <div className="bg-[var(--green-50)] border border-[var(--green-100)] rounded-[var(--radius-xl)] p-6 shadow-[var(--admin-shadow-sm)]">
         <div className="flex items-center gap-2 text-[var(--green-700)] font-bold">
           <CheckCircle2 size={18} /> 모든 필수 단계를 완료했습니다
         </div>
@@ -173,11 +174,11 @@ function NextActionCard({
     );
   }
   return (
-    <div className="bg-[var(--color-primary-softer)] border border-[var(--color-primary)] rounded-[var(--radius-2xl)] p-5 shadow-[var(--shadow-xs)]">
+    <div className="bg-[var(--color-primary-softer)] border border-[var(--color-blue-200)] rounded-[var(--radius-xl)] p-6 shadow-[var(--admin-shadow-sm)]">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-[var(--color-primary-text)] font-bold">
-            <Sparkles size={16} /> 다음 할 일
+            <ArrowRight size={16} /> 다음 할 일
           </div>
           <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
             현재 프로젝트 상태 기준으로 가장 먼저 확인할 작업입니다.
@@ -271,6 +272,22 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialScreenNew, perms.canEdit, projectId]);
 
+  // Dashboard "AI로 시작하기"로 방금 생성된 프로젝트면 AI 기획 위저드를 1회 자동 오픈(중복 입력 제거).
+  // 신호는 sessionStorage(생성 직후 set). 아직 비활성(draft)이고 편집 권한일 때만, 한 번 처리 후 신호 제거.
+  useEffect(() => {
+    if (!projectId || !project || !perms.canEdit) return;
+    if (project.status && project.status !== 'draft') return;
+    let signaled = false;
+    try {
+      if (sessionStorage.getItem('jc:autostart-planning') === projectId) {
+        sessionStorage.removeItem('jc:autostart-planning');
+        signaled = true;
+      }
+    } catch { /* sessionStorage 접근 불가 시 무시 */ }
+    if (signaled) setShowWizard(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, project?.status, perms.canEdit]);
+
   if (!project) return null;
   const { isOwner, canEdit, canDelete, canInvite, role } = perms;
   const status = STATUS_LABEL[project.status ?? 'draft'];
@@ -343,11 +360,11 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
     <div className="jca-card">
       <div className="jca-empty">
         <span className="jca-empty__icon"><FileText size={22} /></span>
-        <div className="jca-empty__title">먼저 프로젝트를 활성화하세요</div>
+        <div className="jca-empty__title">먼저 AI 기획을 시작하세요</div>
         <p className="jca-empty__desc">{desc}</p>
         {canEdit && (
           <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
-            <Rocket size={16} />활성화 시작하기
+            <PlayCircle size={16} />AI 기획 시작하기
           </button>
         )}
       </div>
@@ -377,7 +394,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
   };
 
   return (
-    <div className="p-8 max-w-[1280px]">
+    <div className="p-10 max-w-[1280px]">
       <ConfirmModal
         isOpen={confirmState.isOpen}
         title={confirmState.title}
@@ -433,7 +450,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
           {/*  상단 공통 액션에서 제거 — 수동 코드 추가는 프로토타입 탭의 '수동 생성 옵션' 아코디언에서 진입한다.) */}
           {canEdit && !isActivated && (
             <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
-              <Rocket size={16} />활성화 시작하기
+              <PlayCircle size={16} />AI 기획 시작하기
             </button>
           )}
           {canDelete && (
@@ -471,17 +488,22 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
           {/* 1) 활성화 유도 카드 (가장 중요한 행동) */}
           <div className="jca-card jca-card--pad flex flex-col sm:flex-row sm:items-center gap-5">
             <span className="shrink-0 w-12 h-12 rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)] flex items-center justify-center">
-              <Rocket size={24} />
+              <PlayCircle size={24} />
             </span>
             <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-bold text-[var(--text-strong)]">프로젝트를 활성화하고 기획 문서를 생성하세요</h3>
+              <h3 className="text-lg font-bold text-[var(--text-strong)]">첫 기획을 시작해볼까요?</h3>
               <p className="text-sm text-[var(--text-secondary)] mt-1 leading-relaxed">
-                기획 의도·문제·고객·가치·MVP 범위를 입력하면 프로젝트 브리프(시장조사·레퍼런스 포함)와 제품화 전략 문서가 생성됩니다.
+                서비스의 목적·사용자·참고 자료를 정리하면 July Canvas가 기획 문서 초안을 만들어드립니다. 시작 방식 → 아이디어 입력 → AI 정리 확인 → 기획 문서 생성 순서로 진행됩니다.
               </p>
+              {project.activation?.intent?.trim() && (
+                <p className="mt-3 text-sm text-[var(--text-body)] bg-[var(--surface-active)] border border-[var(--color-blue-100)] rounded-[var(--radius-md)] px-3 py-2 leading-relaxed line-clamp-2">
+                  <span className="font-bold text-[var(--color-primary-text)]">입력한 아이디어</span> · {project.activation.intent.trim()}
+                </p>
+              )}
             </div>
             {canEdit && (
               <button type="button" className="jca-btn jca-btn--primary shrink-0" onClick={() => setShowWizard(true)}>
-                <Rocket size={16} />활성화 시작하기
+                <PlayCircle size={16} />AI 기획 시작하기
               </button>
             )}
           </div>
@@ -497,6 +519,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
         </div>
       ) : (
         <div className="space-y-5">
+          {/* 다음 할 일(파생, 저장 안 함) — 가장 먼저 확인할 작업: hero 위치 */}
+          <NextActionCard project={project} documents={documents} screens={screens} onGo={(t) => goTab(normalizeTab(t))} />
           <ProjectInfoCard
             project={project}
             status={status}
@@ -505,8 +529,6 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
             documents={documents}
             screenCount={projectScreens.length}
           />
-          {/* 다음 할 일(파생, 저장 안 함) — 가장 먼저 확인할 작업 */}
-          <NextActionCard project={project} documents={documents} screens={screens} onGo={(t) => goTab(normalizeTab(t))} />
           {/* 파이프라인 8단계 진행 상황(파생, 저장 안 함) */}
           <PipelineProgressCard project={project} documents={documents} screens={screens} onGo={(t) => goTab(normalizeTab(t))} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -528,8 +550,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 </div>
               </div>
               {canEdit && (
-                <Button variant="secondary" icon={Rocket} onClick={() => setShowWizard(true)} className="w-full">
-                  활성화 정보 수정
+                <Button variant="secondary" icon={Pencil} onClick={() => setShowWizard(true)} className="w-full">
+                  기획 정보 수정
                 </Button>
               )}
             </div>
@@ -546,11 +568,11 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 <span className="jca-empty__icon">
                   <FileText size={22} />
                 </span>
-                <div className="jca-empty__title">먼저 프로젝트를 활성화하세요</div>
-                <p className="jca-empty__desc">활성화하면 기본 기획 문서(브리프·시장조사·제품화 전략)가 생성됩니다.</p>
+                <div className="jca-empty__title">먼저 AI 기획을 시작하세요</div>
+                <p className="jca-empty__desc">AI 기획을 시작하면 기본 기획 문서(브리프·시장조사·제품화 전략)가 만들어집니다.</p>
                 {canEdit && (
                   <button type="button" className="jca-btn jca-btn--primary" onClick={() => setShowWizard(true)}>
-                    <Rocket size={16} />활성화 시작하기
+                    <PlayCircle size={16} />AI 기획 시작하기
                   </button>
                 )}
               </div>
@@ -605,7 +627,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               />
             ) : (
               <p className="text-sm text-[var(--text-secondary)] bg-[var(--surface-sunken)] border border-[var(--border-default)] rounded-[var(--radius-lg)] px-4 py-3">
-                프로젝트를 활성화하면 디자인 기준(디자인 컨텍스트)을 정리할 수 있습니다.
+                AI 기획을 시작하면 디자인 기준(디자인 컨텍스트)을 정리할 수 있습니다.
               </p>
             )}
           </div>
@@ -740,7 +762,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
 
       {/* 구조 설계 탭 — IA·기능정의서·서비스 구조 설계 (역작성 영역 포함) */}
       {tab === 'structure' && (
-        isActivated ? stageDocs('structure') : activationGate('활성화 후 프로토타입을 확정하면 IA·기능정의서·서비스 구조 설계를 작성할 수 있습니다.')
+        isActivated ? stageDocs('structure') : activationGate('AI 기획을 시작하고 프로토타입을 확정하면 IA·기능정의서·서비스 구조 설계를 작성할 수 있습니다.')
       )}
 
       {/* 개발 패키지 탭 (구 handoff) — PRD·개발 계획 + 개발 전달 패키지 */}
@@ -758,17 +780,17 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
               navigate={navigate}
             />
           </div>
-        ) : activationGate('활성화 후 문서·프로토타입이 준비되면 PRD·개발 계획과 개발 전달 패키지를 생성할 수 있습니다.')
+        ) : activationGate('AI 기획을 시작하고 문서·프로토타입이 준비되면 PRD·개발 계획과 개발 전달 패키지를 생성할 수 있습니다.')
       )}
 
       {/* QA/배포 탭 — QA 기준·배포 준비 체크리스트 */}
       {tab === 'qa_launch' && (
-        isActivated ? stageDocs('qa') : activationGate('활성화 후 개발 계획이 준비되면 QA 기준·배포 준비 체크리스트를 작성할 수 있습니다.')
+        isActivated ? stageDocs('qa') : activationGate('AI 기획을 시작하고 개발 계획이 준비되면 QA 기준·배포 준비 체크리스트를 작성할 수 있습니다.')
       )}
 
       {/* 운영 탭 — 운영 개선 리포트 */}
       {tab === 'operate' && (
-        isActivated ? stageDocs('operate') : activationGate('출시 후 운영 개선 리포트를 작성할 수 있습니다. 먼저 프로젝트를 활성화하세요.')
+        isActivated ? stageDocs('operate') : activationGate('출시 후 운영 개선 리포트를 작성할 수 있습니다. 먼저 AI 기획을 시작하세요.')
       )}
 
       {/* 공유/피드백 탭 — 외부 공개 리뷰(public_review). owner/editor만. */}
@@ -903,7 +925,7 @@ function ActivationSummary({ project }: { project: Project }) {
   ];
   return (
     <div className="bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-2xl)] p-6 shadow-[var(--shadow-xs)]">
-      <h3 className="font-bold text-[var(--text-strong)] text-lg mb-4">활성화 정보</h3>
+      <h3 className="font-bold text-[var(--text-strong)] text-lg mb-4">기획 정보</h3>
       <dl className="space-y-3">
         {rows.map((r) => (
           <div key={r.label} className="grid grid-cols-[120px_1fr] gap-3">

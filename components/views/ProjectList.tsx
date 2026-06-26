@@ -1,26 +1,35 @@
 'use client';
 
-// 프로젝트 목록 (#projects) — 대시보드 홈과 분리된 별도 화면. admin index 의 proj-card 그리드 / empty state.
-// 생성/삭제 로직은 기존 Dashboard 에서 그대로 이관 (Firestore 스키마·권한 모델 변경 없음).
+// 프로젝트 목록 (#projects) — wide 리스트 카드 + 우측 요약 rail. 생성은 공용 NewProjectStartModal 사용.
+// 삭제/검색/권한 로직은 기존 그대로 (Firestore 스키마·권한 모델 변경 없음).
 import { useState } from 'react';
 import type { User } from 'firebase/auth';
-import { addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { col, docRef } from '@/lib/firestore';
 import { getPermissions } from '@/lib/auth';
 import { deleteProjectCascade } from '@/lib/projects';
 import { getTime, nowMs, showToast } from '@/lib/utils';
 import { ConfirmModal, type ConfirmState } from '@/components/common/ConfirmModal';
-import { CheckCircle2, ChevronRight, FileText, FolderOpen, Plus, Search, Trash2, X } from 'lucide-react';
+import { NewProjectStartModal } from '@/components/common/NewProjectStartModal';
+import { ArrowRight, ChevronRight, FileText, FolderOpen, MonitorSmartphone, Plus, Search, Trash2, Users } from 'lucide-react';
+import { deriveNextAction } from '@/lib/pipeline';
 import type { Project, ProjectDocument, ProjectStatus, Screen } from '@/types';
 
-const STATUS: Record<ProjectStatus, { cls: string; label: string }> = {
-  draft: { cls: 'jca-status--muted', label: '초안' },
-  active: { cls: 'jca-status--active', label: '진행 중' },
-  review: { cls: 'jca-status--warning', label: '검토 중' },
-  approved: { cls: 'jca-status--success', label: '승인 완료' },
-  archived: { cls: 'jca-status--muted', label: '보관' },
-  handoff: { cls: '', label: '전달됨' },
+const STATUS: Record<ProjectStatus, { cls: string; label: string; dot: string }> = {
+  draft: { cls: 'jca-status--muted', label: '초안', dot: 'var(--gray-400)' },
+  active: { cls: 'jca-status--active', label: '진행 중', dot: 'var(--color-accent)' },
+  review: { cls: 'jca-status--warning', label: '검토 중', dot: 'var(--amber-500)' },
+  approved: { cls: 'jca-status--success', label: '승인 완료', dot: 'var(--green-500)' },
+  archived: { cls: 'jca-status--muted', label: '보관', dot: 'var(--gray-400)' },
+  handoff: { cls: '', label: '전달됨', dot: 'var(--gray-400)' },
 };
+
+/** 우측 summary rail 의 상태 집계 순서/색. */
+const SUMMARY_ORDER: { key: ProjectStatus; label: string }[] = [
+  { key: 'active', label: '진행 중' },
+  { key: 'review', label: '검토 중' },
+  { key: 'approved', label: '승인 완료' },
+  { key: 'draft', label: '초안' },
+  { key: 'archived', label: '보관' },
+];
 
 function relative(ts: Project['updatedAt']): string {
   const ms = getTime(ts);
@@ -47,54 +56,12 @@ interface ProjectListProps {
 
 export default function ProjectList({ projects, screens, documents, user, navigate }: ProjectListProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
   const [query, setQuery] = useState('');
   const [confirmState, setConfirmState] = useState<ConfirmState>({ isOpen: false, title: '', msg: '', action: null });
 
   const canCreateProject = !!user && !user.isAnonymous;
   const myProjects = projects.filter((p) => !p.ownerId || p.ownerId === user?.uid);
   const filtered = query.trim() ? myProjects.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase())) : myProjects;
-
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || user.isAnonymous) {
-      setIsModalOpen(false);
-      showToast('Google 로그인 후 새 프로젝트를 만들 수 있습니다.', 'error');
-      return;
-    }
-    if (!newProjectName.trim()) return;
-    try {
-      const uid = user.uid;
-      const ref = await addDoc(col('projects'), {
-        name: newProjectName,
-        organizationId: null,
-        ownerId: uid,
-        roleByUid: uid ? { [uid]: 'owner' as const } : {},
-        memberUids: uid ? [uid] : [],
-        status: 'draft' as ProjectStatus,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      if (uid) {
-        await setDoc(docRef('projectMembers', `${ref.id}_${uid}`), {
-          projectId: ref.id,
-          uid,
-          email: user?.email || null,
-          displayName: user?.displayName || null,
-          photoURL: user?.photoURL || null,
-          role: 'owner' as const,
-          status: 'active' as const,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      }
-      setIsModalOpen(false);
-      setNewProjectName('');
-      navigate(`#project_${ref.id}`);
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   const handleDelete = (e: React.MouseEvent, project: Project) => {
     e.stopPropagation();
@@ -158,45 +125,57 @@ export default function ProjectList({ projects, screens, documents, user, naviga
           </div>
         </div>
       ) : (
-        <>
-          <div className="mb-4">
-            {/* 모호한 '내보내기'(동작 없음) 버튼 제거. 실제 산출물 내보내기는 프로젝트 상세의 MD/ZIP/공유/패키지에서 제공. */}
-            <div className="jca-table-search" style={{ minWidth: 280 }}>
-              <Search size={15} />
-              <input placeholder="프로젝트 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <div className="jca-ws-split">
+          <div className="jca-ws-main">
+            <div className="mb-4">
+              {/* 모호한 '내보내기'(동작 없음) 버튼 제거. 실제 산출물 내보내기는 프로젝트 상세의 MD/ZIP/공유/패키지에서 제공. */}
+              <div className="jca-table-search" style={{ minWidth: 280 }}>
+                <Search size={15} />
+                <input placeholder="프로젝트 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
+              </div>
             </div>
-          </div>
-          <div className="jca-proj-grid">
-            {filtered.map((project) => {
-              const status = STATUS[project.status ?? 'draft'];
-              const perms = getPermissions(project, user?.uid);
-              const screenCount = screens.filter((s) => s.projectId === project.id).length;
-              const docCount = documents.filter((d) => d.projectId === project.id).length;
-              const memberCount = Math.max(project.memberUids?.length ?? 0, project.ownerId ? 1 : 0);
-              const roleCls = perms.role === 'owner' ? 'jca-role--owner' : perms.role === 'editor' ? 'jca-role--editor' : 'jca-role--viewer';
-              return (
-                <div key={project.id} className="jca-proj-card" onClick={() => navigate(`#project_${project.id}`)}>
-                  <div className="jca-proj-card__top">
-                    <div className="min-w-0">
-                      <div className="jca-proj-card__title truncate">{project.name}</div>
-                      <div className="jca-proj-card__sub">{relative(project.updatedAt ?? project.createdAt)} · 최근 수정</div>
+
+            <div className="jca-proj-grid">
+              {filtered.map((project) => {
+                const status = STATUS[project.status ?? 'draft'];
+                const perms = getPermissions(project, user?.uid);
+                const projScreens = screens.filter((s) => s.projectId === project.id);
+                const projDocs = documents.filter((d) => d.projectId === project.id);
+                const memberCount = Math.max(project.memberUids?.length ?? 0, project.ownerId ? 1 : 0);
+                const roleCls = perms.role === 'owner' ? 'jca-role--owner' : perms.role === 'editor' ? 'jca-role--editor' : 'jca-role--viewer';
+                const next = deriveNextAction(project, projDocs, projScreens);
+                return (
+                  <div key={project.id} className="jca-proj-card" onClick={() => navigate(`#project_${project.id}`)}>
+                    <div className="jca-proj-card__top">
+                      <div className="min-w-0">
+                        <div className="jca-proj-card__title truncate">{project.name}</div>
+                        <div className="jca-proj-card__sub">{relative(project.updatedAt ?? project.createdAt)} · 최근 수정</div>
+                      </div>
+                      <span className={`jca-status ${status.cls}`}>
+                        <span className="jca-status__dot" />
+                        {status.label}
+                      </span>
                     </div>
-                    <span className={`jca-status ${status.cls}`}>
-                      <span className="jca-status__dot" />
-                      {status.label}
-                    </span>
-                  </div>
-                  <div className="jca-meta-group">
-                    <span className="jca-meta">
-                      <FileText size={15} />문서 {docCount}
-                    </span>
-                    <span className="jca-meta">
-                      <CheckCircle2 size={15} />화면 {screenCount}
-                    </span>
-                  </div>
-                  <div className="jca-proj-card__foot">
-                    <span className="jca-meta">멤버 {memberCount}명</span>
-                    <div className="flex items-center gap-2">
+
+                    <div className="jca-meta-group">
+                      <span className="jca-meta"><FileText size={15} />문서 {projDocs.length}</span>
+                      <span className="jca-meta"><MonitorSmartphone size={15} />화면 {projScreens.length}</span>
+                      <span className="jca-meta"><Users size={15} />멤버 {memberCount}</span>
+                    </div>
+
+                    {/* 다음 액션 — 카드 하단 보조 링크 (subtle) */}
+                    {next && (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 self-start text-xs font-semibold text-[var(--color-primary-text)]"
+                        onClick={(e) => { e.stopPropagation(); navigate(`#project_${project.id}_${next.tab}`); }}
+                      >
+                        다음: {next.label} <ArrowRight size={13} />
+                      </button>
+                    )}
+
+                    <div className="jca-proj-card__foot">
+                      <span className={`jca-role ${roleCls}`}>{(perms.role ?? 'viewer').toUpperCase()}</span>
                       {perms.canDelete && (
                         <button
                           type="button"
@@ -207,54 +186,50 @@ export default function ProjectList({ projects, screens, documents, user, naviga
                           <Trash2 size={15} />
                         </button>
                       )}
-                      <span className={`jca-role ${roleCls}`}>{(perms.role ?? 'viewer').toUpperCase()}</span>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-            {filtered.length === 0 && (
-              <p className="text-sm text-[var(--admin-text-muted)] py-8">검색 결과가 없습니다.</p>
-            )}
-          </div>
-        </>
-      )}
-
-      {isModalOpen && canCreateProject && (
-        <div className="jca-overlay" onClick={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
-          <div className="jca-modal jca-modal--sm" role="dialog" aria-modal="true">
-            <div className="jca-modal__head">
-              <h2 className="jca-modal__title">새 프로젝트</h2>
-              <button className="jca-icon-btn" onClick={() => setIsModalOpen(false)} aria-label="닫기">
-                <X size={18} />
-              </button>
+                );
+              })}
+              {filtered.length === 0 && (
+                <p className="text-sm text-[var(--admin-text-muted)] py-8">검색 결과가 없습니다.</p>
+              )}
             </div>
-            <form onSubmit={handleCreateProject}>
-              <div className="jca-modal__body">
-                <div className="jca-field" style={{ marginBottom: 0 }}>
-                  <label className="jca-field__label">프로젝트 이름<span className="jca-field__req">*</span></label>
-                  <input
-                    className="jca-input"
-                    value={newProjectName}
-                    onChange={(e) => setNewProjectName(e.target.value)}
-                    placeholder="예: 쇼핑몰 앱 리뉴얼"
-                    autoFocus
-                    required
-                  />
-                </div>
-              </div>
-              <div className="jca-modal__foot">
-                <button type="button" className="jca-btn jca-btn--secondary" onClick={() => setIsModalOpen(false)}>
-                  취소
-                </button>
-                <button type="submit" className="jca-btn jca-btn--primary" disabled={!newProjectName.trim()}>
-                  생성하기
-                </button>
-              </div>
-            </form>
           </div>
+
+          {/* 우측 summary rail — 단순 상태 집계만 */}
+          <aside className="jca-ws-rail">
+            <div className="jca-rail-card">
+              <div className="jca-rail-card__t">프로젝트 요약</div>
+              <div className="flex items-end justify-between mb-3">
+                <span className="text-3xl font-extrabold leading-none text-[var(--admin-text-primary)]">
+                  {myProjects.length}
+                  <span className="text-base font-bold text-[var(--admin-text-secondary)]"> 개</span>
+                </span>
+                <span className="jca-meta">전체 프로젝트</span>
+              </div>
+              {SUMMARY_ORDER.filter((o) => o.key === 'active' || o.key === 'approved' || o.key === 'draft').map(({ key, label }) => {
+                const count = myProjects.filter((p) => (p.status ?? 'draft') === key).length;
+                return (
+                  <div key={key} className="jca-sumrow">
+                    <span className="inline-flex items-center gap-2 text-[var(--admin-text-secondary)]">
+                      <span className="jca-sumrow__dot" style={{ background: STATUS[key].dot }} />
+                      {label}
+                    </span>
+                    <b className="text-[var(--admin-text-primary)]">{count}</b>
+                  </div>
+                );
+              })}
+            </div>
+          </aside>
         </div>
       )}
+
+      <NewProjectStartModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        user={user}
+        navigate={navigate}
+      />
     </section>
   );
 }
