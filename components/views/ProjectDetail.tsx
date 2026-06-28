@@ -33,6 +33,7 @@ import {
   Link2,
   MessageSquarePlus,
   Package,
+  Pencil,
   PlayCircle,
   Plus,
   Settings,
@@ -228,6 +229,8 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
   const [selectedPlanningType, setSelectedPlanningType] = useState<DocumentType | null>(
     initialDocId && (PLANNING_TYPES as string[]).includes(initialDocId) ? (initialDocId as DocumentType) : null,
   );
+  // 산출물 카드 '수정' 진입 여부 — 선택된 산출물을 바로 편집 모드로 열지 결정.
+  const [planningEdit, setPlanningEdit] = useState(false);
 
   const project = projects.find((p) => p.id === projectId);
   const projectScreens = useMemo(() => screens.filter((s) => s.projectId === projectId), [screens, projectId]);
@@ -760,16 +763,16 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 <h3 className="font-bold text-[var(--text-strong)] text-lg">기획에 사용할 입력</h3>
                 {canEdit && (
                   <button type="button" className="jca-btn jca-btn--secondary jca-btn--sm" onClick={() => openWizard(1)}>
-                    <PlayCircle size={14} />AI 기획 수정
+                    <PlayCircle size={14} />입력 수정
                   </button>
                 )}
               </div>
-              <p className="text-sm text-[var(--text-secondary)] mb-3">July Canvas는 아래 정보를 바탕으로 기획 산출물을 생성합니다. 부족한 내용은 “AI 기획 수정”에서 바로 보완할 수 있습니다.</p>
+              <p className="text-sm text-[var(--text-secondary)] mb-3">July Canvas는 아래 정보를 바탕으로 기획 산출물을 생성합니다. 부족한 내용은 “입력 수정”에서 바로 보완할 수 있습니다.</p>
               <div>
                 <div className="grid grid-cols-[110px_1fr_auto] items-center gap-3 py-3 border-t border-[var(--admin-border-subtle)]">
                   <span className="text-xs font-bold text-[var(--text-tertiary)]">시작 방식</span>
                   <span className="text-sm text-[var(--text-body)] truncate">{MODE_LABEL[a?.mode ?? 'legacy'] ?? '아이디어 제품화'}</span>
-                  {canEdit && <button type="button" className="jca-btn jca-btn--ghost jca-btn--sm" onClick={() => openWizard(1)}>수정</button>}
+                  {canEdit && <button type="button" className="jca-btn jca-btn--ghost jca-btn--sm" onClick={() => openWizard(0)}>수정</button>}
                 </div>
                 <div className="grid grid-cols-[110px_1fr_auto] items-center gap-3 py-3 border-t border-[var(--admin-border-subtle)]">
                   <span className="text-xs font-bold text-[var(--text-tertiary)]">입력한 아이디어</span>
@@ -790,7 +793,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                 <h3 className="font-bold text-[var(--text-strong)] text-lg">기획 핵심 요약</h3>
                 {canEdit && (
                   <button type="button" className="jca-btn jca-btn--secondary jca-btn--sm" onClick={() => openWizard(2)}>
-                    <PlayCircle size={14} />요약 보완
+                    <PlayCircle size={14} />AI 정리 확인
                   </button>
                 )}
               </div>
@@ -826,9 +829,16 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                           <PlayCircle size={14} />{isActivated ? '문서 생성' : 'AI 기획 시작'}
                         </button>
                       ) : (
-                        <button type="button" className={`jca-btn jca-btn--sm mt-3 ${active ? 'jca-btn--primary' : 'jca-btn--secondary'}`} onClick={() => setSelectedPlanningType(active ? null : d.type)} disabled={d.state === 'none'}>
-                          <FileText size={14} />{active ? '닫기' : '보기'}
-                        </button>
+                        <div className="flex items-center gap-2 mt-3">
+                          <button type="button" className={`jca-btn jca-btn--sm ${active && !planningEdit ? 'jca-btn--primary' : 'jca-btn--secondary'}`} onClick={() => { setPlanningEdit(false); setSelectedPlanningType(active && !planningEdit ? null : d.type); }} disabled={d.state === 'none'}>
+                            <FileText size={14} />{active && !planningEdit ? '닫기' : '보기'}
+                          </button>
+                          {canEdit && (
+                            <button type="button" className={`jca-btn jca-btn--sm ${active && planningEdit ? 'jca-btn--primary' : 'jca-btn--ghost'}`} onClick={() => { setPlanningEdit(true); setSelectedPlanningType(d.type); }} disabled={d.state === 'none'}>
+                              <Pencil size={14} />수정
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
@@ -841,7 +851,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                   <p className="text-sm text-[var(--admin-text-muted)]">AI 기획을 시작하면 기획 산출물이 생성됩니다.</p>
                 ) : selected ? (
                   <ProjectDocuments
-                    key={selected.type}
+                    key={`${selected.type}:${planningEdit ? 'edit' : 'view'}`}
                     project={project}
                     documents={documents}
                     screens={screens}
@@ -852,6 +862,7 @@ export default function ProjectDetail({ projectId, projects, screens, navigate, 
                     embedded
                     hideDocList
                     initialDocId={selected.type}
+                    initialEdit={planningEdit}
                     onCurrentDocChange={setCurrentDocId}
                     navigate={navigate}
                   />

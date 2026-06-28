@@ -15,11 +15,10 @@ import {
 } from '@/lib/projectSources';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/common/Button';
-import { Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, FileText, Lightbulb, Link2, Loader2, Paperclip, PlayCircle, Plus, Save, Trash2, Upload, Wand2, X } from 'lucide-react';
+import { Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, FileText, Lightbulb, Link2, Loader2, Paperclip, Pencil, PlayCircle, Plus, Trash2, Upload, Wand2, X } from 'lucide-react';
 import {
   EMPTY_ACTIVATION,
   type ActivationAnalysis,
-  type ActivationRequirement,
   type Project,
   type ProjectActivation,
   type ProjectSource,
@@ -225,8 +224,8 @@ const buildSteps = (mode: WizardMode): { id: StepId; title: string; desc: string
     desc: IDEA_STEP_DESC[mode],
     fields: [{ key: 'intent', label: IDEA_FIELD[mode].label, placeholder: IDEA_FIELD[mode].placeholder, required: true, big: true }],
   },
-  // 분석 확인: 입력 필드 없음(AI 분석 결과를 activationAnalysis로 확인/편집).
-  { id: 'detail', title: '핵심 요약 보완', desc: '', fields: [] },
+  // AI 정리 확인: 입력 필드 없음(자동 정리된 기획 기준을 확인/수정).
+  { id: 'detail', title: 'AI 정리 확인', desc: '', fields: [] },
   { id: 'confirm', title: '기획 문서 생성', desc: '', fields: [] },
 ];
 
@@ -271,9 +270,10 @@ export default function ProjectActivationWizard({ project, onClose, onActivated,
   const [analysis, setAnalysis] = useState<ActivationAnalysis | null>(
     project.activationAnalysis ? sanitizeActivationAnalysis(project.activationAnalysis) : null,
   );
-  const [analysisSaving, setAnalysisSaving] = useState(false);
   // 로컬 AI 분석 실행 진행 상태(버튼 비활성/로딩 표시용).
   const [aiRunning, setAiRunning] = useState(false);
+  // 핵심 기준 요약 편집 모드. 기본은 읽기 전용 compact 표시, [수정] 클릭 시에만 입력 필드.
+  const [summaryEditing, setSummaryEditing] = useState(false);
 
   // 분석 초기값 생성(현재 입력/소스 기반, AI 미실행). 자동 생성하지 않고 사용자가 버튼을 눌렀을 때만 호출.
   // 기존 activation(보강 정보) 값이 있으면 브리프/시장조사/제품화 전략 그룹에 시드 — 동일 내용 재입력 방지.
@@ -319,8 +319,66 @@ export default function ProjectActivationWizard({ project, onClose, onActivated,
   });
 
   // '수동으로 분석 내용 작성' — 빈 초기값으로 편집 폼 열기.
-  const startManualAnalysis = () => {
-    if (!analysis) setAnalysis(buildInitialAnalysis('manual'));
+  // AI/수동 분석 결과를 '핵심 요약' 편집 필드(data.*)로 시드. 비어 있는 필드만 채워 사용자 수정은 보존.
+  const seedSummaryFromAnalysis = (a: ActivationAnalysis) =>
+    setData((prev) => ({
+      ...prev,
+      intent: prev.intent?.trim() ? prev.intent : a.brief.summary || prev.intent,
+      customer: prev.customer?.trim() ? prev.customer : a.brief.customer || prev.customer,
+      problem: prev.problem?.trim() ? prev.problem : a.brief.problem || prev.problem,
+      value: prev.value?.trim() ? prev.value : a.brief.value || prev.value,
+      differentiator: prev.differentiator?.trim() ? prev.differentiator : a.brief.differentiation || prev.differentiator,
+      mvpScope: prev.mvpScope?.trim() ? prev.mvpScope : joinLines(a.productStrategy.mvpIncluded) || prev.mvpScope,
+    }));
+
+  // AI 비활성/실패 시에도 입력한 아이디어로 '기본 초안'을 자동 구성(빈 필드만 채움 → 사용자 수정 보존).
+  // 같은 입력을 모든 필드에 반복하지 않고, 입력에서 핵심 주제를 뽑아 필드별로 다른 의미로 구조화한다.
+  const buildFallbackSummary = (ideaRaw: string) => {
+    const raw = (ideaRaw || '').trim();
+    // 첫 줄·첫 문장에서 핵심 주제를 뽑고, '앱/서비스/플랫폼' 등 접미어를 떼어 핵심 명사만 남긴다.
+    const firstLine = (raw.split('\n')[0] || '').trim();
+    const sentence = (firstLine.split(/[.!?。\n]/)[0] || firstLine).trim();
+    const topic = (sentence.length > 24 ? sentence.slice(0, 24).trim() : sentence) || '새 서비스';
+    const core = topic.replace(/(앱|어플|애플리케이션|서비스|플랫폼|사이트|웹사이트|웹|툴|솔루션)\s*$/u, '').trim() || topic;
+    return {
+      // 서비스 목적 / 주요 사용자 / 해결하려는 문제 / 핵심 가치 / MVP 방향 / 차별점
+      intent: `${core}을(를) 쉽게 시작하고 꾸준히 이어갈 수 있도록 돕는 서비스`,
+      customer: `${core}에 관심이 있고 직접 활용하려는 개인 사용자`,
+      problem: `${core} 과정이 번거롭거나 흩어져 지속하기 어려운 문제`,
+      value: `간단한 흐름으로 ${core}의 핵심을 빠르게 처리하고 확인`,
+      mvpScope: `핵심 기능 등록, 목록 확인, 기본 현황 보기`,
+      differentiator: `복잡한 기능보다 빠른 실행과 확인에 집중한 단순한 흐름`,
+    };
+  };
+
+  // 기본 초안 적용: 빈 핵심 요약 필드를 fallback으로 채우고 analysis(브리프/전략)도 같은 값으로 구성.
+  const applyBasicDraft = (src: ActivationAnalysis['source']) => {
+    const fb = buildFallbackSummary(data.intent);
+    const merged = {
+      intent: data.intent?.trim() || fb.intent,
+      customer: data.customer?.trim() || fb.customer,
+      problem: data.problem?.trim() || fb.problem,
+      value: data.value?.trim() || fb.value,
+      mvpScope: data.mvpScope?.trim() || fb.mvpScope,
+      differentiator: data.differentiator?.trim() || fb.differentiator,
+    };
+    setData((prev) => ({ ...prev, ...merged }));
+    const a = buildInitialAnalysis(src);
+    a.brief.summary = merged.intent;
+    a.brief.customer = merged.customer;
+    a.brief.problem = merged.problem;
+    a.brief.value = merged.value;
+    a.brief.differentiation = merged.differentiator;
+    a.productStrategy.mvpIncluded = splitLines(merged.mvpScope);
+    setAnalysis(a);
+  };
+
+  // 3단계 단일 액션: AI 활성이면 AI 정리, 아니면 기본 초안. '초안 다시 정리'도 이 함수로 처리.
+  // applyBasicDraft/seedSummaryFromAnalysis 모두 빈 필드만 채워 사용자 수정값을 보존한다.
+  const runDraft = () => {
+    if (aiRunning) return;
+    if (AI_ENABLED) void startAiAnalysis();
+    else applyBasicDraft('manual');
   };
 
   // 'AI 분석 실행' — 로컬 전용(local-cli). 서버 라우트가 disabled면 호출해도 AI_DISABLED로 떨어진다.
@@ -351,9 +409,10 @@ export default function ProjectActivationWizard({ project, onClose, onActivated,
           mode: mode === 'requirement_planning' ? 'requirements' : 'idea',
         });
         setAnalysis(normalized);
+        seedSummaryFromAnalysis(normalized);
         showToast('AI 분석 초안을 생성했습니다. 결과를 확인하고 필요한 부분만 수정하세요.');
       } else {
-        if (!analysis) setAnalysis(buildInitialAnalysis('template'));
+        if (!analysis) applyBasicDraft('template');
         showToast('로컬 AI 실행이 준비되지 않아 기본 초안으로 시작합니다.', 'error');
       }
     } catch {
@@ -376,52 +435,6 @@ export default function ProjectActivationWizard({ project, onClose, onActivated,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sources]);
-
-  /** analysis 부분 갱신(편집 표시 포함). */
-  const patchAnalysis = (fn: (a: ActivationAnalysis) => ActivationAnalysis) =>
-    setAnalysis((prev) => (prev ? { ...fn(prev), edited: true } : prev));
-
-  // 분석 그룹(브리프/시장조사/제품화 전략) 내 단일 필드 렌더 헬퍼.
-  // analysis narrowing을 깨지 않도록 값/세터만 받는다(내부에서 analysis를 직접 참조하지 않음).
-  const textRow = (label: string, value: string, onChange: (v: string) => void, placeholder = '', rows = 2) => (
-    <div>
-      <label className="block text-xs font-bold text-[var(--text-body)] mb-1">{label}</label>
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={rows}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-sm resize-y bg-[var(--surface-card)] text-[var(--text-body)]"
-      />
-    </div>
-  );
-  // 줄 단위 string[] 필드. 안내(줄 단위)는 라벨 옆에 한 번만.
-  const listRow = (label: string, value: string[], onChange: (v: string[]) => void, placeholder = '', rows = 2) =>
-    textRow(
-      label,
-      joinLines(value),
-      (v) => onChange(splitLines(v)),
-      placeholder || '한 줄에 하나씩 입력',
-      rows,
-    );
-
-  /** 분석 내용만 부분 저장(권한 필드 미포함 → editor rules 통과). */
-  const handleSaveAnalysis = async () => {
-    if (!analysis || analysisSaving) return;
-    setAnalysisSaving(true);
-    try {
-      await updateDoc(docRef('projects', project.id), {
-        activationAnalysis: sanitizeActivationAnalysis({ ...analysis, edited: true }),
-        updatedAt: serverTimestamp(),
-      });
-      showToast('분석 내용을 저장했습니다.');
-    } catch (err) {
-      console.error(err);
-      showToast('분석 내용 저장 중 오류가 발생했습니다.', 'error');
-    } finally {
-      setAnalysisSaving(false);
-    }
-  };
 
   // 파일 선택 → 검증 → Storage 업로드 → projectSources 저장(pending→uploaded). 이미지면 screenshot.
   const handleAddFiles = async (fileList: FileList | null) => {
@@ -508,7 +521,10 @@ export default function ProjectActivationWizard({ project, onClose, onActivated,
   const isConfirm = current.id === 'confirm';
 
   // 유일 필수 = 아이디어/요구사항(intent). 나머지 단계/필드는 항상 통과.
-  const stepValid = current.fields.every((f) => !f.required || data[f.key].trim());
+  const stepFieldsValid = current.fields.every((f) => !f.required || data[f.key].trim());
+  // AI 정리 확인(detail) 단계는 초안(analysis)이 생성되어야 다음으로 진행 가능.
+  // 기존 프로젝트가 이미 activationAnalysis를 가진 경우 mount 시 analysis가 채워져 통과한다.
+  const stepValid = stepFieldsValid && (current.id !== 'detail' || !!analysis);
   const ideaFilled = !!data.intent.trim();
   // 생성 시점(Dashboard/모달)에 이미 아이디어가 입력돼 있었는지 — 중복 입력 안내용(저장된 activation.intent 기준).
   const prefilledIntent = !!project.activation?.intent?.trim();
@@ -856,280 +872,118 @@ export default function ProjectActivationWizard({ project, onClose, onActivated,
             </div>
           )}
 
-          {/* 3단계: AI 분석 결과 확인 — 기초 산출물 흐름(브리프 → 시장조사 → 제품화 전략) 기준으로 초안을 확인/수정. */}
-          {/*          이번 단계는 실제 AI 실행 미연결. projects.activationAnalysis 단일 최신본으로 저장. */}
+          {/* 3단계: AI 정리 확인 — 입력 재료를 바탕으로 자동 정리된 '기획 기준'을 확인/수정하는 단계.
+                      상세 산출물(브리프/시장조사/제품화 전략)은 미리보기만 보여주고, 상세 편집은 4단계 이후 산출물 상세에서 처리.
+                      실제 AI 실행은 로컬 전용. projects.activationAnalysis 단일 최신본으로 저장. */}
           {current.id === 'detail' && (() => {
             const isReq = mode === 'requirement_planning';
+            // 3-3. 핵심 기준 요약 6항목(읽기/편집 공용). data.* 와 1:1.
+            const SUMMARY_FIELDS: { key: ActivationTextKey; label: string; ph: string }[] = [
+              { key: 'intent', label: '서비스 목적', ph: '예: 흩어진 운동 기록을 한곳에 모아 성취를 시각화' },
+              { key: 'customer', label: '주요 사용자', ph: '예: 자기 기록을 즐기는 20–30대 러너' },
+              { key: 'problem', label: '해결하려는 문제', ph: '예: 기록이 흩어져 동기부여가 어렵다' },
+              { key: 'value', label: '핵심 가치', ph: '예: 한 흐름으로 기록·통계·공유' },
+              { key: 'mvpScope', label: 'MVP 방향', ph: '예: 운동 기록·통계·간단 공유' },
+              { key: 'differentiator', label: '차별점', ph: '예: 기획-디자인-개발이 한 흐름으로 연결' },
+            ];
+            // 3-4. 산출물 미리보기 — 상세 textarea 대신 2~3줄 요약 카드만. 상세는 4단계 이후.
+            const PREVIEWS = isReq
+              ? [
+                  { n: 1, title: '요구사항 분석 / 브리프', desc: '요청 내용과 핵심 요구사항, 제약 조건을 정리합니다.' },
+                  { n: 2, title: '시장조사 / 적용 방향', desc: '참고자료와 유사 서비스를 기준으로 적용할 부분과 차별화 포인트를 검토합니다.' },
+                  { n: 3, title: '제품화 전략', desc: 'MVP 범위, 제외할 기능, 이후 확장 방향을 구분합니다.' },
+                ]
+              : [
+                  { n: 1, title: '브리프 초안', desc: '입력한 아이디어를 서비스 목적과 핵심 요구사항으로 정리합니다.' },
+                  { n: 2, title: '시장조사 방향', desc: '참고자료와 유사 서비스를 기준으로 적용할 부분과 차별화 포인트를 검토합니다.' },
+                  { n: 3, title: '제품화 전략', desc: 'MVP 범위, 제외할 기능, 이후 확장 방향을 구분합니다.' },
+                ];
             return (
-            <div className="space-y-3 mb-6">
-              {/* 핵심 요약 보완 — 기획 핵심 요약 필드(직접 입력/수정). 비우면 AI 분석/기존값 보존. */}
-              <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
-                <p className="text-base font-bold text-[var(--text-strong)]">핵심 요약 보완</p>
-                <p className="text-xs text-[var(--text-secondary)] mt-1 mb-3 leading-relaxed">
-                  입력한 아이디어와 요구사항을 바탕으로 기획의 기준이 되는 항목을 정리합니다. 부족한 항목은 직접 보완할 수 있습니다.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {([
-                    { key: 'intent', label: '서비스 목적', ph: '예: 흩어진 운동 기록을 한곳에 모아 성취를 시각화' },
-                    { key: 'customer', label: '주요 사용자', ph: '예: 자기 기록을 즐기는 20–30대 러너' },
-                    { key: 'problem', label: '해결하려는 문제', ph: '예: 기록이 흩어져 동기부여가 어렵다' },
-                    { key: 'value', label: '핵심 가치', ph: '예: 한 흐름으로 기록·통계·공유' },
-                    { key: 'mvpScope', label: 'MVP 방향', ph: '예: 운동 기록·통계·간단 공유' },
-                    { key: 'differentiator', label: '차별점', ph: '예: 기획-디자인-개발이 한 흐름으로 연결' },
-                  ] as { key: ActivationTextKey; label: string; ph: string }[]).map((f) => (
-                    <label key={f.key} className="block">
-                      <span className="block text-xs font-bold text-[var(--text-tertiary)] mb-1">{f.label}</span>
-                      <input
-                        value={data[f.key]}
-                        onChange={(e) => set(f.key, e.target.value)}
-                        placeholder={f.ph}
-                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-sm bg-[var(--surface-card)] text-[var(--text-body)] transition-colors"
-                      />
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* 제목 + 설명 — AI가 정리한 초안을 확인/보완하는 영역 */}
-              <div>
-                <p className="text-base font-bold text-[var(--text-strong)]">AI 정리 확인 · 기획 초안</p>
-                <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
-                  입력한 아이디어와 참고자료를 바탕으로 브리프, 시장조사, 제품화 전략 초안을 정리합니다.
-                  AI 실행을 사용할 수 없는 환경에서는 수동 초안으로 진행할 수 있습니다.
-                </p>
-              </div>
-
-              {/* 초안 생성 영역 (상태 카드). AI 사용 가능 시 'AI로 초안 생성', 불가 시 '수동 초안 작성'. */}
+            <div className="space-y-4 mb-6">
+              {/* 3-1. AI 정리 상태 + 액션(단일 헤더 카드). 생성 전/후 문구를 한 곳으로 통합(중복 제거). */}
               <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0 flex items-center gap-2 text-sm font-bold text-[var(--text-strong)]">
-                    <Wand2 size={16} className="text-[var(--color-primary-text)]" /> 초안 생성
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-base font-bold text-[var(--text-strong)]">
+                      <Wand2 size={18} className="text-[var(--color-primary-text)]" /> {analysis ? 'AI 정리 완료' : 'AI 정리 확인'}
+                    </div>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+                      {analysis ? '기획 기준과 산출물 초안이 준비되었습니다.' : '기획 기준과 산출물 초안을 생성합니다.'}
+                    </p>
                   </div>
                   <button
                     type="button"
-                    onClick={AI_ENABLED ? startAiAnalysis : startManualAnalysis}
+                    onClick={runDraft}
                     disabled={aiRunning}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-[var(--color-on-primary)] text-sm font-bold shadow-[var(--shadow-brand)] hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
+                    className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-[var(--color-on-primary)] text-sm font-bold shadow-[var(--shadow-brand)] hover:bg-[var(--color-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
                   >
                     {aiRunning ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
-                    {aiRunning ? '초안 생성 중…' : AI_ENABLED ? 'AI로 초안 생성' : '수동 초안 작성'}
+                    {aiRunning ? '정리 중…' : analysis ? '초안 다시 정리' : AI_ENABLED ? 'AI 정리 생성' : '기본 초안 생성'}
                   </button>
                 </div>
-                {!AI_ENABLED && (
-                  <p className="mt-2 text-xs font-medium text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-3 py-2">
-                    AI 실행을 사용할 수 없는 환경에서는 <b>수동 초안</b>으로 진행할 수 있습니다. (AI 초안 생성은 로컬 전용 베타)
-                  </p>
+                {!AI_ENABLED && !analysis && (
+                  <p className="text-[11px] text-[var(--text-tertiary)] mt-2">로컬 AI가 꺼져 있어 기본 초안으로 생성됩니다.</p>
                 )}
               </div>
 
-              {analysis ? (
-                <>
-                  {/* 전체 activationAnalysis 저장(상단 1개) — 개별 섹션 저장 없음. primary CTA는 하단 '다음' 유지. */}
-                  <div className="flex flex-wrap items-center justify-end gap-3">
-                    <span className="text-[11px] text-[var(--text-tertiary)]">기획 문서 생성 완료 시 자동 저장됩니다.</span>
-                    <Button variant="secondary" icon={Save} onClick={handleSaveAnalysis} disabled={analysisSaving}>
-                      {analysisSaving ? '저장 중…' : '분석 초안 저장'}
+              {/* 3-3. 핵심 기준 요약 — 생성 후에만 노출. 기본은 compact 읽기, [수정] 클릭 시에만 편집. */}
+              {analysis && (
+                <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-[var(--text-strong)]">핵심 기준 요약</p>
+                      <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 leading-relaxed">자동 정리된 결과입니다. 필요한 항목만 수정하세요.</p>
+                    </div>
+                    <Button variant="secondary" icon={summaryEditing ? Check : Pencil} onClick={() => setSummaryEditing((v) => !v)}>
+                      {summaryEditing ? '완료' : '수정'}
                     </Button>
                   </div>
-
-                  {/* 1. 브리프 초안 */}
-                  <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 space-y-3">
-                    <div>
-                      <div className="text-sm font-bold text-[var(--text-strong)]">{isReq ? '1. 요구사항 분석 / 브리프 초안' : '1. 브리프 초안'}</div>
-                      <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 leading-relaxed">
-                        {isReq
-                          ? '요청 내용을 요약하고 핵심 요구사항과 제약 조건을 정리합니다.'
-                          : '입력 내용을 바탕으로 서비스의 문제, 고객, 가치 정의를 정리합니다.'}
-                      </p>
+                  {summaryEditing ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {SUMMARY_FIELDS.map((f) => (
+                        <label key={f.key} className="block">
+                          <span className="block text-xs font-bold text-[var(--text-tertiary)] mb-1">{f.label}</span>
+                          <input
+                            value={data[f.key]}
+                            onChange={(e) => set(f.key, e.target.value)}
+                            placeholder={f.ph}
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-[var(--radius-lg)] focus:ring-2 focus:ring-[var(--color-focus-ring)] outline-none text-sm bg-[var(--surface-card)] text-[var(--text-body)] transition-colors"
+                          />
+                        </label>
+                      ))}
                     </div>
-                    {textRow(
-                      isReq ? '요청 내용 요약' : '아이디어 요약',
-                      analysis.brief.summary,
-                      (v) => patchAnalysis((a) => ({ ...a, brief: { ...a.brief, summary: v } })),
-                      isReq ? '전달받은 RFP/요구사항의 목적, 배경, 요청 범위를 요약합니다.' : '만들고 싶은 서비스의 핵심 요약',
-                      3,
-                    )}
-                    {!isReq && (
-                      <>
-                        {textRow('해결하려는 문제', analysis.brief.problem, (v) => patchAnalysis((a) => ({ ...a, brief: { ...a.brief, problem: v } })), '어떤 문제를 해결하는가?')}
-                        {textRow('핵심 고객', analysis.brief.customer, (v) => patchAnalysis((a) => ({ ...a, brief: { ...a.brief, customer: v } })), '누구를 위한 제품인가?')}
-                        {textRow('핵심 가치', analysis.brief.value, (v) => patchAnalysis((a) => ({ ...a, brief: { ...a.brief, value: v } })), '고객에게 주는 핵심 가치')}
-                        {textRow('핵심 차별점', analysis.brief.differentiation, (v) => patchAnalysis((a) => ({ ...a, brief: { ...a.brief, differentiation: v } })), '경쟁/대안 대비 차별점')}
-                      </>
-                    )}
-
-                    {/* 핵심 요구사항 테이블 — 요구사항/RFP 모드에서만 노출(아이디어 모드는 MVP 포함 기능으로 대체). */}
-                    {isReq && (
-                      <div className="rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-card)] p-3 space-y-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="text-xs font-bold text-[var(--text-strong)]">핵심 요구사항</div>
-                            <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 leading-relaxed">
-                              AI가 추출한 필수/선택 요구사항을 확인하고 수정합니다. 누락된 항목이 있을 때만 추가하세요.
-                            </p>
-                          </div>
-                          <Button
-                            variant="secondary"
-                            icon={Plus}
-                            onClick={() =>
-                              patchAnalysis((a) => ({
-                                ...a,
-                                requirements: [...a.requirements, { id: createClientId(), title: '', description: '', required: true, rationale: '', sourceIds: [] } as ActivationRequirement],
-                              }))
-                            }
-                          >
-                            누락 요구사항 추가
-                          </Button>
+                  ) : (
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">
+                      {SUMMARY_FIELDS.map((f) => (
+                        <div key={f.key} className="grid grid-cols-[84px_1fr] gap-2">
+                          <dt className="text-[11px] font-bold text-[var(--text-tertiary)] pt-0.5">{f.label}</dt>
+                          <dd className="text-sm text-[var(--text-body)] leading-relaxed line-clamp-2">
+                            {data[f.key]?.trim() ? data[f.key] : <span className="text-[var(--text-tertiary)]">미입력</span>}
+                          </dd>
                         </div>
-                        {analysis.requirements.length === 0 ? (
-                          <p className="text-xs text-[var(--text-tertiary)]">아직 추출된 요구사항이 없습니다. AI 분석 실행 후 결과를 확인하거나, 누락 요구사항을 직접 추가할 수 있습니다.</p>
-                        ) : (
-                          <ul className="space-y-3">
-                            {analysis.requirements.map((r, i) => (
-                              <li key={r.id} className="rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-3 space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="text"
-                                    value={r.title}
-                                    onChange={(e) => patchAnalysis((a) => ({ ...a, requirements: a.requirements.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) }))}
-                                    placeholder="요구사항명"
-                                    className="flex-1 min-w-0 px-3 py-2 border border-[var(--border-strong)] rounded-[var(--radius-lg)] outline-none text-sm font-semibold bg-[var(--surface-card)] text-[var(--text-body)]"
-                                  />
-                                  <label className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-body)] shrink-0">
-                                    <input
-                                      type="checkbox"
-                                      checked={r.required}
-                                      onChange={(e) => patchAnalysis((a) => ({ ...a, requirements: a.requirements.map((x, j) => (j === i ? { ...x, required: e.target.checked } : x)) }))}
-                                    />
-                                    필수
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => patchAnalysis((a) => ({ ...a, requirements: a.requirements.filter((_, j) => j !== i) }))}
-                                    aria-label="요구사항 삭제"
-                                    className="shrink-0 p-2 rounded-full text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--red-600)] transition-colors"
-                                  >
-                                    <Trash2 size={15} />
-                                  </button>
-                                </div>
-                                <textarea
-                                  value={r.description}
-                                  onChange={(e) => patchAnalysis((a) => ({ ...a, requirements: a.requirements.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)) }))}
-                                  rows={2}
-                                  placeholder="설명"
-                                  className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-[var(--radius-lg)] outline-none text-sm resize-y bg-[var(--surface-card)] text-[var(--text-body)]"
-                                />
-                                <input
-                                  type="text"
-                                  value={r.rationale}
-                                  onChange={(e) => patchAnalysis((a) => ({ ...a, requirements: a.requirements.map((x, j) => (j === i ? { ...x, rationale: e.target.value } : x)) }))}
-                                  placeholder="근거"
-                                  className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-[var(--radius-lg)] outline-none text-sm bg-[var(--surface-card)] text-[var(--text-body)]"
-                                />
-                                {analysis.sourceSummaries.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {analysis.sourceSummaries.map((src) => {
-                                      const on = r.sourceIds.includes(src.sourceId);
-                                      return (
-                                        <button
-                                          key={src.sourceId}
-                                          type="button"
-                                          onClick={() =>
-                                            patchAnalysis((a) => ({
-                                              ...a,
-                                              requirements: a.requirements.map((x, j) =>
-                                                j === i ? { ...x, sourceIds: on ? x.sourceIds.filter((s) => s !== src.sourceId) : [...x.sourceIds, src.sourceId] } : x,
-                                              ),
-                                            }))
-                                          }
-                                          className={`text-[11px] font-semibold px-2 py-0.5 rounded-[var(--radius-pill)] border transition-colors ${
-                                            on ? 'border-[var(--color-primary)] text-[var(--color-primary-text)] bg-[var(--surface-active)]' : 'border-[var(--border-default)] text-[var(--text-tertiary)] bg-[var(--surface-card)]'
-                                          }`}
-                                          title={src.label}
-                                        >
-                                          {on ? '✓ ' : ''}{src.label.length > 18 ? src.label.slice(0, 18) + '…' : src.label}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )}
+                      ))}
+                    </dl>
+                  )}
+                </div>
+              )}
 
-                    {isReq &&
-                      listRow(
-                        '제약 조건 / 전제 조건',
-                        analysis.brief.constraints,
-                        (v) => patchAnalysis((a) => ({ ...a, brief: { ...a.brief, constraints: v } })),
-                        '일정, 예산, 기술, 정책, 운영상 제약 조건을 한 줄에 하나씩 입력',
-                      )}
-                  </div>
-
-                  {/* 2. 시장조사 초안 */}
-                  <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 space-y-3">
-                    <div>
-                      <div className="text-sm font-bold text-[var(--text-strong)]">{isReq ? '2. 시장조사 / 적용 방향' : '2. 시장조사 초안'}</div>
-                      <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 leading-relaxed">
-                        참고자료와 레퍼런스를 바탕으로 시장, 경쟁/대안, 기회와 리스크를 정리합니다.
-                      </p>
-                    </div>
-                    {isReq ? (
-                      <>
-                        {textRow('기존 자사 서비스에 적용할 부분', analysis.marketResearch.targetMarket, (v) => patchAnalysis((a) => ({ ...a, marketResearch: { ...a.marketResearch, targetMarket: v } })))}
-                        {listRow('참고한 타사 / 레퍼런스 서비스', analysis.marketResearch.competitors, (v) => patchAnalysis((a) => ({ ...a, marketResearch: { ...a.marketResearch, competitors: v } })))}
-                        {listRow('유사 기능 / 차별화 포인트', analysis.marketResearch.opportunities, (v) => patchAnalysis((a) => ({ ...a, marketResearch: { ...a.marketResearch, opportunities: v } })))}
-                        {listRow('시장 / 사용자 관점 인사이트', analysis.marketResearch.insights, (v) => patchAnalysis((a) => ({ ...a, marketResearch: { ...a.marketResearch, insights: v } })))}
-                        {listRow('리스크', analysis.marketResearch.risks, (v) => patchAnalysis((a) => ({ ...a, marketResearch: { ...a.marketResearch, risks: v } })))}
-                      </>
-                    ) : (
-                      <>
-                        {textRow('목표 시장 / 최초 진입 시장', analysis.marketResearch.entryMarket, (v) => patchAnalysis((a) => ({ ...a, marketResearch: { ...a.marketResearch, entryMarket: v } })))}
-                        {textRow('고객 문제 가설', analysis.marketResearch.customerProblemHypothesis, (v) => patchAnalysis((a) => ({ ...a, marketResearch: { ...a.marketResearch, customerProblemHypothesis: v } })))}
-                        {listRow('경쟁 / 대안 서비스', analysis.marketResearch.competitors, (v) => patchAnalysis((a) => ({ ...a, marketResearch: { ...a.marketResearch, competitors: v } })))}
-                        {listRow('참고자료에서 확인한 인사이트', analysis.marketResearch.insights, (v) => patchAnalysis((a) => ({ ...a, marketResearch: { ...a.marketResearch, insights: v } })))}
-                        {listRow('시장 기회', analysis.marketResearch.opportunities, (v) => patchAnalysis((a) => ({ ...a, marketResearch: { ...a.marketResearch, opportunities: v } })))}
-                        {listRow('리스크', analysis.marketResearch.risks, (v) => patchAnalysis((a) => ({ ...a, marketResearch: { ...a.marketResearch, risks: v } })))}
-                      </>
-                    )}
-                  </div>
-
-                  {/* 3. 제품화 전략 초안 */}
-                  <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 space-y-3">
-                    <div>
-                      <div className="text-sm font-bold text-[var(--text-strong)]">3. 제품화 전략 초안</div>
-                      <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 leading-relaxed">
-                        MVP 범위, 수익 구조, 운영 정책, 후속 기능을 정리합니다.
-                      </p>
-                    </div>
-                    {textRow(
-                      isReq ? '제품 적용 방향' : '제품 콘셉트',
-                      analysis.productStrategy.concept,
-                      (v) => patchAnalysis((a) => ({ ...a, productStrategy: { ...a.productStrategy, concept: v } })),
-                    )}
-                    {listRow('MVP 포함 기능', analysis.productStrategy.mvpIncluded, (v) => patchAnalysis((a) => ({ ...a, productStrategy: { ...a.productStrategy, mvpIncluded: v } })))}
-                    {listRow('MVP 제외 기능', analysis.productStrategy.mvpExcluded, (v) => patchAnalysis((a) => ({ ...a, productStrategy: { ...a.productStrategy, mvpExcluded: v } })))}
-                    {listRow('나중에 추가할 기능', analysis.productStrategy.laterFeatures, (v) => patchAnalysis((a) => ({ ...a, productStrategy: { ...a.productStrategy, laterFeatures: v } })))}
-                    {!isReq &&
-                      textRow('수익 구조', analysis.productStrategy.revenueModel, (v) => patchAnalysis((a) => ({ ...a, productStrategy: { ...a.productStrategy, revenueModel: v } })), '어떻게 수익을 내는가?')}
-                    {listRow(isReq ? '정책 초안' : '운영 / 정책 초안', analysis.productStrategy.policyDraft, (v) => patchAnalysis((a) => ({ ...a, productStrategy: { ...a.productStrategy, policyDraft: v } })))}
-                    {isReq &&
-                      textRow('승인 / 검토 흐름', analysis.productStrategy.approvalFlow, (v) => patchAnalysis((a) => ({ ...a, productStrategy: { ...a.productStrategy, approvalFlow: v } })))}
-                    {listRow('확인 필요 항목', analysis.productStrategy.openQuestions, (v) => patchAnalysis((a) => ({ ...a, productStrategy: { ...a.productStrategy, openQuestions: v } })))}
-                  </div>
-                </>
-              ) : (
-                /* 분석 결과 없음: 긴 빈 폼 대신 짧은 empty state + 수동 초안 작성 진입 */
-                <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-5 text-center space-y-3">
-                  <p className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-line">
-                    {'아직 분석 결과가 없습니다.\nAI 분석을 실행하면 입력 내용과 참고자료를 바탕으로 브리프, 시장조사, 제품화 전략 초안이 순서대로 정리됩니다.\n배포 환경에서는 수동으로 초안을 작성할 수 있습니다.'}
+              {/* 3-4. 산출물 미리보기 — 상세 textarea 대신 요약 카드만. 상세 편집은 4단계 이후 산출물 상세에서. */}
+              {analysis && (
+                <div className="rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4">
+                  <p className="text-sm font-bold text-[var(--text-strong)]">산출물 미리보기</p>
+                  <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 mb-3 leading-relaxed">
+                    다음 단계에서 아래 기획 산출물이 생성됩니다. 상세 내용은 문서 생성 후 산출물 상세에서 편집할 수 있습니다.
                   </p>
-                  <Button variant="secondary" icon={Plus} onClick={startManualAnalysis}>
-                    수동 초안 작성
-                  </Button>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {PREVIEWS.map((p) => (
+                      <div key={p.n} className="rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-card)] p-3">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-strong)]">
+                          <FileText size={13} className="text-[var(--color-primary-text)]" /> {p.n}. {p.title}
+                        </div>
+                        <p className="text-[11px] text-[var(--text-secondary)] mt-1.5 leading-relaxed">{p.desc}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1170,9 +1024,15 @@ export default function ProjectActivationWizard({ project, onClose, onActivated,
           )}
 
           {/* 미입력 validation 안내 (입력 단계 전용) */}
-          {!stepValid && (
+          {!stepFieldsValid && (
             <p className="mt-4 text-xs font-medium text-[var(--amber-700)] bg-[var(--amber-50)] border border-[var(--amber-100)] rounded-[var(--radius-md)] px-3 py-2">
               {mode === 'requirement_planning' ? '요구사항' : '아이디어'}(<span className="text-[var(--red-600)] font-bold">*</span>)을(를) 입력해야 다음 단계로 진행할 수 있습니다.
+            </p>
+          )}
+          {/* AI 정리 확인 단계: 초안 미생성 시 진행 안내 */}
+          {current.id === 'detail' && !analysis && (
+            <p className="mt-4 text-xs font-medium text-[var(--amber-700)] bg-[var(--amber-50)] border border-[var(--amber-100)] rounded-[var(--radius-md)] px-3 py-2">
+              먼저 {AI_ENABLED ? 'AI 정리 생성' : '기본 초안 생성'}을 눌러 초안을 만들어야 다음 단계로 진행할 수 있습니다.
             </p>
           )}
         </div>
