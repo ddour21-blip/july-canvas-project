@@ -365,6 +365,11 @@ export interface ProjectDocument {
   status: DocumentStatus;
   /** 승인 완료 후 잠금 (PRD 등) */
   locked?: boolean;
+  /**
+   * 기획 산출물(brief/market_research/product_strategy) 생성·재생성 시점의 기준 fingerprint.
+   * 현재 activation+activationAnalysis 기준값과 비교해 "재생성 필요" 여부를 판단한다(내부 비교용 해시).
+   */
+  sourceFingerprint?: string;
   createdAt?: FirestoreTime;
   updatedAt?: FirestoreTime;
 }

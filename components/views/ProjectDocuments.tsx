@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { col, docRef } from '@/lib/firestore';
 import { copyToClipboard, formatDateTime, getTime, nowMs, showToast } from '@/lib/utils';
-import { DOCUMENT_META, DOCUMENT_ORDER, REQUIRED_DOCUMENT_TYPES, generatePRD, injectPrototypeUrl } from '@/lib/documents';
+import { DOCUMENT_META, DOCUMENT_ORDER, REQUIRED_DOCUMENT_TYPES, generatePRD, generateBrief, generateMarketResearch, generateProductStrategy, activationDocFingerprint, injectPrototypeUrl } from '@/lib/documents';
 import { buildDesignContext } from '@/lib/designContext';
 import { buildServiceStructure } from '@/lib/serviceStructure';
 import { buildDevelopmentPlan } from '@/lib/developmentPlan';
@@ -69,6 +69,14 @@ const PIPELINE_DOC_BUILDERS: Partial<
   qa_criteria: buildQaCriteria,
   launch_checklist: buildLaunchChecklist,
   operation_report: buildOperationReport,
+};
+
+// 기획(활성화) 산출물 재생성 빌더. 현재 activation + activationAnalysis(3단계 AI 정리 결과)로 본문을 새로 만든다.
+// 'AI 정리 생성'(activationAnalysis 갱신)과 달리, 이 동작은 실제 문서(brief/market_research/product_strategy) 내용을 갱신한다.
+const ACTIVATION_DOC_BUILDERS: Partial<Record<DocumentType, (project: Project) => string>> = {
+  brief: (project) => generateBrief(project, project.activation ?? EMPTY_ACTIVATION, project.activationAnalysis ?? undefined),
+  market_research: (project) => generateMarketResearch(project, project.activation ?? EMPTY_ACTIVATION, project.activationAnalysis ?? undefined),
+  product_strategy: (project) => generateProductStrategy(project, project.activation ?? EMPTY_ACTIVATION, project.activationAnalysis ?? undefined),
 };
 
 // 확정 프로토타입 변경 시 '재생성 필요' 판정 대상(역작성 산출물).
@@ -164,6 +172,8 @@ interface Props {
   stage?: PipelineStep;
   /** 딥링크로 진입한 초기 선택 문서 id (해당 문서 타입을 선택 상태로) */
   initialDocId?: string | null;
+  /** initialDocId 문서를 열 때 바로 편집 모드로 진입(산출물 카드의 '수정' 진입용). */
+  initialEdit?: boolean;
   /** 현재 선택된 문서 id를 상위로 보고 (공유 '현재 문서 링크'용) */
   onCurrentDocChange?: (docId: string | null) => void;
   /** 프로토타입 화면 딥링크 이동용 */
@@ -186,10 +196,13 @@ const PROTOTYPE_FAIL_MESSAGES: Record<string, string> = {
 const prototypeFailMessage = (reason?: string): string =>
   PROTOTYPE_FAIL_MESSAGES[reason ?? 'UNKNOWN'] ?? PROTOTYPE_FAIL_MESSAGES.UNKNOWN;
 
-export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, section = 'documents', stage, prototypePart, variant = 'full', embedded = false, hideDocList = false, initialDocId, onCurrentDocChange, navigate }: Props) {
+export default function ProjectDocuments({ project, documents, screens, isEditor, isOwner, section = 'documents', stage, prototypePart, variant = 'full', embedded = false, hideDocList = false, initialDocId, initialEdit = false, onCurrentDocChange, navigate }: Props) {
   const { user } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  // 기획 산출물 재생성 진행/완료 피드백 상태(문서 id).
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [justRegeneratedId, setJustRegeneratedId] = useState<string | null>(null);
   // stage가 지정되면 그 단계의 첫 문서를 기본 선택(탭별 워크스페이스). 아니면 기존처럼 첫 문서.
   const stageTypes = stage ? STAGE_TYPES[stage] ?? null : null;
   const [selectedType, setSelectedType] = useState<DocumentType>(stageTypes?.[0] ?? DOCUMENT_ORDER[0]);
@@ -490,6 +503,20 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
     }
   }
 
+  // initialEdit: 산출물 카드 '수정' 진입 — 대상 문서가 로드되면 1회 편집 모드로 전환.
+  const [appliedEdit, setAppliedEdit] = useState(false);
+  if (initialEdit && !appliedEdit && isEditor && initialDocId) {
+    const t = Object.prototype.hasOwnProperty.call(DOCUMENT_META, initialDocId)
+      ? (initialDocId as DocumentType)
+      : documents.find((d) => d.id === initialDocId)?.type;
+    const doc = t ? documents.find((d) => d.type === t) : undefined;
+    if (doc && !doc.locked) {
+      setAppliedEdit(true);
+      setEditingId(doc.id);
+      setDraft(doc.content);
+    }
+  }
+
   // 현재 선택 타입의 문서 id를 상위로 보고 (없으면 null). 프롭 콜백이라 effect 사용 가능.
   useEffect(() => {
     onCurrentDocChange?.(documents.find((d) => d.type === selectedType)?.id ?? null);
@@ -538,6 +565,32 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
       updatedAt: serverTimestamp(),
     });
     showToast(`${DOCUMENT_META[docu.type].title}를(을) 다시 생성했습니다.`);
+  };
+
+  // 기획 산출물 재생성(brief/market_research/product_strategy). 기존 문서 덮어쓰기(버전 업, 중복 생성 없음).
+  // 현재 activation + activationAnalysis 기준으로 본문·sourceFingerprint를 갱신한다.
+  const handleRegenerateActivationDoc = async (docu: ProjectDocument) => {
+    const builder = ACTIVATION_DOC_BUILDERS[docu.type];
+    if (!builder || regeneratingId) return;
+    const cur = parseFloat(docu.version);
+    const nextV = isNaN(cur) ? docu.version : (cur + 0.1).toFixed(1);
+    setRegeneratingId(docu.id);
+    try {
+      await updateDoc(docRef('documents', docu.id), {
+        content: builder(project),
+        status: 'draft' as DocumentStatus,
+        version: nextV,
+        sourceFingerprint: activationDocFingerprint(docu.type, project.activation ?? null, project.activationAnalysis ?? null),
+        updatedAt: serverTimestamp(),
+      });
+      setJustRegeneratedId(docu.id);
+      showToast('최신 기준으로 갱신되었습니다.');
+    } catch (err) {
+      console.error('[doc] activation regenerate failed:', err);
+      showToast('산출물 재생성에 실패했습니다. 잠시 후 다시 시도해주세요.', 'error');
+    } finally {
+      setRegeneratingId(null);
+    }
   };
 
   // 단계 승인: 사람이 단계 산출물을 승인하며 다음 단계로 넘어가는 파이프라인 원칙용(Owner 전용, PRD 제외).
@@ -641,6 +694,17 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
   const selectedDoc = byType(selectedType);
   const isEditing = selectedDoc && editingId === selectedDoc.id;
   const url = prototypeUrl();
+
+  // 기획 산출물 재생성 필요 여부: 저장된 sourceFingerprint와 현재 기준값 비교.
+  // fingerprint가 없는 기존 문서는 비교 불가 → 갱신 가능(enabled)으로 둔다.
+  const isActivationDoc = !!ACTIVATION_DOC_BUILDERS[selectedType];
+  const selectedRegenerating = !!selectedDoc && regeneratingId === selectedDoc.id;
+  const selectedJustRegenerated = !!selectedDoc && justRegeneratedId === selectedDoc.id;
+  const currentFingerprint = isActivationDoc
+    ? activationDocFingerprint(selectedType, project.activation ?? null, project.activationAnalysis ?? null)
+    : '';
+  const activationDocStale =
+    isActivationDoc && !!selectedDoc && (!selectedDoc.sourceFingerprint || selectedDoc.sourceFingerprint !== currentFingerprint);
 
   // 확정 프로토타입 변경 후 재생성 안내/잠금 교착 처리용 파생값.
   const selectedDocStatus = deriveDocStatus(selectedDoc, project, documents);
@@ -1626,6 +1690,17 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
             </div>
           ) : (
             <div className="p-5">
+              {/* 기획 산출물: 입력/AI 정리 변경 또는 방금 갱신 상태 안내 */}
+              {isActivationDoc && activationDocStale && !selectedRegenerating && (
+                <p className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--amber-700)] bg-[var(--amber-50)] border border-[var(--amber-100)] rounded-[var(--radius-md)] px-3 py-1.5">
+                  <RefreshCw size={13} /> AI 정리 또는 입력이 변경되었습니다. “최신 기준으로 재생성”으로 문서를 갱신하세요.
+                </p>
+              )}
+              {isActivationDoc && !activationDocStale && selectedJustRegenerated && (
+                <p className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--green-700)] bg-[var(--green-50)] border border-[var(--green-100)] rounded-[var(--radius-md)] px-3 py-1.5">
+                  <CheckCircle2 size={13} /> 방금 갱신됨 · 최신 기준으로 생성되었습니다.
+                </p>
+              )}
               <pre className="whitespace-pre-wrap text-[13px] text-[var(--text-body)] leading-relaxed font-sans max-h-[28rem] overflow-y-auto bg-[var(--surface-sunken)] border border-[var(--border-subtle)] rounded-[var(--radius-lg)] p-4">
                 {selectedDoc.content}
               </pre>
@@ -1650,6 +1725,25 @@ export default function ProjectDocuments({ project, documents, screens, isEditor
                   <Button variant="outline" icon={RefreshCw} onClick={() => handleRegeneratePipelineDoc(selectedDoc)} className="text-sm py-1.5">
                     템플릿 다시 생성
                   </Button>
+                )}
+                {/* 기획 산출물: 현재 입력·AI 정리 결과로 문서 내용 재생성(산출물 재생성 ≠ AI 정리 생성).
+                    fingerprint 비교로 변경이 있을 때만 활성화, 최신 상태면 disabled. */}
+                {isActivationDoc && isEditor && !selectedDoc.locked && (
+                  activationDocStale || selectedRegenerating ? (
+                    <Button
+                      variant="outline"
+                      icon={RefreshCw}
+                      onClick={() => handleRegenerateActivationDoc(selectedDoc)}
+                      disabled={selectedRegenerating}
+                      className="text-sm py-1.5"
+                    >
+                      {selectedRegenerating ? '재생성 중…' : '최신 기준으로 재생성'}
+                    </Button>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--green-700)] bg-[var(--green-50)] border border-[var(--green-100)] px-2.5 py-1 rounded-[var(--radius-pill)]">
+                      <CheckCircle2 size={13} /> {selectedJustRegenerated ? '방금 갱신됨' : '최신 상태'}
+                    </span>
+                  )
                 )}
                 {isEditor && !selectedDoc.locked && (
                   <Button
